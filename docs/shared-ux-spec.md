@@ -8,7 +8,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
-1. **Title and status strip**: The app name and the current session state as text.
+1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is currently a typographic placeholder (`ZETIC`, extra bold, `0.08em` tracking) with a drop-in slot for the official brand vector.
 2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`.
 3. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
 4. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
@@ -18,7 +18,7 @@ Turn Translate is a single screen. Setup, model loading, conversation, and error
 ### Screen layout
 
 ```text
-Turn Translate
+Turn Translate                              ZETIC
 Conversation ready
 ------------------------------------
  [ A · English ]              [ B · Korean ]
@@ -42,7 +42,7 @@ Conversation ready
 ```
 
 - A bubbles and the A chip and control create only A utterances; B bubbles and the B chip and control create only B utterances.
-- Alignment plus the `Speaker A` / `Speaker B` label carries the A/B distinction; the fill difference (A filled, B outlined) is redundant, never the only signal.
+- Alignment plus the `Speaker A` / `Speaker B` label carries the A/B distinction; the per-speaker tint (A teal `#E9F7F5`, B ink `#F0F0F0`) and the colored mini-label are redundant reinforcement, never the only signal.
 - An A bubble identifies `To B - <B reading language>`; a B bubble identifies `To A - <A reading language>`.
 - The active utterance's partial source text updates only its existing active bubble. Partial text is never translated.
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
@@ -51,7 +51,7 @@ Conversation ready
 ## Language selection on the main screen
 
 - Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
-- The chip face shows only the reading language, because that is the setting people actually change. The recognition language stays reachable in the same menu and is announced in the chip's accessibility label.
+- The chip face shows only the reading language, because that is the setting people actually change. The `A ·` / `B ·` prefix is tinted in that speaker's deep color and the chip border uses that speaker's border token. The recognition language stays reachable in the same menu and is announced in the chip's accessibility label.
 - Chips render `Automatic` in short form; the menu entries keep the platform's full display name (Android shows `Automatic (device recognizer)` there).
 - Languages can be changed before, between, and during a session without reloading the model. A reading-language change affects future translation prompts only. A recognition-language change applies at the next utterance start.
 - Both speakers' chips are locked while any utterance is recording, finalizing, or translating, and while the model is loading or unloading. Locking both, rather than only the active speaker's, keeps an in-flight utterance's target language stable.
@@ -106,14 +106,14 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 ## Design tokens
 
-The palette is the ZETIC minimal system: white surfaces, near-black text, gray supporting text, thin dividers, and a single teal accent.
+The palette is the ZETIC minimal system: white surfaces, near-black text, gray supporting text, thin dividers, and a single teal accent, plus two muted per-speaker families drawn from the same two hues.
 
 | Token | Value | Usage |
 | --- | --- | --- |
-| `color.accent` | `#2DBDB2` | Reserved for three emphasis uses only: the active recording control, the `Start conversation` action, and the model-load progress indicator |
-| `color.surface` | `#FFFFFF` | Default background, B bubbles, chips, and inactive controls |
-| `color.surfaceSubtle` | `#F0F0F0` | Inline banners, A bubbles, and disabled controls |
-| `color.divider` | `#E8E8E8` | Hairline dividers, chip and control borders |
+| `color.accent` | `#2DBDB2` | Brand accent, reserved for two product-level emphasis uses: the `Start conversation` action and the model-load progress indicator |
+| `color.surface` | `#FFFFFF` | Default background, chips, and idle controls |
+| `color.surfaceSubtle` | `#F0F0F0` | Inline banners and disabled controls |
+| `color.divider` | `#E8E8E8` | Hairline dividers and neutral control borders |
 | `color.textPrimary` | `#0A0A0A` | Body text |
 | `color.textSecondary` | `#6B6B6B` | Supporting, meta, and status text |
 | `color.error` | `#C92A2A` | Errors |
@@ -122,8 +122,20 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 | `radius.control` | `20 dp/pt` | A/B PTT controls, language chips, session actions |
 | `type.body` | `16 sp/pt` | Source and translated text |
 | `type.meta` | `12 sp/pt` | Speaker, status, chip, and target-language text |
+| `type.wordmark` | `13 sp/pt`, extra bold, `0.08em` tracking | The `ZETIC` wordmark in the header |
 
-Accent use is capped at the three emphasis roles in the table; no other element is tinted. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table. System dark-mode support is outside MVP scope; do not add forced theme switching.
+### Per-speaker identity families
+
+Each speaker owns one muted family, both derived from the brand system. No hue outside these two families is introduced.
+
+| Token | Speaker A (teal) | Speaker B (ink) | Usage |
+| --- | --- | --- | --- |
+| `color.accentX` | `#2DBDB2` | `#0A0A0A` | Fill of that speaker's PTT control while recording, with white label text |
+| `color.deepX` | `#17877D` | `#0A0A0A` | The `Speaker A` / `Speaker B` mini-label in a bubble, and the `A ·` / `B ·` prefix on the chip and idle PTT label |
+| `color.tintX` | `#E9F7F5` | `#F0F0F0` | Chat-bubble fill; bubbles carry no border |
+| `color.borderX` | `#BFE7E2` | `#E8E8E8` | Hairline border of that speaker's language chip and idle PTT control |
+
+The two-use accent cap applies to the product chrome only. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher — the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table. System dark-mode support is outside MVP scope; do not add forced theme switching.
 
 ## Android/iOS parity criteria
 
@@ -146,5 +158,6 @@ Accent use is capped at the three emphasis roles in the table; no other element 
 
 - Every control has an equivalent accessibility label.
 - Body text and state text do not clip or overlap at larger text sizes and Dynamic Type sizes; the language bar keeps both chips reachable rather than overlapping them.
-- A/B active state, processing, and errors are distinguished with text, alignment, and layout in addition to color.
+- A/B active state, processing, and errors are distinguished with text, alignment, and layout in addition to color; removing all color leaves the screen fully usable.
+- The `ZETIC` wordmark exposes a `ZETIC` accessibility label and is decorative brand exposure only, never a control.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.

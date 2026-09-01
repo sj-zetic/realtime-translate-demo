@@ -9,6 +9,38 @@ enum DesignToken {
   static let textPrimary = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
   static let textSecondary = Color(red: 107 / 255, green: 107 / 255, blue: 107 / 255)
   static let error = Color(red: 201 / 255, green: 42 / 255, blue: 42 / 255)
+
+  /// Per-speaker identity families, both derived from the brand system: speaker A is the teal
+  /// family and speaker B is the ink family. Color is always redundant with the speaker label
+  /// and the leading/trailing alignment, never the only distinguisher.
+  static let accentA = Color(red: 45 / 255, green: 189 / 255, blue: 178 / 255)
+  static let deepA = Color(red: 23 / 255, green: 135 / 255, blue: 125 / 255)
+  static let tintA = Color(red: 233 / 255, green: 247 / 255, blue: 245 / 255)
+  static let borderA = Color(red: 191 / 255, green: 231 / 255, blue: 226 / 255)
+  static let accentB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
+  static let deepB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
+  static let tintB = Color(red: 240 / 255, green: 240 / 255, blue: 240 / 255)
+  static let borderB = Color(red: 232 / 255, green: 232 / 255, blue: 232 / 255)
+}
+
+extension Speaker {
+  var accentColor: Color { self == .a ? DesignToken.accentA : DesignToken.accentB }
+  var deepColor: Color { self == .a ? DesignToken.deepA : DesignToken.deepB }
+  var tintColor: Color { self == .a ? DesignToken.tintA : DesignToken.tintB }
+  var borderColor: Color { self == .a ? DesignToken.borderA : DesignToken.borderB }
+}
+
+/// Typographic placeholder for the ZETIC wordmark. Replace with the official ZETIC wordmark
+/// vector (an image asset in the app bundle rendered through `Image`) when the brand asset is
+/// added to the repository; keep the size, placement, and `ZETIC` accessibility label.
+private struct ZeticWordmark: View {
+  var body: some View {
+    Text("ZETIC")
+      .font(.system(size: 13, weight: .heavy))
+      .kerning(13 * 0.08)
+      .foregroundStyle(DesignToken.textPrimary)
+      .accessibilityLabel("ZETIC")
+  }
 }
 
 private enum Layout {
@@ -33,6 +65,9 @@ struct RealtimeTranslateRootView: View {
       .background(DesignToken.surface)
       .navigationTitle("Turn Translate")
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .navigationBarTrailing) { ZeticWordmark() }
+      }
       .safeAreaInset(edge: .bottom, spacing: 0) { BottomBar(viewModel: viewModel) }
     }
     .tint(DesignToken.accent)
@@ -91,14 +126,20 @@ private struct LanguageBar: View {
       }
       .pickerStyle(.inline)
     } label: {
-      Text("\(speaker.rawValue) · \(target.wrappedValue.name)")
-        .font(.caption).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
-        .lineLimit(1)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(DesignToken.surface)
-        .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-        .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
+      (
+        Text("\(speaker.rawValue) ·").fontWeight(.bold).foregroundColor(speaker.deepColor)
+          + Text(" \(target.wrappedValue.name)").fontWeight(.medium)
+            .foregroundColor(DesignToken.textPrimary)
+      )
+      .font(.caption)
+      .lineLimit(1)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 6)
+      .background(DesignToken.surface)
+      .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+      .overlay(
+        RoundedRectangle(cornerRadius: Layout.control).stroke(speaker.borderColor, lineWidth: 1)
+      )
     }
     .disabled(!viewModel.canEditLanguages)
     .accessibilityIdentifier("languages-\(speaker.rawValue)")
@@ -219,7 +260,7 @@ private struct ConversationBubble: View {
       if !isA { Spacer(minLength: 32) }
       VStack(alignment: .leading, spacing: 6) {
         Text("Speaker \(item.speaker.rawValue)")
-          .font(.caption).fontWeight(.semibold).foregroundStyle(DesignToken.textSecondary)
+          .font(.caption).fontWeight(.semibold).foregroundStyle(item.speaker.deepColor)
         Text(item.transcript.isEmpty ? "Listening..." : item.transcript)
           .font(.body).foregroundStyle(DesignToken.textPrimary)
         ThinDivider()
@@ -229,12 +270,8 @@ private struct ConversationBubble: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(12)
-      .background(isA ? DesignToken.surfaceSubtle : DesignToken.surface)
+      .background(item.speaker.tintColor)
       .clipShape(RoundedRectangle(cornerRadius: Layout.message))
-      .overlay(
-        RoundedRectangle(cornerRadius: Layout.message)
-          .stroke(isA ? Color.clear : DesignToken.divider, lineWidth: 1)
-      )
       if isA { Spacer(minLength: 32) }
     }
     .accessibilityElement(children: .combine)
@@ -346,8 +383,18 @@ private struct PTTButton: View {
     default: return true
     }
   }
-  private var label: String {
-    isListening ? "\(speaker.rawValue) recording - release to stop" : "\(speaker.rawValue) - hold to talk"
+  private var label: Text {
+    Text(speaker.rawValue).fontWeight(.bold).foregroundColor(prefixColor)
+      + Text(isListening ? " recording - release to stop" : " - hold to talk")
+        .fontWeight(.semibold).foregroundColor(contentColor)
+  }
+  private var prefixColor: Color {
+    if isListening { return DesignToken.surface }
+    return isBlocked ? DesignToken.textSecondary : speaker.deepColor
+  }
+  private var borderColor: Color {
+    if isListening { return speaker.accentColor }
+    return isBlocked ? DesignToken.divider : speaker.borderColor
   }
   private var blockedHint: String {
     if let active = state.activeSpeaker, active != speaker {
@@ -356,7 +403,7 @@ private struct PTTButton: View {
     return "Push-to-talk unlocks once the translation model is ready."
   }
   private var containerColor: Color {
-    if isListening { return DesignToken.accent }
+    if isListening { return speaker.accentColor }
     return isBlocked ? DesignToken.surfaceSubtle : DesignToken.surface
   }
   private var contentColor: Color {
@@ -366,20 +413,18 @@ private struct PTTButton: View {
 
   var body: some View {
     Button(action: { isListening ? end(speaker) : begin(speaker) }, label: {
-      Text(label)
-        .font(.footnote).fontWeight(.semibold)
+      label
+        .font(.footnote)
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .padding(.horizontal, 4)
     })
     .buttonStyle(.plain)
-    .foregroundStyle(contentColor)
     .background(containerColor)
     .clipShape(RoundedRectangle(cornerRadius: Layout.control))
     .overlay(
-      RoundedRectangle(cornerRadius: Layout.control)
-        .stroke(isListening ? DesignToken.accent : DesignToken.divider, lineWidth: 1)
+      RoundedRectangle(cornerRadius: Layout.control).stroke(borderColor, lineWidth: 1)
     )
     .disabled(isBlocked)
     .simultaneousGesture(LongPressGesture(minimumDuration: 0.15).onEnded { _ in

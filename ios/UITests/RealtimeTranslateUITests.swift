@@ -40,6 +40,11 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
   }
 
+  func testHeaderCarriesTheZeticWordmark() {
+    let app = launch(state: "ready")
+    XCTAssertTrue(app.staticTexts["ZETIC"].exists)
+  }
+
   func testLanguageBarSitsAboveTheConversationAndPushToTalk() {
     let app = launch(state: "ready")
     let chipA = app.buttons["languages-A"]

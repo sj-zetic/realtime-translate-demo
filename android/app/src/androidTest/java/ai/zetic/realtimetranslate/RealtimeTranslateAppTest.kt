@@ -109,6 +109,16 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Newest appended card:", substring = true).assertIsDisplayed()
     }
 
+    @Test fun headerCarriesTheTitleAndTheZeticWordmark() {
+        setApp(SessionUiState(SessionPhase.Ready))
+        composeRule.onNodeWithText("Turn Translate").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("ZETIC").assertIsDisplayed()
+
+        val title = composeRule.onNodeWithText("Turn Translate").fetchSemanticsNode().boundsInRoot
+        val wordmark = composeRule.onNodeWithContentDescription("ZETIC").fetchSemanticsNode().boundsInRoot
+        assertTrue(title.left < wordmark.left)
+    }
+
     @Test fun topLanguageBarShowsOneChipPerSpeakerMirroringBubbleSides() {
         setApp(SessionUiState(SessionPhase.Ready))
         composeRule.onNodeWithContentDescription(CHIP_A).assertIsEnabled()

@@ -45,10 +45,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 sealed interface UiAction {
@@ -116,7 +120,16 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text("Turn Translate", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+        Row(Modifier.fillMaxWidth()) {
+            Text(
+                "Turn Translate",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f).alignByBaseline(),
+            )
+            ZeticWordmark(Modifier.alignByBaseline())
+        }
         Text(
             status,
             color = TextSecondary,
@@ -129,6 +142,22 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         state.speechLanguageCatalogMessage?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
     }
     HorizontalDivider(color = DividerLine)
+}
+
+/**
+ * Typographic placeholder for the ZETIC wordmark. Replace with the official ZETIC wordmark
+ * vector (a `res/drawable` VectorDrawable rendered through `Icon`/`Image`) when the brand asset
+ * is added to the repository; keep the size, placement, and `ZETIC` accessibility label.
+ */
+@Composable private fun ZeticWordmark(modifier: Modifier = Modifier) {
+    Text(
+        "ZETIC",
+        fontSize = 13.sp,
+        fontWeight = FontWeight.ExtraBold,
+        letterSpacing = 0.08.em,
+        color = TextPrimary,
+        modifier = modifier.semantics { contentDescription = "ZETIC" },
+    )
 }
 
 /** Language chips can be changed at any time except while an utterance is in flight. */
@@ -172,7 +201,7 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             onClick = { expanded = true },
             enabled = enabled,
             shape = ControlShape,
-            border = BorderStroke(1.dp, DividerLine),
+            border = BorderStroke(1.dp, if (enabled) speakerBorder(speaker) else DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             modifier = Modifier.semantics {
@@ -180,7 +209,16 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             },
         ) {
             Text(
-                "${speaker.label} · $reading",
+                buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            color = if (enabled) speakerDeep(speaker) else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                    ) { append("${speaker.label} ·") }
+                    append(" ")
+                    append(reading)
+                },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -302,22 +340,18 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isA) Arrangement.Start else Arrangement.End,
     ) {
-        val bubble = if (isA) {
-            Modifier.clip(MessageShape).background(SurfaceSubtle)
-        } else {
-            Modifier.clip(MessageShape).background(Surface).border(1.dp, DividerLine, MessageShape)
-        }
         Column(
             Modifier
                 .fillMaxWidth(0.88f)
-                .then(bubble)
+                .clip(MessageShape)
+                .background(speakerTint(item.speaker))
                 .padding(12.dp)
                 .semantics { contentDescription = "Speaker ${item.speaker.label} utterance" },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
                 "Speaker ${item.speaker.label}",
-                color = TextSecondary,
+                color = speakerDeep(item.speaker),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -374,7 +408,7 @@ private fun bottomHint(state: SessionUiState): String {
         "Speaker ${speaker.label} push-to-talk unlocks when the translation model is ready"
     }
     val container = when {
-        listening -> Accent
+        listening -> speakerAccent(speaker)
         enabled -> Surface
         else -> SurfaceSubtle
     }
@@ -383,11 +417,25 @@ private fun bottomHint(state: SessionUiState): String {
         enabled -> TextPrimary
         else -> TextSecondary
     }
+    val prefixColor = when {
+        listening -> Surface
+        enabled -> speakerDeep(speaker)
+        else -> TextSecondary
+    }
+    val borderColor = when {
+        listening -> speakerAccent(speaker)
+        enabled -> speakerBorder(speaker)
+        else -> DividerLine
+    }
+    val label = buildAnnotatedString {
+        withStyle(SpanStyle(color = prefixColor, fontWeight = FontWeight.Bold)) { append(speaker.label) }
+        append(if (listening) " recording - release to stop" else " - hold to talk")
+    }
     Box(
         modifier
             .clip(ControlShape)
             .background(container)
-            .border(1.dp, if (listening) Accent else DividerLine, ControlShape)
+            .border(1.dp, borderColor, ControlShape)
             .semantics(mergeDescendants = true) {
                 contentDescription = if (enabled) actionLabel else blockedLabel
                 if (enabled) onClick { onAction(UiAction.TogglePtt(speaker)); true } else disabled()
@@ -407,7 +455,7 @@ private fun bottomHint(state: SessionUiState): String {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            if (listening) "${speaker.label} recording - release to stop" else "${speaker.label} - hold to talk",
+            label,
             color = contentColor,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
