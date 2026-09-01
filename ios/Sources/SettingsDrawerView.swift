@@ -95,9 +95,9 @@ private struct SettingsDrawerPanel: View {
       Spacer(minLength: 8)
       Button(action: model.close) {
         Image(systemName: "xmark")
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: 15, weight: .semibold))
           .foregroundStyle(DesignToken.textSecondary)
-          .frame(width: 32, height: 32)
+          .frame(width: Layout.tapTarget, height: Layout.tapTarget)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
@@ -158,7 +158,15 @@ private struct SettingsDrawerPanel: View {
   }
 
   /// The model's footprint, and the app's only destructive action behind the app's only
-  /// `confirmationDialog`. The row itself never deletes: it asks.
+  /// confirmation. The row itself never deletes: it asks.
+  ///
+  /// An `alert`, not a `confirmationDialog`. On a regular-width presentation SwiftUI renders a
+  /// confirmation dialog as a popover and drops the `.cancel` button from it, on the grounds that
+  /// tapping outside a popover dismisses it. What that left on screen was the app's only
+  /// destructive action, alone, with no visible way out: the only "no" was a tap on the dimmed
+  /// area, and the UI test covering this had grown a branch to cope with the missing button. An
+  /// alert keeps both buttons in every presentation, which is what a destructive confirmation
+  /// needs.
   private var storageRow: some View {
     let row = model.storageRow(hold: modelHold)
     return SettingsRow(
@@ -170,8 +178,7 @@ private struct SettingsDrawerPanel: View {
       isEnabled: row.isEnabled,
       action: model.confirmDeleteModel
     )
-    .confirmationDialog(ModelStorageCopy.confirmationTitle, isPresented: $model.isConfirmingDelete,
-                        titleVisibility: .visible) {
+    .alert(ModelStorageCopy.confirmationTitle, isPresented: $model.isConfirmingDelete) {
       // No identifiers here: SwiftUI turns these into alert actions, which carry their titles as
       // their identifiers, and an identifier of our own would be dropped on some releases and
       // shadow the title on others.

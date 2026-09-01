@@ -26,7 +26,8 @@ enum TypedInputCopy {
     String(localized: "Send", comment: "Typed input sheet confirmation button")
   }
   static var cancel: String {
-    String(localized: "Cancel", comment: "Typed input sheet dismissal button")
+    String(localized: "Cancel",
+           comment: "Dismissal button: the typed input sheet, and the model preparation the bottom bar calls off")
   }
   static var speakerPickerLabel: String {
     String(localized: "Who is speaking", comment: "Typed input sheet A/B segmented control label")
@@ -40,15 +41,17 @@ enum TypedInputCopy {
     -> String {
     // Deliberately one literal rather than two joined pieces: a sentence that is split in English
     // cannot be reordered by a translator whose language puts the halves the other way round.
+    // `displayName`, not `name`: this is a sentence a person reads, so the language is named in
+    // the language they are reading it in. `name` is the Hy-MT2 prompt's argument and nothing else.
     String(
       localized: "typedInput.guidance",
-      defaultValue: "Speaker \(speaker.rawValue) types in \(typing.name). It is translated into \(translatedTo.name) for \(speaker.counterpart.rawValue).",
+      defaultValue: "Speaker \(speaker.rawValue) types in \(typing.displayName). It is translated into \(translatedTo.displayName) for Speaker \(speaker.counterpart.rawValue).",
       comment: "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages"
     )
   }
 
   static func placeholder(for language: TargetLanguage) -> String {
-    String(localized: "typedInput.placeholder", defaultValue: "Type in \(language.name)",
+    String(localized: "typedInput.placeholder", defaultValue: "Type in \(language.displayName)",
            comment: "Typed input field placeholder. %@ is a language name")
   }
 }
@@ -184,9 +187,9 @@ struct TypedInputButton: View {
   var body: some View {
     Button(action: open) {
       Image(systemName: "keyboard")
-        .font(.system(size: 13, weight: .medium))
+        .font(.system(size: 15, weight: .medium))
         .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
-        .frame(width: 36, height: 28)
+        .frame(width: Layout.tapTarget, height: Layout.tapTarget)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

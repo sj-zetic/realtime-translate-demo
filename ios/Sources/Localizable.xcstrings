@@ -35,7 +35,7 @@
         }
       }
     },
-    "Allow Microphone Access" : {
+    "Allow microphone access" : {
       "comment" : "Session banner button that triggers the system prompts",
       "localizations" : {
         "es" : {
@@ -104,7 +104,7 @@
       }
     },
     "Cancel" : {
-      "comment" : "Typed input sheet dismissal button",
+      "comment" : "Dismissal button: the typed input sheet, and the model preparation the bottom bar calls off",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -167,40 +167,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fermer les réglages"
-          }
-        }
-      }
-    },
-    "Closing Translation Session" : {
-      "comment" : "Status strip: the session is unwinding",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrando la sesión"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fermeture de la session"
-          }
-        }
-      }
-    },
-    "Closing translation session..." : {
-      "comment" : "Session banner body text while the session unwinds",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrando la sesión de traducción..."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fermeture de la session de traduction..."
           }
         }
       }
@@ -409,7 +375,7 @@
         }
       }
     },
-    "End Session" : {
+    "End session" : {
       "comment" : "Bottom bar action that ends a live session",
       "localizations" : {
         "es" : {
@@ -630,23 +596,6 @@
         }
       }
     },
-    "Microphone Permission Required" : {
-      "comment" : "Status strip: the microphone and speech prompts are unanswered",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Falta permiso de micrófono"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autorisation requise"
-          }
-        }
-      }
-    },
     "Microphone and speech" : {
       "comment" : "Permission priming screen title",
       "localizations" : {
@@ -677,6 +626,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "L’autorisation du micro est requise."
+          }
+        }
+      }
+    },
+    "Microphone permission required" : {
+      "comment" : "Status strip: the microphone and speech prompts are unanswered",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falta permiso de micrófono"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autorisation requise"
           }
         }
       }
@@ -766,7 +732,7 @@
         }
       }
     },
-    "Open App Settings" : {
+    "Open app settings" : {
       "comment" : "Session banner button that opens this app's page in iOS Settings",
       "localizations" : {
         "es" : {
@@ -813,23 +779,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lire la traduction"
-          }
-        }
-      }
-    },
-    "Preparing Translation" : {
-      "comment" : "Status strip: the model is loading",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparando la traducción"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Préparation du modèle"
           }
         }
       }
@@ -885,7 +834,7 @@
         }
       }
     },
-    "Ready to Start" : {
+    "Ready to start" : {
       "comment" : "Status strip: idle, before a session starts",
       "localizations" : {
         "es" : {
@@ -902,7 +851,7 @@
         }
       }
     },
-    "Ready to Talk" : {
+    "Ready to talk" : {
       "comment" : "Status strip: the model is loaded and idle",
       "localizations" : {
         "es" : {
@@ -953,7 +902,7 @@
         }
       }
     },
-    "Retry Model Load" : {
+    "Retry model load" : {
       "comment" : "Session banner button that loads the model again after a failure",
       "localizations" : {
         "es" : {
@@ -983,23 +932,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Envoyer"
-          }
-        }
-      }
-    },
-    "Session Ended" : {
-      "comment" : "Status strip: the session has finished",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sesión terminada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Session terminée"
           }
         }
       }
@@ -1068,23 +1000,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "L’interlocuteur A ou B peut prendre la parole."
-          }
-        }
-      }
-    },
-    "Speaker controls unlock when the model is ready." : {
-      "comment" : "Session banner body text while the model loads",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los controles de los hablantes se activan cuando el modelo esté listo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les commandes s’activent quand le modèle est prêt."
           }
         }
       }
@@ -1225,7 +1140,7 @@
         }
       }
     },
-    "Start Session" : {
+    "Start session" : {
       "comment" : "Bottom bar action that starts a session",
       "localizations" : {
         "es" : {
@@ -1276,8 +1191,8 @@
         }
       }
     },
-    "Tap Start Session to begin translating." : {
-      "comment" : "Bottom bar hint before a session starts. Start Session is a button",
+    "Tap Start session to begin translating." : {
+      "comment" : "Bottom bar hint before a session starts. Start session is a button",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1310,70 +1225,53 @@
         }
       }
     },
-    "The Hy-MT2 translation model could not complete this request." : {
-      "comment" : "Placeholder translation failure used by UI tests. Hy-MT2 is a model name",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El modelo de traducción Hy-MT2 no pudo completar esta solicitud."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modèle de traduction Hy-MT2 n’a pas pu traiter cette demande."
-          }
-        }
-      }
-    },
-    "The Melange personal key is not configured in this app build." : {
-      "comment" : "Model load failure: the build has no Melange credential",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clave personal de Melange no está configurada en esta versión de la app."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clé personnelle Melange n’est pas configurée dans cette version de l’app."
-          }
-        }
-      }
-    },
-    "The translation model is not loaded." : {
-      "comment" : "Translation failure: a request arrived before the model was ready",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El modelo de traducción no está cargado."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modèle de traduction n’est pas chargé."
-          }
-        }
-      }
-    },
-    "The translation model returned an empty result." : {
+    "The translation came back empty." : {
       "comment" : "Translation failure: the model produced no text",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El modelo de traducción devolvió un resultado vacío."
+            "value" : "La traducción llegó vacía."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le modèle de traduction n’a renvoyé aucun résultat."
+            "value" : "La traduction est revenue vide."
+          }
+        }
+      }
+    },
+    "The translation did not finish." : {
+      "comment" : "Translation failure: the model stopped part way through",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La traducción no se completó."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La traduction n’est pas allée au bout."
+          }
+        }
+      }
+    },
+    "This build of the app cannot download the translation model." : {
+      "comment" : "Model load failure: the build has no download credential",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión de la app no puede descargar el modelo de traducción."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette version de l’app ne peut pas télécharger le modèle de traduction."
           }
         }
       }
@@ -1401,7 +1299,41 @@
         }
       }
     },
-    "Translation Model Unavailable" : {
+    "Translates this turn again." : {
+      "comment" : "Accessibility hint for the retry button on a failed chat bubble",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a traducir este turno."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduit à nouveau ce tour de parole."
+          }
+        }
+      }
+    },
+    "Translation is not ready yet." : {
+      "comment" : "Translation failure: a request arrived before the model was ready",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La traducción aún no está lista."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La traduction n’est pas encore prête."
+          }
+        }
+      }
+    },
+    "Translation model unavailable" : {
       "comment" : "Status strip: the model failed to load",
       "localizations" : {
         "es" : {
@@ -1435,8 +1367,8 @@
         }
       }
     },
-    "Try Again" : {
-      "comment" : "Session banner button that retries after a runtime error",
+    "Try again" : {
+      "comment" : "Button that runs a failed piece of work again",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1448,23 +1380,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réessayer"
-          }
-        }
-      }
-    },
-    "Try again." : {
-      "comment" : "Placeholder model load failure used by UI tests",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réessayez."
           }
         }
       }
@@ -1571,7 +1486,7 @@
         }
       }
     },
-    "Unable to Process" : {
+    "Unable to process" : {
       "comment" : "Status strip: the session hit an error",
       "localizations" : {
         "es" : {
@@ -1618,23 +1533,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aller sur zetic.ai, ouvre le site web"
-          }
-        }
-      }
-    },
-    "Wait while the session ends." : {
-      "comment" : "Bottom bar hint while the session is unwinding",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Espera a que termine la sesión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Patientez pendant la fermeture de la session."
           }
         }
       }
@@ -1719,25 +1617,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Speaker %1$@ cannot begin while speaker %2$@ is active."
+            "value" : "Speaker %1$@ cannot begin while Speaker %2$@ is active."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El hablante %1$@ no puede empezar mientras el %2$@ está hablando."
+            "value" : "El hablante %1$@ no puede empezar mientras el hablante %2$@ tiene la palabra."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’interlocuteur %1$@ ne peut pas parler tant que %2$@ a la parole."
+            "value" : "L’interlocuteur %1$@ ne peut pas parler tant que l’interlocuteur %2$@ a la parole."
           }
         }
       }
     },
     "consent.size" : {
-      "comment" : "Consent card body text. %@ is a hedged size such as about 1.9 GB",
+      "comment" : "Consent card body text. %@ is a formatted size such as 1.91 GB",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1845,48 +1743,25 @@
         }
       }
     },
-    "modelSize.approximate" : {
-      "comment" : "Model download size, hedged. %@ is a formatted size such as 1.9 GB",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "about %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unos %@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "environ %@"
-          }
-        }
-      }
-    },
     "ptt.accessibility.end" : {
       "comment" : "Push-to-talk accessibility label while recording. %@ is A or B",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "End %@ Turn"
+            "value" : "End Speaker %@'s turn"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminar el turno de %@"
+            "value" : "Terminar el turno del hablante %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Terminer le tour de parole de %@"
+            "value" : "Terminer le tour de parole de l’interlocuteur %@"
           }
         }
       }
@@ -1897,19 +1772,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start %@ Turn"
+            "value" : "Start Speaker %@'s turn"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empezar el turno de %@"
+            "value" : "Empezar el turno del hablante %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Démarrer le tour de parole de %@"
+            "value" : "Démarrer le tour de parole de l’interlocuteur %@"
           }
         }
       }
@@ -1920,7 +1795,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Speaker %1$@ cannot start while speaker %2$@ is active."
+            "value" : "Speaker %1$@ cannot start while Speaker %2$@ is active."
           }
         },
         "es" : {
@@ -1949,7 +1824,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "- enregistrement, relâcher pour arrêter"
+            "value" : "enregistrement, relâcher pour arrêter"
           }
         }
       }
@@ -2098,19 +1973,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finalizing %@'s transcript"
+            "value" : "Finalizing Speaker %@'s transcript"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finalizando la transcripción de %@"
+            "value" : "Finalizando la transcripción del hablante %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finalisation du texte de %@"
+            "value" : "Finalisation du texte de l’interlocuteur %@"
           }
         }
       }
@@ -2121,19 +1996,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ is speaking"
+            "value" : "Speaker %@ is speaking"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ está hablando"
+            "value" : "El hablante %@ está hablando"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ parle"
+            "value" : "L’interlocuteur %@ parle"
           }
         }
       }
@@ -2144,19 +2019,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Translating for %@"
+            "value" : "Translating for Speaker %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduciendo para %@"
+            "value" : "Traduciendo para el hablante %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Traduction pour %@"
+            "value" : "Traduction pour l’interlocuteur %@"
           }
         }
       }
@@ -2230,48 +2105,25 @@
         }
       }
     },
-    "translationFailure.generationFailed" : {
-      "comment" : "Translation failure: %lld is a numeric code from the runtime",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The translation model failed with code %lld."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El modelo de traducción falló con el código %lld."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modèle de traduction a échoué avec le code %lld."
-          }
-        }
-      }
-    },
     "typedInput.guidance" : {
       "comment" : "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Speaker %1$@ types in %2$@. It is translated into %3$@ for %4$@."
+            "value" : "Speaker %1$@ types in %2$@. It is translated into %3$@ for Speaker %4$@."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El hablante %1$@ escribe en %2$@. Se traduce a %3$@ para %4$@."
+            "value" : "El hablante %1$@ escribe en %2$@. Se traduce a %3$@ para el hablante %4$@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L’interlocuteur %1$@ écrit en %2$@. Le texte est traduit en %3$@ pour %4$@."
+            "value" : "L’interlocuteur %1$@ écrit en %2$@. Le texte est traduit en %3$@ pour l’interlocuteur %4$@."
           }
         }
       }

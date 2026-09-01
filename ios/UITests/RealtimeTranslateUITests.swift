@@ -3,10 +3,10 @@ import XCTest
 final class RealtimeTranslateUITests: XCTestCase {
   func testListeningAShowsPTTAndDisablesBOnTheSameScreen() {
     let app = launch(state: "listeningA")
-    XCTAssertTrue(app.staticTexts["Session status: A is speaking"].exists)
-    XCTAssertTrue(app.buttons["End A Turn"].exists)
-    XCTAssertFalse(app.buttons["Start B Turn"].isEnabled)
-    XCTAssertTrue(app.buttons["End Session"].exists)
+    XCTAssertTrue(app.staticTexts["Session status: Speaker A is speaking"].exists)
+    XCTAssertTrue(app.buttons["End Speaker A's turn"].exists)
+    XCTAssertFalse(app.buttons["Start Speaker B's turn"].isEnabled)
+    XCTAssertTrue(app.buttons["End session"].exists)
   }
 
   func testListeningLocksBothLanguageChips() {
@@ -17,22 +17,50 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testFinalizingShowsActiveSourceBubble() {
     let app = launch(state: "finalizingA")
-    XCTAssertTrue(app.staticTexts["Session status: Finalizing A's transcript"].exists)
+    XCTAssertTrue(app.staticTexts["Session status: Finalizing Speaker A's transcript"].exists)
     XCTAssertTrue(contains(app, "Hello."))
   }
 
-  func testTranslationErrorKeepsBubbleAndEnablesNextTurn() {
+  /// A failed turn keeps its transcript, says what happened in words a person can act on, and
+  /// offers the one thing that was missing: sending it again. It used to be a dead end that
+  /// mentioned Hy-MT2 by name and left the words nowhere to go.
+  func testAFailedTranslationExplainsItselfAndOffersARetry() {
     let app = launch(state: "translationError")
     XCTAssertTrue(contains(app, "Hello."))
-    XCTAssertTrue(contains(app, "Hy-MT2"))
-    XCTAssertTrue(app.buttons["Start A Turn"].isEnabled)
-    XCTAssertTrue(app.buttons["Start B Turn"].isEnabled)
+    XCTAssertTrue(contains(app, "The translation did not finish."))
+    XCTAssertFalse(contains(app, "Hy-MT2"))
+
+    let retry = app.buttons["retry-translation"]
+    XCTAssertTrue(retry.waitForExistence(timeout: 5))
+    XCTAssertTrue(retry.isEnabled)
+    XCTAssertTrue(retry.isHittable)
+    XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
+
+    XCTAssertTrue(app.buttons["Start Speaker A's turn"].isEnabled)
+    XCTAssertTrue(app.buttons["Start Speaker B's turn"].isEnabled)
   }
 
-  func testEndedStateOffersOneTapStartOnTheMainScreen() {
-    let app = launch(state: "ended")
-    XCTAssertTrue(app.buttons["Start Session"].exists)
-    XCTAssertTrue(app.buttons["Start Session"].isEnabled)
+  /// A 1.9 GB transfer someone changed their mind about had no way out at all: the session action
+  /// was a disabled `Start Session` and nothing else on the screen stopped anything.
+  func testTheModelDownloadCanBeCancelledFromTheBottomBar() {
+    let app = launch(state: "loadingModel")
+    let cancel = app.buttons["cancel-model-preparation"]
+    XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+    XCTAssertTrue(cancel.isEnabled)
+    XCTAssertTrue(cancel.isHittable)
+
+    cancel.tap()
+
+    let start = app.buttons["start-session"]
+    XCTAssertTrue(start.waitForExistence(timeout: 5))
+    XCTAssertTrue(start.isEnabled)
+    XCTAssertFalse(app.buttons["cancel-model-preparation"].exists)
+  }
+
+  func testIdleStateOffersOneTapStartOnTheMainScreen() {
+    let app = launch(state: "setup")
+    XCTAssertTrue(app.buttons["Start session"].exists)
+    XCTAssertTrue(app.buttons["Start session"].isEnabled)
     // The spoken language follows the reading language when the host offers a matching
     // on-device recognizer, and stays Automatic when it does not; accept both hosts.
     let labelA = app.buttons["languages-A"].label
@@ -41,7 +69,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     let labelB = app.buttons["languages-B"].label
     XCTAssertTrue(labelB.contains("reads Korean"))
     XCTAssertTrue(labelB.contains("speaks Korean") || labelB.contains("speaks Automatic"))
-    XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
+    XCTAssertFalse(app.buttons["Start Speaker A's turn"].isEnabled)
   }
 
   func testHeaderCarriesTheZeticWordmarkAsTheSettingsButton() {
@@ -84,7 +112,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testLongPressingABubbleCopiesItAndShowsTheCopiedToast() {
-    let app = launch(state: "ended", extra: ["-toastSeconds", "6"])
+    let app = launch(state: "setup", extra: ["-toastSeconds", "6"])
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 5))
 
@@ -128,17 +156,20 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testATranslatedBubbleCarriesAReplayControl() {
-    let app = launch(state: "ended")
+    let app = launch(state: "setup")
     let replay = app.buttons["replay-translation"]
     XCTAssertTrue(replay.waitForExistence(timeout: 5))
     XCTAssertEqual(replay.label, "Play translation")
     XCTAssertTrue(replay.isHittable)
     replay.tap()
 
+    XCTAssertGreaterThanOrEqual(replay.frame.width, 44)
+    XCTAssertGreaterThanOrEqual(replay.frame.height, 44)
+
     // A failed translation has nothing to play, so the control is absent rather than disabled.
     app.terminate()
     let failed = launch(state: "translationError")
-    XCTAssertTrue(failed.staticTexts["Session status: Ready to Talk"].waitForExistence(timeout: 5))
+    XCTAssertTrue(failed.staticTexts["Session status: Ready to talk"].waitForExistence(timeout: 5))
     XCTAssertFalse(failed.buttons["replay-translation"].exists)
   }
 
@@ -153,14 +184,14 @@ final class RealtimeTranslateUITests: XCTestCase {
     let chipB = app.buttons["languages-B"]
 
     XCTAssertLessThan(chipA.frame.minX, chipB.frame.minX)
-    XCTAssertLessThan(chipA.frame.maxY, app.buttons["Start A Turn"].frame.minY)
+    XCTAssertLessThan(chipA.frame.maxY, app.buttons["Start Speaker A's turn"].frame.minY)
   }
 
   func testModelLoadingDisablesLanguagePickersAndPushToTalk() {
     let app = launch(state: "loadingModel")
     XCTAssertFalse(app.buttons["languages-A"].isEnabled)
     XCTAssertFalse(app.buttons["languages-B"].isEnabled)
-    XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
+    XCTAssertFalse(app.buttons["Start Speaker A's turn"].isEnabled)
   }
 
   func testModelLoadFailureEnablesLanguagePickersAndInlineRetry() {
@@ -168,17 +199,17 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["languages-A"].isEnabled)
     XCTAssertTrue(app.buttons["languages-B"].isEnabled)
     XCTAssertTrue(app.buttons["retry-model-load"].exists)
-    XCTAssertTrue(app.buttons["Start Session"].isEnabled)
+    XCTAssertTrue(app.buttons["Start session"].isEnabled)
   }
 
   func testReadyControlsRemainHittableAboveTheHomeIndicator() {
     let app = launch(state: "ready")
-    let endSession = app.buttons["End Session"]
+    let endSession = app.buttons["End session"]
 
     XCTAssertTrue(endSession.isHittable)
     XCTAssertLessThan(endSession.frame.maxY, app.frame.maxY)
-    XCTAssertTrue(app.buttons["Start A Turn"].isEnabled)
-    XCTAssertTrue(app.buttons["Start B Turn"].isEnabled)
+    XCTAssertTrue(app.buttons["Start Speaker A's turn"].isEnabled)
+    XCTAssertTrue(app.buttons["Start Speaker B's turn"].isEnabled)
   }
 
   private func contains(_ app: XCUIApplication, _ text: String) -> Bool {
@@ -214,7 +245,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testFirstStartConversationAsksBeforeDownloadingTheModel() {
-    let app = launch(state: "ended", firstRun: "consentNeeded")
+    let app = launch(state: "setup", firstRun: "consentNeeded")
     let start = app.buttons["start-session"]
     XCTAssertTrue(start.waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["consent-download"].exists)
@@ -223,7 +254,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
     let download = app.buttons["consent-download"]
     XCTAssertTrue(download.waitForExistence(timeout: 5))
-    XCTAssertTrue(contains(app, "about 1.9 GB"))
+    XCTAssertTrue(contains(app, "1.91 GB"))
     XCTAssertTrue(contains(app, "It downloads once"))
     XCTAssertTrue(app.buttons["consent-not-now"].exists)
 
@@ -233,14 +264,14 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testConsentWarnsAboutWiFiOnlyWhenThePathIsExpensive() {
-    let cellular = launch(state: "ended", firstRun: "consentNeeded", extra: ["-firstRunCellular"])
+    let cellular = launch(state: "setup", firstRun: "consentNeeded", extra: ["-firstRunCellular"])
     XCTAssertTrue(cellular.buttons["start-session"].waitForExistence(timeout: 10))
     cellular.buttons["start-session"].tap()
     XCTAssertTrue(cellular.buttons["consent-download"].waitForExistence(timeout: 5))
     XCTAssertTrue(cellular.staticTexts["consent-cellular-warning"].exists)
     cellular.terminate()
 
-    let wifi = launch(state: "ended", firstRun: "consentNeeded")
+    let wifi = launch(state: "setup", firstRun: "consentNeeded")
     XCTAssertTrue(wifi.buttons["start-session"].waitForExistence(timeout: 10))
     wifi.buttons["start-session"].tap()
     XCTAssertTrue(wifi.buttons["consent-download"].waitForExistence(timeout: 5))
@@ -264,8 +295,8 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(typedInput.isHittable)
     XCTAssertTrue(typedInput.isEnabled)
     // On the hint row, clear of the push-to-talk controls and the session action.
-    XCTAssertGreaterThan(typedInput.frame.minY, app.buttons["Start A Turn"].frame.maxY)
-    XCTAssertLessThan(typedInput.frame.maxY, app.buttons["End Session"].frame.minY)
+    XCTAssertGreaterThan(typedInput.frame.minY, app.buttons["Start Speaker A's turn"].frame.maxY)
+    XCTAssertLessThan(typedInput.frame.maxY, app.buttons["End session"].frame.minY)
 
     typedInput.tap()
 
@@ -292,14 +323,14 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testTypedInputIsLockedBeforeTheModelIsReady() {
-    let app = launch(state: "ended")
+    let app = launch(state: "setup")
     let typedInput = app.buttons["typed-input"]
     XCTAssertTrue(typedInput.waitForExistence(timeout: 10))
     XCTAssertFalse(typedInput.isEnabled)
   }
 
   func testTheDrawersClearRowEmptiesTheTranscript() {
-    let app = launch(state: "ended", extra: ["-toastSeconds", "6"])
+    let app = launch(state: "setup", extra: ["-toastSeconds", "6"])
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 10))
 
@@ -314,7 +345,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(toast.waitForExistence(timeout: 5))
     XCTAssertTrue(waitForDisappearance(bubble, timeout: 5))
     // The session action is untouched: clearing empties the transcript, it does not end anything.
-    XCTAssertTrue(app.buttons["Start Session"].exists)
+    XCTAssertTrue(app.buttons["Start session"].exists)
 
     // With nothing left to clear the row stays where it is and stops being tappable.
     app.buttons["ZETIC, opens settings"].tap()
@@ -327,14 +358,15 @@ final class RealtimeTranslateUITests: XCTestCase {
   /// Driven from `-modelStorage`, so the row and its confirmation are exercised without a real
   /// 1.9 GB model on the simulator.
   func testTheStorageRowNamesTheFootprintAndConfirmsBeforeDeleting() {
-    let app = launch(state: "ended", extra: ["-modelStorage", "2039431168", "-toastSeconds", "6"])
+    let app = launch(state: "setup", extra: ["-modelStorage", "1908528832", "-toastSeconds", "6"])
     app.buttons["ZETIC, opens settings"].tap()
 
     let storage = app.buttons["settings-storage"]
     XCTAssertTrue(storage.waitForExistence(timeout: 10))
     XCTAssertTrue(storage.isEnabled)
     XCTAssertTrue(storage.label.contains("Storage"))
-    XCTAssertTrue(storage.label.contains("GB"))
+    // The same figure the consent card names, from the same formatter.
+    XCTAssertTrue(storage.label.contains("1.91 GB"))
     XCTAssertTrue(storage.label.contains("Delete downloaded model"))
 
     // Tapping the row asks rather than deleting, and backing out leaves the model alone.
@@ -342,11 +374,13 @@ final class RealtimeTranslateUITests: XCTestCase {
     let delete = app.buttons["Delete downloaded model"]
     XCTAssertTrue(delete.waitForExistence(timeout: 5))
     XCTAssertTrue(contains(app, "The next session downloads the model again."))
-    // How the dialog offers its way out depends on how the host presents it: an action sheet
-    // carries the "Keep it" button, a popover is dismissed by tapping outside itself. Either way
-    // backing out leaves the model where it is.
+    // Both buttons, in every presentation. As a `confirmationDialog` this rendered as a popover
+    // with the `.cancel` button elided, leaving the app's only destructive action on screen with
+    // no visible way out; this test used to branch around that rather than fail on it.
     let keep = app.buttons["Keep it"]
-    if keep.exists { keep.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
+    XCTAssertTrue(keep.exists)
+    XCTAssertTrue(keep.isHittable)
+    keep.tap()
     XCTAssertTrue(waitForDisappearance(delete, timeout: 5))
     XCTAssertTrue(app.buttons["settings-storage"].isEnabled)
 
@@ -363,7 +397,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testTheStorageRowIsLockedWhileASessionHoldsTheModel() {
-    let app = launch(state: "ready", extra: ["-modelStorage", "2039431168"])
+    let app = launch(state: "ready", extra: ["-modelStorage", "1908528832"])
     app.buttons["ZETIC, opens settings"].tap()
 
     let storage = app.buttons["settings-storage"]

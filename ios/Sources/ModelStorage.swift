@@ -42,9 +42,15 @@ enum ModelStorageCopy {
     String(localized: "Model deleted", comment: "Toast after the model is removed from disk")
   }
 
-  /// The one place a byte count becomes words, so the row, the confirmation, and the accessibility
-  /// label can never disagree about how big the model is. `ByteCountFormatter` localizes the unit
-  /// on its own, so nothing here has to.
+  /// The one place in the whole app a byte count becomes words: this row, its confirmation, its
+  /// accessibility label, the download consent card, and the transfer line under the progress bar.
+  /// `ByteCountFormatter` localizes the unit and the decimal separator on its own, so nothing here
+  /// has to.
+  ///
+  /// `.file` is decimal, which is what iOS itself, the App Store, and Finder all count in, so the
+  /// figure here is the figure someone will see in Settings for the same file. It used to be one
+  /// of two: the row formatted the real bytes while the consent card carried a hand-written
+  /// `1.9 GB`, and the same model introduced itself as one size and then took up another.
   static func size(bytes: Int64) -> String {
     ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
   }

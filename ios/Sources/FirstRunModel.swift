@@ -121,16 +121,16 @@ final class FixedNetworkPath: NetworkPathReporting {
 // MARK: - Download size and consent
 
 enum ModelDownloadSize {
-  /// The measured size of the Hy-MT2 archive. User-facing copy always says "about 1.9 GB".
-  /// Held in tenths because that is the unit the progress line is rounded to, and unlike 1.9 a
-  /// whole number of tenths is exact in binary floating point.
-  static let tenthsOfAGigabyte = 19
-  /// A byte size, not a sentence: the digits and the unit are the same in every language this app
-  /// ships, so the figure stays a plain constant and only the words around it are translated.
-  static let total = "1.9 GB"
-  static var approximate: String {
-    String(localized: "modelSize.approximate", defaultValue: "about \(total)",
-           comment: "Model download size, hedged. %@ is a formatted size such as 1.9 GB")
+  /// The measured size of the Hy-MT2 archive, in bytes, as the one fact everything else is derived
+  /// from. Nothing anywhere writes a size out by hand: the consent card, the progress line, and
+  /// the settings drawer's storage row all format bytes through `ModelStorageCopy.size`, so the
+  /// model can never introduce itself as one size and then occupy another.
+  static let bytes: Int64 = 1_908_528_832
+  static var total: String { ModelStorageCopy.size(bytes: bytes) }
+
+  /// How much of it has arrived, at a download fraction, formatted the same way.
+  static func transferred(fraction: Double) -> String {
+    ModelStorageCopy.size(bytes: Int64((Double(bytes) * fraction).rounded()))
   }
 }
 
@@ -171,10 +171,9 @@ struct ModelPreparationStatus: Equatable {
     guard let progress, progress > 0, progress < 1 else {
       return ModelPreparationStatus(headline: FirstRunCopy.preparingModel, detail: nil, progress: nil)
     }
-    // Counted in whole tenths of a gigabyte, which are exact in binary, so half of a 1.9 GB archive
-    // reads as the "1.0" a reader expects rather than the "0.9" that 0.5 * 1.9 formats to.
-    let tenths = (progress * Double(ModelDownloadSize.tenthsOfAGigabyte)).rounded()
-    let transferred = String(format: "%.1f", tenths / 10)
+    // Both halves through the same formatter, so the line cannot say "1.0 of 1.91 GB" and set two
+    // different precisions against each other.
+    let transferred = ModelDownloadSize.transferred(fraction: progress)
     let percent = Int((progress * 100).rounded())
     // Written out in full rather than composed from `downloadingModel` and a number: a catalog
     // entry that is only a placeholder and a percent sign gives a translator nothing to work with.
@@ -239,10 +238,12 @@ enum FirstRunCopy {
   static var consentTitle: String {
     String(localized: "Download the translation model", comment: "Model download consent card title")
   }
+  /// The real figure rather than a hedge. `about 1.9 GB` was a rounded guess sitting next to a
+  /// storage row that reported the measured bytes, and the two disagreed on screen.
   static var consentSize: String {
     String(localized: "consent.size",
-           defaultValue: "The translation model is \(ModelDownloadSize.approximate).",
-           comment: "Consent card body text. %@ is a hedged size such as about 1.9 GB")
+           defaultValue: "The translation model is \(ModelDownloadSize.total).",
+           comment: "Consent card body text. %@ is a formatted size such as 1.91 GB")
   }
   static var consentOnce: String {
     String(localized: "It downloads once, then it stays on this phone.",

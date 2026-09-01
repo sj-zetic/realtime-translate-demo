@@ -19,8 +19,12 @@ enum DesignToken {
   static let borderA = Color(red: 191 / 255, green: 231 / 255, blue: 226 / 255)
   static let accentB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
   static let deepB = Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
-  static let tintB = Color(red: 240 / 255, green: 240 / 255, blue: 240 / 255)
-  static let borderB = Color(red: 232 / 255, green: 232 / 255, blue: 232 / 255)
+  /// One step deeper than the old `#F0F0F0`, matched to `tintA`'s lightness so the two bubble
+  /// fills separate from the white page by the same amount. At `#F0F0F0` against `#E9F7F5` the
+  /// two speakers were the same block of pale at arm's length, which is the distance this app is
+  /// used at: one phone on a table between two people.
+  static let tintB = Color(red: 233 / 255, green: 233 / 255, blue: 233 / 255)
+  static let borderB = Color(red: 217 / 255, green: 217 / 255, blue: 217 / 255)
 }
 
 extension Speaker {
@@ -31,21 +35,32 @@ extension Speaker {
 }
 
 /// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`, as the button that opens
-/// the settings drawer. The chevron is the only affordance that says the lockup is tappable.
+/// the settings drawer.
+///
+/// The glyph beside it is the only affordance that says the lockup is tappable, so it has to be
+/// telling the truth about what happens. A downward chevron promises something that drops from
+/// where it stands; the drawer slides in from the trailing edge. The three lines are the
+/// platform's own settled sign for "a list of settings lives behind this", with no direction in
+/// them to get wrong.
+enum ZeticWordmarkGlyph {
+  static let settings = "line.3.horizontal"
+}
+
 private struct ZeticWordmarkButton: View {
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 4) {
+      HStack(spacing: 6) {
         Image("ZeticLogo")
           .resizable()
           .scaledToFit()
           .frame(height: 16)
-        Image(systemName: "chevron.down")
-          .font(.system(size: 9, weight: .semibold))
+        Image(systemName: ZeticWordmarkGlyph.settings)
+          .font(.system(size: 11, weight: .semibold))
           .foregroundStyle(DesignToken.textSecondary)
       }
+      .frame(minHeight: Layout.tapTarget)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -60,6 +75,15 @@ private struct ZeticWordmarkButton: View {
 enum Layout {
   static let message: CGFloat = 16
   static let control: CGFloat = 20
+  /// The minimum edge of anything that can be tapped. Every icon-only control in this app was
+  /// drawn to its glyph (36x28, 32x32, 28x24) rather than to a finger, which is under the
+  /// platform's own floor in both directions at once.
+  static let tapTarget: CGFloat = 44
+  /// Above this, the bottom bar drops its hint line. See `BottomBar.showsHint`.
+  static let hintCeiling: DynamicTypeSize = .accessibility1
+  /// The tallest a scrolling session banner may grow to before the transcript starts paying for
+  /// it. Enough for a headline, a line of detail, and two stacked banner buttons.
+  static let bannerCeiling: CGFloat = 340
 }
 
 /// One screen holds everything: status, a per-speaker language bar, an inline session banner,
@@ -83,6 +107,7 @@ struct RealtimeTranslateRootView: View {
   /// so the raw string is the stored form and `AppLanguage.named` is the one tolerant reader.
   @AppStorage(AppLanguageDefaults.storageKey) private var appLanguageRaw = AppLanguage.system.rawValue
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   /// Holds the display awake while a session is live. A reference, not observed state: nothing on
   /// screen depends on it, so it must never invalidate the body it is driven from.
   @State private var screenAwake = ScreenAwakeController()
@@ -181,23 +206,50 @@ struct RealtimeTranslateRootView: View {
   private var mainScreen: some View {
     NavigationStack {
       VStack(spacing: 0) {
-        // The mute toggle rides the status strip: that row is one short line of text with the
-        // whole trailing half empty, so the app's only always-present control lands there without
-        // crowding the wordmark or adding a row of chrome.
-        StatusStrip(title: viewModel.state.title, isMuted: speechMuted,
-                    toggleMute: { speechMuted.toggle() })
-        ThinDivider()
         LanguageBar(viewModel: viewModel)
-        SessionBanner(viewModel: viewModel, startSession: startSession)
+        // The banner is the one row on this screen with no ceiling of its own, and at the
+        // accessibility sizes the permission banner alone is taller than the phone. A `VStack`
+        // whose children do not fit overflows in both directions at once, which is how the status
+        // line came to be drawn through the navigation bar and the session action came to be
+        // pushed off the bottom edge. Above the same ceiling the hint line goes at, the banner
+        // scrolls inside a bounded box instead, and only when there is a banner to bound: an
+        // empty scroller would leave a blank third of the screen behind in every other state.
+        if viewModel.hasSessionBanner, dynamicTypeSize >= Layout.hintCeiling {
+          ScrollView { sessionBanner }
+            .frame(maxHeight: Layout.bannerCeiling)
+            // Ahead of the transcript in the queue for what is left. The transcript's own
+            // scroller is greedy, and without this the banner is offered nothing at all.
+            .layoutPriority(1)
+        } else {
+          sessionBanner
+        }
         // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
         // screen, so it never lands on top of the push-to-talk row or the session action.
         ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy,
-                         canReplay: viewModel.canReplay, replay: viewModel.replay)
+                         showsReplay: !viewModel.isMuted, canReplay: viewModel.canReplay,
+                         replay: viewModel.replay, canRetry: viewModel.canRetryTranslation,
+                         retry: viewModel.retryTranslation)
           .overlay(alignment: .bottom) {
             ToastLayer(center: conversationCopy.toasts, identifier: "copy-toast")
           }
       }
       .background(DesignToken.surface)
+      // A top safe-area inset rather than the first row of the column, because the column is laid
+      // out inside a navigation stack whose inline bar floats over it: at the accessibility sizes
+      // a two-line status line grew upward out of the column and drew straight through the bar's
+      // title and the ZETIC button. As an inset it is placed under the bar and pushes the rest of
+      // the screen down instead of overlapping anything.
+      .safeAreaInset(edge: .top, spacing: 0) {
+        // The mute toggle rides the status strip: that row is one short line of text with the
+        // whole trailing half empty, so the app's only always-present control lands there without
+        // crowding the wordmark or adding a row of chrome.
+        VStack(spacing: 0) {
+          StatusStrip(title: viewModel.state.title, isMuted: speechMuted,
+                      toggleMute: { speechMuted.toggle() })
+          ThinDivider()
+        }
+        .background(DesignToken.surface)
+      }
       // A plain `String`, not a literal: the product name is the same in every language and must
       // never reach the catalog.
       .navigationTitle(AppText.productName)
@@ -231,12 +283,11 @@ struct RealtimeTranslateRootView: View {
     .tint(DesignToken.accent)
   }
 
-  private var emptyHint: String {
-    viewModel.isSessionLive
-      ? String(localized: "Speaker A or B can begin speaking.",
-               comment: "Empty transcript hint while a session is live")
-      : String(localized: "Choose the languages above, then start the session.",
-               comment: "Empty transcript hint before a session starts")
+  private var emptyHint: String? { ConversationEmptyHint.text(for: viewModel.state) }
+
+  private var sessionBanner: some View {
+    SessionBanner(viewModel: viewModel, startSession: startSession,
+                  recoverFromError: viewModel.recoverFromError)
   }
 }
 
@@ -291,17 +342,21 @@ private struct StatusStrip: View {
       Text(title)
         .font(.caption)
         .foregroundStyle(DesignToken.textSecondary)
-        // Wraps at the accessibility sizes: "Translation Model Unavailable" truncated to
-        // "Translation Model" is a status line that says the opposite of what it means.
+        // Wraps at the accessibility sizes: "Translation model unavailable" truncated to
+        // "Translation model" is a status line that says the opposite of what it means. Two lines
+        // is the ceiling, though: this is the app's quietest line, and letting it run to four
+        // takes the space away from the transcript, which is the loudest.
         .fixedSize(horizontal: false, vertical: true)
+        .lineLimit(3)
+        .minimumScaleFactor(0.7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel(Text("Session status: \(title)",
                                  comment: "Accessibility label for the status strip. %@ is the status"))
       SpeechMuteToggle(isMuted: isMuted, toggle: toggleMute)
     }
     .padding(.leading, 16)
-    .padding(.trailing, 8)
-    .padding(.vertical, 8)
+    .padding(.trailing, 4)
+    .padding(.vertical, 4)
   }
 }
 
@@ -313,10 +368,10 @@ private struct SpeechMuteToggle: View {
 
   var body: some View {
     Button(action: toggle) {
-      Image(systemName: isMuted ? "speaker.slash" : "speaker.wave.2")
-        .font(.system(size: 13, weight: .medium))
+      Image(systemName: isMuted ? SpeechGlyph.soundOff : SpeechGlyph.soundOn)
+        .font(.system(size: 15, weight: .medium))
         .foregroundStyle(isMuted ? DesignToken.textSecondary : DesignToken.textPrimary)
-        .frame(width: 36, height: 28)
+        .frame(width: Layout.tapTarget, height: Layout.tapTarget)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -332,9 +387,11 @@ private struct LanguageBar: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      speakerMenu(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA)
+      speakerMenu(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA,
+                  counterpart: viewModel.targetLanguageB)
       Spacer(minLength: 12)
-      speakerMenu(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB)
+      speakerMenu(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB,
+                  counterpart: viewModel.targetLanguageA)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 8)
@@ -342,13 +399,20 @@ private struct LanguageBar: View {
   }
 
   @ViewBuilder private func speakerMenu(
-    _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>
+    _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>,
+    counterpart: TargetLanguage
   ) -> some View {
     Menu {
       // The `label:` form, because the shorthand `Picker("...")` init has nowhere to put a
-      // translator comment. The language names themselves are `verbatim`: see `TargetLanguage`.
+      // translator comment. The language names themselves are `verbatim`: they are already in the
+      // reader's own language, and a catalog entry per language name would be 38 entries a
+      // translator has to reproduce by hand from what the system already knows.
       Picker(selection: target) {
-        ForEach(TargetLanguage.hyMT2Candidates) { Text(verbatim: $0.name).tag($0) }
+        // Not catalogue order: the two languages this conversation is using, then the phone's own,
+        // then the remaining 35 alphabetically by the name actually on screen.
+        ForEach(TargetLanguage.menuOrder(pinning: [target.wrappedValue, counterpart])) {
+          Text(verbatim: $0.menuName).tag($0)
+        }
       } label: {
         Text("Reading language", comment: "Section label in a speaker's language menu")
       }
@@ -361,10 +425,10 @@ private struct LanguageBar: View {
       .pickerStyle(.inline)
     } label: {
       // `verbatim`, because neither half is copy: one is a speaker label and a separator, the
-      // other is a Hy-MT2 language name. A catalog entry of "%@ ·" would be noise.
+      // other is a language name the system has already localized.
       (
         Text(verbatim: "\(speaker.rawValue) ·").fontWeight(.bold).foregroundColor(speaker.deepColor)
-          + Text(verbatim: " \(target.wrappedValue.name)").fontWeight(.medium)
+          + Text(verbatim: " \(target.wrappedValue.menuName)").fontWeight(.medium)
             .foregroundColor(DesignToken.textPrimary)
       )
       .font(.caption)
@@ -385,7 +449,7 @@ private struct LanguageBar: View {
     .accessibilityIdentifier("languages-\(speaker.rawValue)")
     .accessibilityLabel(
       String(localized: "languageChip.accessibility",
-             defaultValue: "Speaker \(speaker.rawValue) languages: reads \(target.wrappedValue.name), speaks \(source.wrappedValue.name)",
+             defaultValue: "Speaker \(speaker.rawValue) languages: reads \(target.wrappedValue.displayName), speaks \(source.wrappedValue.name)",
              comment: "Language chip accessibility label. %1$@ speaker, %2$@ reading, %3$@ spoken")
     )
   }
@@ -394,6 +458,7 @@ private struct LanguageBar: View {
 private struct SessionBanner: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
   let startSession: () -> Void
+  let recoverFromError: () -> Void
 
   var body: some View {
     switch viewModel.state {
@@ -405,16 +470,8 @@ private struct SessionBanner: View {
           .fixedSize(horizontal: false, vertical: true)
         // `BannerButton` takes a plain `String`, so each title is looked up here rather than
         // handed over as a literal that would never reach the catalog.
-        BannerButton(
-          title: String(localized: "Allow Microphone Access",
-                        comment: "Session banner button that triggers the system prompts"),
-          action: viewModel.requestMicrophonePermission
-        )
-        BannerButton(
-          title: String(localized: "Open App Settings",
-                        comment: "Session banner button that opens this app's page in iOS Settings"),
-          action: viewModel.openAppSettings
-        )
+        BannerButton(title: PermissionCopy.allowAccess, action: viewModel.requestMicrophonePermission)
+        BannerButton(title: PermissionCopy.openSettings, action: viewModel.openAppSettings)
       }
     case let .loadingModel(progress):
       // A genuine download reports progress and can name a size; a local load reports nothing at
@@ -438,10 +495,8 @@ private struct SessionBanner: View {
         if let value = status.progress {
           ProgressView(value: value).tint(DesignToken.accent)
         }
-        Text("Speaker controls unlock when the model is ready.",
-             comment: "Session banner body text while the model loads")
-          .font(.caption).foregroundStyle(DesignToken.textSecondary)
-          .fixedSize(horizontal: false, vertical: true)
+        // No "Speaker controls unlock when the model is ready." here any more: the bottom bar's
+        // own hint says exactly that, two inches lower, in the same words.
       }
     case let .modelLoadFailed(reason):
       banner {
@@ -449,28 +504,28 @@ private struct SessionBanner: View {
         Text(verbatim: reason).font(.subheadline).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
         BannerButton(
-          title: String(localized: "Retry Model Load",
+          title: String(localized: "Retry model load",
                         comment: "Session banner button that loads the model again after a failure"),
           action: startSession
         )
         .accessibilityIdentifier("retry-model-load")
       }
-    case .endingSession:
+    case let .error(failure):
       banner {
-        Text("Closing translation session...",
-             comment: "Session banner body text while the session unwinds")
-          .font(.subheadline).foregroundStyle(DesignToken.textSecondary)
-          .accessibilityIdentifier("closing-session")
-      }
-    case let .error(reason):
-      banner {
-        Text(verbatim: reason).font(.subheadline).foregroundStyle(DesignToken.error)
+        Text(verbatim: failure.message).font(.subheadline).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
-        BannerButton(
-          title: String(localized: "Try Again",
-                        comment: "Session banner button that retries after a runtime error"),
-          action: viewModel.requestMicrophonePermission
-        )
+        // What the way out actually is. A refused permission goes back to the system prompts and
+        // has to say so; anything else is one button that puts the session back, without throwing
+        // the loaded model's session away to ask for a microphone the app already holds.
+        switch failure.cause {
+        case .permission:
+          BannerButton(title: PermissionCopy.allowAccess, action: recoverFromError)
+            .accessibilityIdentifier("recover-session")
+          BannerButton(title: PermissionCopy.openSettings, action: viewModel.openAppSettings)
+        case .runtime:
+          BannerButton(title: TranslationFailureCopy.retryAction, action: recoverFromError)
+            .accessibilityIdentifier("recover-session")
+        }
       }
     default:
       // An interruption is not a failure, so the note borrows the banner's shape but none of its
@@ -523,17 +578,22 @@ private struct BannerButton: View {
 
 private struct ConversationList: View {
   let items: [ConversationItem]
-  let emptyHint: String
+  /// Nil in the states where the banner above is already saying what is happening.
+  let emptyHint: String?
   let copy: (ConversationItem) -> Void
-  /// Whether tapping a replay glyph would actually play anything right now.
+  /// Whether a replay control belongs on a translated bubble at all: muted, it does not.
+  let showsReplay: Bool
+  /// Whether tapping one would actually play anything right now.
   let canReplay: Bool
   let replay: (ConversationItem) -> Void
+  let canRetry: Bool
+  let retry: (ConversationItem) -> Void
 
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 12) {
-          if items.isEmpty {
+          if items.isEmpty, let emptyHint {
             Text(emptyHint)
               .font(.subheadline)
               .foregroundStyle(DesignToken.textSecondary)
@@ -541,8 +601,9 @@ private struct ConversationList: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           ForEach(items) { item in
-            ConversationBubble(item: item, copy: { copy(item) }, canReplay: canReplay,
-                               replay: { replay(item) })
+            ConversationBubble(item: item, copy: { copy(item) }, showsReplay: showsReplay,
+                               canReplay: canReplay, replay: { replay(item) },
+                               canRetry: canRetry, retry: { retry(item) })
               .id(item.id)
           }
         }
@@ -560,18 +621,28 @@ private struct ConversationList: View {
 private struct ConversationBubble: View {
   let item: ConversationItem
   let copy: () -> Void
-  /// Whether the session can play anything at all right now: muted, or the microphone is open.
+  /// Whether a replay control belongs here at all. Muted, it does not: a visible-but-inert speaker
+  /// glyph on every bubble of a silent app is a row of controls that answer taps with nothing.
+  let showsReplay: Bool
+  /// Whether tapping one would play right now: false while the recognizer holds the microphone.
   let canReplay: Bool
   let replay: () -> Void
+  let canRetry: Bool
+  let retry: () -> Void
 
   private var isA: Bool { item.speaker == .a }
   /// Only a finished translation can be replayed, so the glyph is absent, not disabled, on a
   /// bubble that is still recognizing, still translating, or whose translation failed.
   private var hasReplayableTranslation: Bool { item.speakableTranslation != nil }
+  private var showsReplayControl: Bool { hasReplayableTranslation && showsReplay }
 
   var body: some View {
+    // The bubble sizes to its content and the spacer takes what is left, rather than the bubble
+    // taking the full width and the spacer 32 points of it. Two near-full-width blocks whose only
+    // difference is a 12 point label and two tints one step apart are not two speakers at arm's
+    // length; a shape that leans is legible across a table.
     HStack(spacing: 0) {
-      if !isA { Spacer(minLength: 32) }
+      if !isA { Spacer(minLength: 64) }
       VStack(alignment: .leading, spacing: 6) {
         Text("Speaker \(item.speaker.rawValue)",
              comment: "Chat bubble heading. %@ is the speaker label, A or B")
@@ -587,12 +658,12 @@ private struct ConversationBubble: View {
         }
         .font(.body).foregroundStyle(DesignToken.textPrimary)
         ThinDivider()
-        Text("To \(item.speaker.counterpart.rawValue) - \(item.targetLanguage.name)",
+        Text("To \(item.speaker.counterpart.rawValue) - \(item.targetLanguage.menuName)",
              comment: "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name")
           .font(.caption).foregroundStyle(DesignToken.textSecondary)
         deliveryLine
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(alignment: .leading)
       .padding(12)
       .background(item.speaker.tintColor)
       .clipShape(RoundedRectangle(cornerRadius: Layout.message))
@@ -612,11 +683,11 @@ private struct ConversationBubble: View {
       // Applied after the grouping, which is what keeps the replay control its own element rather
       // than a glyph folded into the bubble's combined label.
       .overlay(alignment: .bottomTrailing) {
-        if hasReplayableTranslation {
-          ReplayButton(isEnabled: canReplay, replay: replay).padding([.trailing, .bottom], 8)
+        if showsReplayControl {
+          ReplayButton(isEnabled: canReplay, replay: replay)
         }
       }
-      if isA { Spacer(minLength: 32) }
+      if isA { Spacer(minLength: 64) }
     }
   }
 
@@ -632,28 +703,47 @@ private struct ConversationBubble: View {
       Text(verbatim: item.translation ?? "")
         .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
         // Keeps the last line of a long translation clear of the replay glyph in the corner.
-        .padding(.trailing, hasReplayableTranslation ? 30 : 0)
+        .padding(.trailing, showsReplayControl ? 34 : 0)
     case let .translationFailed(reason):
       // Already localized where it was built, by `TranslationFailureCopy` at the display site.
-      Text(verbatim: reason).font(.caption).foregroundStyle(DesignToken.error)
+      // A failed turn is the one thing on this screen that used to be a dead end: the words were
+      // said, the transcript is right there, and nothing anywhere offered to send it again.
+      VStack(alignment: .leading, spacing: 6) {
+        Text(verbatim: reason).font(.caption).foregroundStyle(DesignToken.error)
+          .fixedSize(horizontal: false, vertical: true)
+        Button(action: retry) {
+          Text(verbatim: TranslationFailureCopy.retryAction)
+            .font(.caption).fontWeight(.semibold)
+            .padding(.horizontal, 12)
+            .frame(minHeight: Layout.tapTarget)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(canRetry ? DesignToken.textPrimary : DesignToken.textSecondary)
+        .background(DesignToken.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+        .disabled(!canRetry)
+        .accessibilityIdentifier("retry-translation")
+        .accessibilityLabel(TranslationFailureCopy.retryAction)
+        .accessibilityHint(TranslationFailureCopy.retryHint)
+      }
     }
   }
 }
 
-/// The per-bubble replay control. Muted, or while the recognizer holds the microphone, it stays
-/// visible but inert: the bubble still has a translation to speak, the app is simply not speaking
-/// anything right now. Disabled rather than merely silent, because a control that answers a tap
-/// with nothing is a control that reads as broken.
+/// The per-bubble replay control. Present only when the app is not muted: a silent app showing an
+/// inert speaker on every bubble is a screen full of controls that do nothing. While the
+/// recognizer holds the microphone it stays but goes disabled, because that is a moment rather
+/// than a setting, and the control has to be in the same place when the moment passes.
 private struct ReplayButton: View {
   let isEnabled: Bool
   let replay: () -> Void
 
   var body: some View {
     Button(action: replay) {
-      Image(systemName: "speaker.wave.2")
-        .font(.system(size: 12, weight: .medium))
+      Image(systemName: SpeechGlyph.replay)
+        .font(.system(size: 15, weight: .medium))
         .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
-        .frame(width: 28, height: 24)
+        .frame(width: Layout.tapTarget, height: Layout.tapTarget)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -668,6 +758,16 @@ private struct BottomBar: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
   let startSession: () -> Void
   let openTypedInput: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  /// The hint line is the first thing to go at the accessibility sizes.
+  ///
+  /// This bar is a safe-area inset, which means it takes whatever height it asks for and the
+  /// transcript gets the rest. At AX5 the hint alone runs to five lines, which pushed the session
+  /// action off the bottom edge of the phone and squeezed the conversation, the thing the app is
+  /// for, into a couple of hundred points. Nothing is lost by dropping it: every sentence it says
+  /// is already the accessibility hint on the control it is about.
+  private var showsHint: Bool { dynamicTypeSize < Layout.hintCeiling }
 
   var body: some View {
     VStack(spacing: 12) {
@@ -678,15 +778,21 @@ private struct BottomBar: View {
       }
       .padding(.horizontal, 16)
       // The hint line is one short sentence with its trailing half empty, so the typed-input
-      // control lands there instead of becoming a third and fourth button in the row above.
+      // control lands there instead of becoming a third and fourth button in the row above. The
+      // control stays when the sentence goes: it is an affordance, not commentary.
       HStack(spacing: 8) {
-        Text(hint)
-          .font(.caption).foregroundStyle(DesignToken.textSecondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
+        if showsHint {
+          Text(hint)
+            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          Spacer(minLength: 0)
+        }
         TypedInputButton(isEnabled: viewModel.canSubmitTypedTranscript, open: openTypedInput)
       }
       .padding(.leading, 16)
-      .padding(.trailing, 8)
+      .padding(.trailing, 4)
       sessionButton
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
@@ -705,46 +811,40 @@ private struct BottomBar: View {
     case .error:
       return String(localized: "Resolve the error above to continue.",
                     comment: "Bottom bar hint while a session error banner is showing")
-    case .endingSession:
-      return String(localized: "Wait while the session ends.",
-                    comment: "Bottom bar hint while the session is unwinding")
-    case .setup, .ended:
-      return String(localized: "Tap Start Session to begin translating.",
-                    comment: "Bottom bar hint before a session starts. Start Session is a button")
+    case .setup:
+      return String(localized: "Tap Start session to begin translating.",
+                    comment: "Bottom bar hint before a session starts. Start session is a button")
     default:
       break
     }
     if let active = viewModel.state.activeSpeaker {
       return String(localized: "bottomBar.otherSpeakerActive",
-                    defaultValue: "Speaker \(active.counterpart.rawValue) cannot begin while speaker \(active.rawValue) is active.",
+                    defaultValue: "Speaker \(active.counterpart.rawValue) cannot begin while Speaker \(active.rawValue) is active.",
                     comment: "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one")
     }
     return String(localized: "Hold a button to talk, or tap once to start and again to stop.",
                   comment: "Bottom bar hint while the session is idle and ready")
   }
 
+  /// One slot, three actions, because there is only ever one thing to do to a session from here.
+  ///
+  /// The middle one is the new one. A 1.9 GB transfer used to show a disabled `Start Session` and
+  /// nothing else: the only ways to stop it were to background the app or to delete it, and the
+  /// download would still be running. `End session` already stops the transfer as well as the
+  /// screen watching it, so the cancel is that same path under the name it has while a model is
+  /// being prepared. A local load has no transfer to stop and is abandoned the same way.
   @ViewBuilder private var sessionButton: some View {
-    if viewModel.isSessionLive {
-      Button(action: viewModel.endSession) {
-        Text("End Session", comment: "Bottom bar action that ends a live session")
-          .font(.footnote).fontWeight(.semibold)
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
-      }
-      .buttonStyle(.plain)
-      .foregroundStyle(DesignToken.textPrimary)
-      .background(DesignToken.surface)
-      .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-      .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
-      .disabled(viewModel.state == .endingSession)
-      .accessibilityIdentifier("end-session")
-      .accessibilityLabel("End Session")
+    if viewModel.canCancelModelPreparation {
+      outlinedAction(title: SessionActionCopy.cancelPreparation, identifier: "cancel-model-preparation",
+                     action: viewModel.endSession)
+    } else if viewModel.isSessionLive {
+      outlinedAction(title: SessionActionCopy.end, identifier: "end-session",
+                     action: viewModel.endSession)
     } else {
       Button(action: startSession) {
-        Text("Start Session", comment: "Bottom bar action that starts a session")
+        Text(verbatim: SessionActionCopy.start)
           .font(.footnote).fontWeight(.semibold)
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
+          .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
       }
       .buttonStyle(.plain)
       .foregroundStyle(viewModel.canStartSession ? DesignToken.surface : DesignToken.textSecondary)
@@ -752,8 +852,24 @@ private struct BottomBar: View {
       .clipShape(RoundedRectangle(cornerRadius: Layout.control))
       .disabled(!viewModel.canStartSession)
       .accessibilityIdentifier("start-session")
-      .accessibilityLabel("Start Session")
+      .accessibilityLabel(SessionActionCopy.start)
     }
+  }
+
+  private func outlinedAction(title: String, identifier: String,
+                              action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      Text(verbatim: title)
+        .font(.footnote).fontWeight(.semibold)
+        .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(DesignToken.textPrimary)
+    .background(DesignToken.surface)
+    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+    .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
+    .accessibilityIdentifier(identifier)
+    .accessibilityLabel(title)
   }
 }
 
@@ -798,7 +914,7 @@ private struct PTTButton: View {
   private var blockedHint: String {
     if let active = state.activeSpeaker, active != speaker {
       return String(localized: "ptt.blockedByOtherSpeaker",
-                    defaultValue: "Speaker \(speaker.rawValue) cannot start while speaker \(active.rawValue) is active.",
+                    defaultValue: "Speaker \(speaker.rawValue) cannot start while Speaker \(active.rawValue) is active.",
                     comment: "Push-to-talk accessibility hint. %1$@ is this speaker, %2$@ the active one")
     }
     return String(localized: "Push-to-talk unlocks once the translation model is ready.",
@@ -818,7 +934,11 @@ private struct PTTButton: View {
       label
         .font(.footnote)
         .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
+        // Wraps to as many lines as it needs instead of truncating. Without it, the two controls
+        // this app is built around read "A - hol..." and "B - hol..." at the accessibility sizes:
+        // an ellipsis where the instruction should be, on the only two buttons that matter.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: Layout.tapTarget)
         .padding(.vertical, 14)
         .padding(.horizontal, 4)
     })
@@ -834,9 +954,11 @@ private struct PTTButton: View {
     })
     .accessibilityLabel(
       isListening
-        ? String(localized: "ptt.accessibility.end", defaultValue: "End \(speaker.rawValue) Turn",
+        ? String(localized: "ptt.accessibility.end",
+                 defaultValue: "End Speaker \(speaker.rawValue)'s turn",
                  comment: "Push-to-talk accessibility label while recording. %@ is A or B")
-        : String(localized: "ptt.accessibility.start", defaultValue: "Start \(speaker.rawValue) Turn",
+        : String(localized: "ptt.accessibility.start",
+                 defaultValue: "Start Speaker \(speaker.rawValue)'s turn",
                  comment: "Push-to-talk accessibility label while idle. %@ is A or B")
     )
     .accessibilityHint(

@@ -118,14 +118,16 @@ final class RealtimeTranslateViewModel: ObservableObject {
       return RealtimeTranslateViewModel(state: .finalizing(.a), items: previewItems, preferences: store)
     case "translationError":
       return RealtimeTranslateViewModel(state: .ready, items: failedPreviewItems, preferences: store)
-    case "ended":
-      return RealtimeTranslateViewModel(state: .ended, items: previewItems, preferences: store)
+    case "setup":
+      return RealtimeTranslateViewModel(state: .setup, items: previewItems, preferences: store)
     case "loadingModel":
       return RealtimeTranslateViewModel(state: .loadingModel(0.5), preferences: store)
     case "modelLoadFailed":
+      // The real copy for the real failure, rather than a placeholder sentence of its own: a UI
+      // test driving this state should be reading what someone would actually see.
       return RealtimeTranslateViewModel(
         state: .modelLoadFailed(
-          String(localized: "Try again.", comment: "Placeholder model load failure used by UI tests")
+          TranslationFailureCopy.message(for: TranslationRuntimeError.missingPersonalKey)
         ),
         preferences: store
       )
@@ -165,7 +167,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   }
 
   func startSession() {
-    guard state == .setup || state == .ended || isModelLoadFailure else { return }
+    guard state == .setup || isModelLoadFailure else { return }
     sessionTask?.cancel()
     state = .loadingModel(nil)
     sessionTask = Task { [weak self] in
@@ -217,8 +219,26 @@ final class RealtimeTranslateViewModel: ObservableObject {
       activeItemID = nil
       isRecognizerRunning = false
       speechRecognizer.stop()
-      state = .error(TranslationFailureCopy.message(for: error))
+      state = .error(SessionFailure.from(error))
       haptics.play(.sessionError)
+    }
+  }
+
+  /// The one way out of `error`, and the reason the state carries a cause at all.
+  ///
+  /// A refused permission genuinely has to go back to the system prompts, which unavoidably drops
+  /// the session to `setup`. Everything else, a recognizer that was busy or a microphone that
+  /// would not start, only has to put the session back where it was: the model is still loaded and
+  /// still in memory, and re-asking for a microphone the app already has answers nothing while
+  /// costing the person their loaded session.
+  func recoverFromError() {
+    guard case let .error(failure) = state else { return }
+    switch failure.cause {
+    case .permission:
+      requestMicrophonePermission()
+    case .runtime:
+      notice = nil
+      state = .ready
     }
   }
 
@@ -352,7 +372,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// prompts, and a recognition-language change applies at the next utterance start.
   var canEditLanguages: Bool {
     switch state {
-    case .loadingModel, .endingSession, .listening, .finalizing, .translating: false
+    case .loadingModel, .listening, .finalizing, .translating: false
     default: true
     }
   }
@@ -387,9 +407,27 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// A single tap can start the first session once permissions are granted.
   var canStartSession: Bool {
     switch state {
-    case .setup, .ended, .modelLoadFailed: true
+    case .setup, .modelLoadFailed: true
     default: false
     }
+  }
+
+  /// Whether the session banner has anything to say right now. The root view needs to know
+  /// before it lays the screen out, because a banner that has to be bounded at the accessibility
+  /// sizes must not leave an empty bounded box behind in the states that have no banner.
+  var hasSessionBanner: Bool {
+    switch state {
+    case .permissionRequired, .loadingModel, .modelLoadFailed, .error: return true
+    default: return notice != nil
+    }
+  }
+
+  /// Whether the model preparation on screen can still be called off. Both halves of it can: a
+  /// download has a transfer to stop, and a local load has a map to abandon, and both land back on
+  /// the same idle screen the start came from.
+  var canCancelModelPreparation: Bool {
+    if case .loadingModel = state { return true }
+    return false
   }
 
   // MARK: - Spoken output
@@ -525,11 +563,43 @@ final class RealtimeTranslateViewModel: ObservableObject {
       isRecognizerRunning = false
       speechRecognizer.stop()
     }
-    let request = HyMT2Request(sourceText: transcript, targetLanguage: target)
-    mostRecentTranslationRequest = request
     let itemID = activeItemID
     activeItemID = nil
     pendingFinalTranscript = nil
+    startTranslation(itemID: itemID, transcript: transcript, target: target, speaker: speaker)
+  }
+
+  /// Whether a bubble whose translation failed can be handed back to the model right now. The same
+  /// gate a new utterance passes: an idle live session, so a retry can never land on top of
+  /// someone who is mid-sentence.
+  var canRetryTranslation: Bool { state == .ready }
+
+  /// Runs the failed bubble's translation again, from its own transcript and its own reading
+  /// language, so a retry re-sends the turn that failed rather than the turn's languages as they
+  /// stand now. The bubble goes back to `Translation pending` in place, which is the same shape it
+  /// had the first time, and lands back in the same three outcomes.
+  func retryTranslation(_ item: ConversationItem) {
+    guard canRetryTranslation, case .translationFailed = item.state,
+          items.contains(where: { $0.id == item.id }) else { return }
+    notice = nil
+    let speaker = item.speaker
+    updateItem(id: item.id) { existing in
+      ConversationItem(id: existing.id, speaker: existing.speaker, transcript: existing.transcript,
+                       targetLanguage: existing.targetLanguage, translation: nil, state: .finalizing)
+    }
+    state = .translating(speaker)
+    startTranslation(itemID: item.id, transcript: item.transcript,
+                     target: item.targetLanguage, speaker: speaker)
+  }
+
+  /// The one Hy-MT2 round trip, shared by a finished turn and by a retry of one that failed. Both
+  /// arrive with the bubble already in its pending shape and the session already in `translating`,
+  /// so this owns only the request, the three outcomes, and the return to idle.
+  private func startTranslation(itemID: UUID?, transcript: String, target: TargetLanguage,
+                                speaker: Speaker) {
+    let request = HyMT2Request(sourceText: transcript, targetLanguage: target)
+    mostRecentTranslationRequest = request
+    translationTask?.cancel()
     translationTask = Task { [weak self] in
       guard let self else { return }
       do {
@@ -588,10 +658,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
       ConversationItem(
         id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9],
         translation: nil,
-        state: .translationFailed(
-          String(localized: "The Hy-MT2 translation model could not complete this request.",
-                 comment: "Placeholder translation failure used by UI tests. Hy-MT2 is a model name")
-        )
+        state: .translationFailed(TranslationFailureCopy.message(for: TranslationRuntimeError.generationFailed(3)))
       )
     ]
   }

@@ -110,7 +110,12 @@ struct ModelConsentOverlay: View {
   var body: some View {
     ZStack {
       if let prompt {
-        Color.black.opacity(0.16)
+        // Deeper than the settings drawer's 16%, and deliberately so. The card's accent-filled
+        // `Download now` sits directly over the bottom bar's accent-filled `Start session`, and
+        // through a 16% veil the two read as two live primary actions on one screen: the accent
+        // stops meaning "the way forward" and starts meaning "teal". A 40% scrim puts the screen
+        // behind properly out of play, which is what the card is claiming anyway.
+        Color.black.opacity(0.4)
           .ignoresSafeArea()
           .transition(.opacity)
           .contentShape(Rectangle())
@@ -225,7 +230,7 @@ private struct FirstRunSurface<Content: View, Actions: View>: View {
   }
 }
 
-/// The accent-filled action. One per surface, matching the `Start Session` treatment on the main
+/// The accent-filled action. One per surface, matching the `Start session` treatment on the main
 /// screen so the brand accent keeps meaning "this is the way forward".
 private struct FirstRunPrimaryButton: View {
   let title: String
