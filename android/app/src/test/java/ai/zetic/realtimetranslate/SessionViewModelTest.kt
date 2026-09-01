@@ -280,6 +280,55 @@ class SessionViewModelTest {
         assertTrue(viewModel.state.value.conversations.isEmpty())
     }
 
+    @Test fun `clearing the conversation empties the transcript and leaves everything else alone`() = runTest {
+        val translator = FakeTranslator()
+        val viewModel = SessionViewModel(
+            translator = translator,
+            initialState = SessionUiState(
+                SessionPhase.Ready,
+                conversationStarted = true,
+                conversations = listOf(bubble("one"), bubble("two")),
+            ),
+        )
+        val languagesBefore = viewModel.state.value.settings
+
+        assertTrue(viewModel.state.value.canClearConversation)
+        viewModel.dispatch(SessionAction.ClearConversation)
+
+        assertTrue(viewModel.state.value.conversations.isEmpty())
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertTrue(viewModel.state.value.conversationStarted)
+        assertEquals(languagesBefore, viewModel.state.value.settings)
+        assertFalse(translator.closed)
+        assertEquals(0, translator.unloads)
+    }
+
+    @Test fun `the clear row is unavailable with nothing to clear and while an utterance is in flight`() {
+        val empty = SessionUiState(SessionPhase.Ready, conversationStarted = true)
+        val translating = SessionUiState(SessionPhase.TranslatingA, conversationStarted = true, conversations = listOf(bubble("one")))
+        val listening = SessionUiState(SessionPhase.ListeningB, conversationStarted = true, conversations = listOf(bubble("one")))
+
+        assertFalse(empty.canClearConversation)
+        assertFalse(translating.canClearConversation)
+        assertFalse(listening.canClearConversation)
+    }
+
+    @Test fun `a clear that arrives mid-utterance is refused rather than stranding the bubble`() = runTest {
+        val viewModel = SessionViewModel(
+            translator = FakeTranslator(),
+            initialState = SessionUiState(
+                SessionPhase.TranslatingA,
+                conversationStarted = true,
+                conversations = listOf(bubble("one")),
+            ),
+        )
+
+        viewModel.dispatch(SessionAction.ClearConversation)
+
+        assertEquals(1, viewModel.state.value.conversations.size)
+        assertEquals(SessionPhase.TranslatingA, viewModel.state.value.phase)
+    }
+
     @Test fun `retry recovers an active session from a speech error without reloading`() = runTest {
         val translator = FakeTranslator()
         val transcriber = DelayedTranscriber()
@@ -325,6 +374,16 @@ class SessionViewModelTest {
         unloading.await()
         assertTrue(fakeModel.closed)
     }
+
+    private fun bubble(id: String) = ConversationItem(
+        id = id,
+        speaker = Speaker.A,
+        sourceLanguage = SpeechLanguage.Automatic,
+        targetLanguage = HyMt2Languages.all.first { it.code == "ko" },
+        transcript = "hello",
+        isFinal = true,
+        translation = "annyeong",
+    )
 
     private fun installed(tag: String) = SpeechLanguage.Installed(tag, tag)
 
