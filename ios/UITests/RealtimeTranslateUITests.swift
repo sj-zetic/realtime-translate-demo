@@ -136,31 +136,25 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(waitForDisappearance(toast, timeout: 8))
   }
 
-  func testTheMuteToggleSitsInTheStatusStripAndFlipsItsState() {
+  /// The status strip is one line of text again. Nothing tappable rides its trailing end now that
+  /// there is no sound state to draw.
+  func testTheStatusStripCarriesNoSoundToggle() {
     let app = launch(state: "ready")
-    let toggle = app.buttons["speech-mute"]
-    XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-    XCTAssertTrue(toggle.isHittable)
-    // Near the status strip, above the language chips, and clear of the wordmark button.
-    XCTAssertLessThan(toggle.frame.maxY, app.buttons["languages-A"].frame.minY)
-    XCTAssertGreaterThan(toggle.frame.minY, app.buttons["ZETIC, opens settings"].frame.maxY)
-
-    let soundOn = toggle.label
-    XCTAssertEqual(soundOn, "Spoken translation on")
-    toggle.tap()
-    XCTAssertTrue(app.buttons["Spoken translation off"].waitForExistence(timeout: 3))
-
-    // Left as it was found, so the stored preference does not leak into the next test.
-    app.buttons["Spoken translation off"].tap()
-    XCTAssertTrue(app.buttons[soundOn].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.staticTexts["Session status: Ready to talk"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["speech-mute"].exists)
+    XCTAssertFalse(app.buttons["Spoken translation on"].exists)
+    XCTAssertFalse(app.buttons["Spoken translation off"].exists)
   }
 
-  func testATranslatedBubbleCarriesAReplayControl() {
+  /// The play control is the only way this app makes a sound, so it is on every translated bubble
+  /// unconditionally: there is no longer a setting that can take it away.
+  func testATranslatedBubbleCarriesAPlayControl() {
     let app = launch(state: "setup")
     let replay = app.buttons["replay-translation"]
     XCTAssertTrue(replay.waitForExistence(timeout: 5))
     XCTAssertEqual(replay.label, "Play translation")
     XCTAssertTrue(replay.isHittable)
+    XCTAssertTrue(replay.isEnabled)
     replay.tap()
 
     XCTAssertGreaterThanOrEqual(replay.frame.width, 44)
@@ -353,60 +347,6 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(clear.isEnabled)
   }
 
-  // MARK: - Model storage
-
-  /// Driven from `-modelStorage`, so the row and its confirmation are exercised without a real
-  /// 1.9 GB model on the simulator.
-  func testTheStorageRowNamesTheFootprintAndConfirmsBeforeDeleting() {
-    let app = launch(state: "setup", extra: ["-modelStorage", "1908528832", "-toastSeconds", "6"])
-    app.buttons["ZETIC, opens settings"].tap()
-
-    let storage = app.buttons["settings-storage"]
-    XCTAssertTrue(storage.waitForExistence(timeout: 10))
-    XCTAssertTrue(storage.isEnabled)
-    XCTAssertTrue(storage.label.contains("Storage"))
-    // The same figure the consent card names, from the same formatter.
-    XCTAssertTrue(storage.label.contains("1.91 GB"))
-    XCTAssertTrue(storage.label.contains("Delete downloaded model"))
-
-    // Tapping the row asks rather than deleting, and backing out leaves the model alone.
-    storage.tap()
-    let delete = app.buttons["Delete downloaded model"]
-    XCTAssertTrue(delete.waitForExistence(timeout: 5))
-    XCTAssertTrue(contains(app, "The next session downloads the model again."))
-    // Both buttons, in every presentation. As a `confirmationDialog` this rendered as a popover
-    // with the `.cancel` button elided, leaving the app's only destructive action on screen with
-    // no visible way out; this test used to branch around that rather than fail on it.
-    let keep = app.buttons["Keep it"]
-    XCTAssertTrue(keep.exists)
-    XCTAssertTrue(keep.isHittable)
-    keep.tap()
-    XCTAssertTrue(waitForDisappearance(delete, timeout: 5))
-    XCTAssertTrue(app.buttons["settings-storage"].isEnabled)
-
-    storage.tap()
-    XCTAssertTrue(delete.waitForExistence(timeout: 5))
-    delete.tap()
-
-    XCTAssertTrue(app.staticTexts["Model deleted"].waitForExistence(timeout: 5))
-    // The row stays where it is and reports an empty store, rather than disappearing.
-    let empty = app.buttons["settings-storage"]
-    XCTAssertTrue(empty.waitForExistence(timeout: 5))
-    XCTAssertFalse(empty.isEnabled)
-    XCTAssertTrue(empty.label.contains("No model downloaded"))
-  }
-
-  func testTheStorageRowIsLockedWhileASessionHoldsTheModel() {
-    let app = launch(state: "ready", extra: ["-modelStorage", "1908528832"])
-    app.buttons["ZETIC, opens settings"].tap()
-
-    let storage = app.buttons["settings-storage"]
-    XCTAssertTrue(storage.waitForExistence(timeout: 10))
-    XCTAssertFalse(storage.isEnabled)
-    XCTAssertTrue(storage.label.contains("End the session first"))
-  }
-
-
   // MARK: - App language
 
   /// The row exists, sits in the drawer's list, and names the language in force. It deliberately
@@ -421,9 +361,11 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(row.isEnabled)
     XCTAssertTrue(row.label.contains("App language"))
     XCTAssertTrue(row.label.contains("System"))
-    // Between the clear row and the storage row, so the list keeps the documented order.
+    // Between the clear row and `Visit zetic.ai`, so the list keeps the documented order.
     XCTAssertGreaterThan(row.frame.minY, app.buttons["settings-clear-conversation"].frame.maxY)
-    XCTAssertLessThan(row.frame.maxY, app.buttons["settings-storage"].frame.minY)
+    XCTAssertLessThan(row.frame.maxY, app.buttons["settings-visit-zetic"].frame.minY)
+    // The `Storage` row and its delete flow are gone; the drawer is five rows now.
+    XCTAssertFalse(app.buttons["settings-storage"].exists)
   }
 
   /// Every existing scenario is a returning user: the first-run flags are forced closed so the
