@@ -367,7 +367,7 @@ The 1.9 GB translation model is the largest thing this app puts on a phone, and 
 - The chip face shows only the reading language, because that is the setting people actually change. The `A ·` / `B ·` prefix is tinted in that speaker's deep color and the chip border uses that speaker's border token. The recognition language stays reachable in the same menu and is announced in the chip's accessibility label.
 - Chips render `Automatic` in short form; the menu entries keep the platform's full display name (Android shows `Automatic (device recognizer)` there).
 - Languages can be changed before, between, and during a session without reloading the model. A reading-language change affects future translation prompts only. A recognition-language change applies at the next utterance start.
-- Both speakers' chips are locked while any utterance is recording, finalizing, or translating, and while the model is loading or unloading. Locking both, rather than only the active speaker's, keeps an in-flight utterance's target language stable.
+- Both speakers' chips are locked while any utterance is recording, finalizing, or translating, and while the model is loading. Locking both, rather than only the active speaker's, keeps an in-flight utterance's target language stable.
 - Defaults are English and Korean reading languages with recognition aligned to each (falling back to `Automatic` when no matching recognizer exists), so the first session needs no language taps.
 
 ### Remembering the selections
@@ -391,12 +391,11 @@ The `setup` and `ready` states now render on the same screen: `setup` is the idl
 | `permissionRequired` | Permission banner; push-to-talk locked | Request permission, open settings, change languages | `setup`, `error` |
 | `setup` | Idle screen; `Start conversation`; push-to-talk locked | Start session, change language | `modelLoading`, `permissionRequired`, `error`; stays in `setup` while the [download consent card](#3-model-download-consent) is open and if it is declined |
 | `modelLoading` | Progress banner, [downloading or preparing](#model-preparation-progress); push-to-talk and chips locked | Wait | `ready`, `modelLoadFailed` |
-| `ready` | Live screen; A/B controls available; `End session` | Start A or B, end session, change language | `listeningA`, `listeningB`, `modelUnloading` |
+| `ready` | Live screen; A/B controls available; `End session` | Start A or B, end session, change language | `listeningA`, `listeningB`, `setup` |
 | `listeningA` | `Speaker A is speaking`, active A bubble, accent-filled A control | Stop A | `finalizingA`, `error` |
 | `listeningB` | `Speaker B is speaking`, active B bubble, accent-filled B control | Stop B | `finalizingB`, `error` |
 | `finalizingA` / `finalizingB` | `Finalizing speaker A/B transcript` | Wait for completion | `translatingA`, `translatingB`, `error` |
 | `translatingA` / `translatingB` | `Translating for speaker B/A` | Wait for completion | `ready`, `error` |
-| `modelUnloading` | Unloading banner | Wait | Clear the prior conversation after cleanup and close, then enter `setup` on the same screen |
 | `modelLoadFailed` | Failure banner with `Retry model load` | Retry model load | `modelLoading` |
 | `error` | Error banner with the cause and a recovery action; existing bubbles remain | Retry, open settings, end session | `ready`, `setup`, `permissionRequired` |
 
@@ -491,12 +490,12 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Start B | B partial bubble on the right and active-B state; A control disabled with explanatory text |
 | Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language |
 | Translation succeeds | Source text, target language, and translated text appear in one bubble |
-| Change a reading language mid-session | The chip updates, the model is not reloaded, and only later utterances use the new target |
+| Change a reading language mid-session | The chip updates, that speaker's recognition language re-aligns to the matching recognizer when the device has one, the model is not reloaded, and only later utterances use the new target |
 | Change a recognition language mid-session | The `Spoken language` section updates and the new language is used from the next utterance start |
 | Change a language during an utterance | Both speakers' chips are disabled until the utterance finishes translating |
 | STT unsupported or permission denied | Do not start; show cause and recovery action inline; do not switch to network recognition |
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
-| End session | Wait for model cleanup and close, clear the prior conversation, then return the same screen to its idle state |
+| End session | Stop recognition and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start conversation` / `Start Session` reaches `ready` without loading again |
 | Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
 | Leave a live session idle on screen | iOS only for now: the display stays lit for as long as the A/B controls are on screen, and dims normally in every other state. Android parity is pending |
 | Background the app mid-session | iOS only for now: the screen hold is released immediately and taken again on return. Android parity is pending |
@@ -533,6 +532,8 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
 - A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
 - No user-facing string in the spoken-output controls contains an em dash.
+- Choosing a reading language re-aligns that speaker's recognition language to the matching installed recognizer, on both platforms, at first resolution and on every later change; a reading language the device has no recognizer for leaves the recognition language as it was, and an explicit recognition choice stands until that speaker's reading language changes again. The matcher and the coupling are covered by unit tests on both platforms, including the variant preference (`fr` over `fr-BE`, `zh-Hant` over `zh-CN`).
+- Ending a session leaves the model resident on both platforms, so a second `Start conversation` / `Start Session` in the same launch loads nothing; the model is released only when the screen's owner goes away. Covered by unit tests on both platforms.
 - Both speakers' language selections come back after a relaunch. An explicit spoken-language override survives; a spoken language that was only ever the derived default, and a stored recognizer identifier the device no longer offers, both re-derive from the restored reading language. The restore rule is covered by unit tests case by case, including the stale-identifier case.
 - A typed message produces exactly the bubble, target language, Hy-MT2 request, and spoken translation the speech path produces for the same text; a unit test compares the two requests directly rather than trusting that they were written the same way. The typed control and the send action are locked under the same rule as push-to-talk.
 - The typed-input sheet is fully navigable with a screen reader: the speaker control, the guidance line, the field, `Cancel`, and `Send` each carry a label, and the sheet is announced as modal.

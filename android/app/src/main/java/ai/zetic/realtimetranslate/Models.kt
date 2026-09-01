@@ -1,6 +1,6 @@
 package ai.zetic.realtimetranslate
 
-enum class SessionPhase { PermissionRequired, LoadingModel, ModelLoadFailed, EndingSession, Ready, ListeningA, ListeningB, FinalizingA, FinalizingB, TranslatingA, TranslatingB, Error }
+enum class SessionPhase { PermissionRequired, LoadingModel, ModelLoadFailed, Ready, ListeningA, ListeningB, FinalizingA, FinalizingB, TranslatingA, TranslatingB, Error }
 
 enum class Speaker(val label: String) {
     A("A"), B("B");

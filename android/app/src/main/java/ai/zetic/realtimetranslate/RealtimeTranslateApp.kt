@@ -88,7 +88,6 @@ private val ControlShape: Shape = RoundedCornerShape(20.dp)
 fun statusLabel(state: SessionUiState): String = when (state.phase) {
     SessionPhase.PermissionRequired -> "Microphone permission required"
     SessionPhase.LoadingModel -> "Preparing translation model"
-    SessionPhase.EndingSession -> "Ending session"
     SessionPhase.ModelLoadFailed -> "Translation model unavailable"
     SessionPhase.Ready -> if (state.conversationStarted) "Conversation ready" else "Ready to start"
     SessionPhase.ListeningA -> "Speaker A is speaking"
@@ -159,9 +158,7 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
 
 /** Language chips can be changed at any time except while an utterance is in flight. */
 private fun canEditLanguages(state: SessionUiState): Boolean =
-    state.activeSpeaker() == null &&
-        state.phase != SessionPhase.LoadingModel &&
-        state.phase != SessionPhase.EndingSession
+    state.activeSpeaker() == null && state.phase != SessionPhase.LoadingModel
 
 /** Chips render the short form; the menu entries keep the full display name. */
 private fun shortLanguageName(language: SpeechLanguage): String = when (language) {
@@ -276,9 +273,6 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             Text(state.errorMessage ?: "The translation model could not be loaded.", color = Error, fontSize = 14.sp)
             BannerAction("Retry model load", "Retry model load") { onAction(UiAction.Retry) }
         }
-        SessionPhase.EndingSession -> Banner {
-            Text("Unloading translation model", color = TextSecondary, fontSize = 14.sp)
-        }
         SessionPhase.Error -> Banner {
             Text(state.errorMessage.orEmpty(), color = Error, fontSize = 14.sp)
             BannerAction("Try again", "Try again") { onAction(UiAction.Retry) }
@@ -387,7 +381,6 @@ private fun bottomHint(state: SessionUiState): String {
         state.phase == SessionPhase.LoadingModel || state.phase == SessionPhase.ModelLoadFailed ->
             "Push-to-talk unlocks once the translation model is ready."
         state.phase == SessionPhase.Error -> "Resolve the error above to continue."
-        state.phase == SessionPhase.EndingSession -> "Wait while the session ends."
         !state.conversationStarted -> "Tap Start conversation to load the translation model."
         active != null -> "Speaker ${active.other().label} cannot begin while speaker ${active.label} is active."
         else -> "Hold a button to talk, or tap once to start and again to stop."
@@ -465,7 +458,6 @@ private fun bottomHint(state: SessionUiState): String {
     if (state.conversationStarted) {
         OutlinedButton(
             onClick = { onAction(UiAction.EndSession) },
-            enabled = state.phase != SessionPhase.EndingSession,
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
