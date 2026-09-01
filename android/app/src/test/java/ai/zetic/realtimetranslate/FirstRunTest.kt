@@ -85,37 +85,42 @@ class FirstRunTest {
 
     // region Copy
 
-    @Test fun `no first-run string contains an em dash or an en dash`() {
-        val strings = listOf(
-            FirstRunCopy.PRODUCT_NAME, FirstRunCopy.WELCOME_TAGLINE, FirstRunCopy.WELCOME_PRIVACY,
-            FirstRunCopy.WELCOME_ACTION, FirstRunCopy.PRIMING_TITLE, FirstRunCopy.PRIMING_MICROPHONE,
-            FirstRunCopy.PRIMING_SPEECH, FirstRunCopy.PRIMING_PRIVACY, FirstRunCopy.PRIMING_NEXT,
-            FirstRunCopy.PRIMING_ACTION, FirstRunCopy.PRIMING_DECLINE, FirstRunCopy.CONSENT_TITLE,
-            FirstRunCopy.CONSENT_SIZE, FirstRunCopy.CONSENT_ONCE, FirstRunCopy.CONSENT_CELLULAR,
-            FirstRunCopy.CONSENT_ACTION, FirstRunCopy.CONSENT_DECLINE,
-            SettingsDrawerCopy.TITLE, SettingsDrawerCopy.CLOSE, SettingsDrawerCopy.CLEAR_TITLE,
-            SettingsDrawerCopy.CLEAR_SUBTITLE, SettingsDrawerCopy.CLEAR_CONFIRMATION,
-            SettingsDrawerCopy.WEBSITE_TITLE, SettingsDrawerCopy.CONTACT_TITLE,
-            SettingsDrawerCopy.COPY_CONFIRMATION, SettingsDrawerCopy.BUBBLE_COPY_ACTION,
-            SettingsDrawerCopy.BUBBLE_COPY_CONFIRMATION, SettingsDrawerCopy.ABOUT_TITLE,
-            SettingsDrawerCopy.PRIVACY_LINE, SettingsDrawerCopy.WEBSITE_ACCESSIBILITY,
-            SettingsDrawerCopy.CONTACT_ACCESSIBILITY,
-            SettingsDrawerCopy.clearAccessibilityLabel(true), SettingsDrawerCopy.clearAccessibilityLabel(false),
-        )
+    // The em dash rule now covers every string in every language rather than the constants this
+    // file used to list, and lives in LocalizationCatalogTest, which reads the catalog off disk.
 
-        strings.forEach { value ->
-            assertFalse("`$value` contains an em dash", value.contains('—'))
-            assertFalse("`$value` contains an en dash", value.contains('–'))
-        }
+    @Test fun `the words the app never translates stay constants rather than catalog entries`() {
+        assertEquals("Turn Translate", FirstRunCopy.PRODUCT_NAME)
+        assertEquals("contact@zetic.ai", SettingsDrawerCopy.CONTACT_EMAIL)
+        assertEquals("https://zetic.ai", SettingsDrawerCopy.WEBSITE)
     }
 
-    @Test fun `about 1_9 GB is the only size wording`() {
-        assertEquals("about 1.9 GB", ModelDownloadSize.APPROXIMATE)
-        assertTrue(FirstRunCopy.CONSENT_SIZE.contains("about 1.9 GB"))
+    @Test fun `the size is hedged by a translated frame around one untranslated figure`() {
+        assertEquals("1.9 GB", ModelDownloadSize.TOTAL)
+        assertEquals(
+            UiText.res(
+                R.string.first_run_consent_size,
+                UiText.res(R.string.model_size_approximate, ModelDownloadSize.TOTAL),
+            ),
+            ConsentSizeLine,
+        )
     }
 
     @Test fun `the About block reads the version pair as one terse line`() {
-        assertEquals("Version 0.1.0 (1)", AppInfo("Turn Translate", "0.1.0", "1").versionLine)
+        assertEquals(
+            UiText.res(R.string.about_version_line, "0.1.0", "1"),
+            AppInfo("Turn Translate", "0.1.0", "1").versionLine,
+        )
+    }
+
+    @Test fun `the clear row's accessibility label is built from the row's own title`() {
+        assertEquals(
+            UiText.res(R.string.settings_clear_accessibility_available, UiText.res(R.string.settings_clear_title)),
+            SettingsDrawerCopy.clearAccessibilityLabel(isEnabled = true),
+        )
+        assertEquals(
+            UiText.res(R.string.settings_clear_accessibility_unavailable, UiText.res(R.string.settings_clear_title)),
+            SettingsDrawerCopy.clearAccessibilityLabel(isEnabled = false),
+        )
     }
 
     // endregion

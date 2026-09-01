@@ -37,6 +37,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
@@ -91,18 +93,20 @@ fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     UiAction.Retry -> SessionAction.Retry
 }
 
-fun statusLabel(state: SessionUiState): String = when (state.phase) {
-    SessionPhase.PermissionRequired -> "Microphone permission required"
-    SessionPhase.LoadingModel -> "Preparing translation model"
-    SessionPhase.ModelLoadFailed -> "Translation model unavailable"
-    SessionPhase.Ready -> if (state.conversationStarted) "Conversation ready" else "Ready to start"
-    SessionPhase.ListeningA -> "Speaker A is speaking"
-    SessionPhase.ListeningB -> "Speaker B is speaking"
-    SessionPhase.FinalizingA -> "Finalizing speaker A transcript"
-    SessionPhase.FinalizingB -> "Finalizing speaker B transcript"
-    SessionPhase.TranslatingA -> "Translating for speaker B"
-    SessionPhase.TranslatingB -> "Translating for speaker A"
-    SessionPhase.Error -> "An error occurred"
+fun statusLabel(state: SessionUiState): UiText = when (state.phase) {
+    SessionPhase.PermissionRequired -> UiText.res(R.string.status_permission_required)
+    SessionPhase.LoadingModel -> UiText.res(R.string.status_preparing_model)
+    SessionPhase.ModelLoadFailed -> UiText.res(R.string.status_model_unavailable)
+    SessionPhase.Ready ->
+        if (state.conversationStarted) UiText.res(R.string.status_conversation_ready) else UiText.res(R.string.status_ready_to_start)
+    SessionPhase.ListeningA -> UiText.res(R.string.status_listening, Speaker.A.label)
+    SessionPhase.ListeningB -> UiText.res(R.string.status_listening, Speaker.B.label)
+    SessionPhase.FinalizingA -> UiText.res(R.string.status_finalizing, Speaker.A.label)
+    SessionPhase.FinalizingB -> UiText.res(R.string.status_finalizing, Speaker.B.label)
+    // The status names who the translation is *for*, which is the other speaker.
+    SessionPhase.TranslatingA -> UiText.res(R.string.status_translating, Speaker.B.label)
+    SessionPhase.TranslatingB -> UiText.res(R.string.status_translating, Speaker.A.label)
+    SessionPhase.Error -> UiText.res(R.string.status_error)
 }
 
 /**
@@ -117,32 +121,41 @@ fun RealtimeTranslateApp(
     onOpenSettingsDrawer: () -> Unit = {},
     onCopyBubble: (ConversationItem) -> Unit = {},
     copyToast: ToastState? = null,
+    isMuted: Boolean = false,
+    onToggleMute: () -> Unit = {},
+    onReplayBubble: (ConversationItem) -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
-        Header(state, onOpenSettingsDrawer)
+        Header(state, onOpenSettingsDrawer, isMuted, onToggleMute)
         LanguageBar(state, onAction)
         SessionBanner(state, onAction, onOpenAppSettings)
         // The copy confirmation is anchored to the bottom of the transcript rather than the bottom
         // of the screen, so it never lands on top of the push-to-talk row or the session action.
         Box(Modifier.weight(1f)) {
-            ConversationList(state, Modifier.fillMaxSize(), onCopyBubble)
+            ConversationList(state, Modifier.fillMaxSize(), onCopyBubble, isMuted, onReplayBubble)
             copyToast?.let { ToastHost(it, Modifier.align(Alignment.BottomCenter)) }
         }
         BottomBar(state, onAction)
     }
 }
 
-@Composable private fun Header(state: SessionUiState, onOpenSettingsDrawer: () -> Unit) {
-    val status = statusLabel(state)
+@Composable private fun Header(
+    state: SessionUiState,
+    onOpenSettingsDrawer: () -> Unit,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
+) {
+    val status = statusLabel(state).text()
+    val statusAccessibility = stringResource(R.string.status_accessibility, status)
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Turn Translate",
+                FirstRunCopy.PRODUCT_NAME,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
@@ -150,18 +163,49 @@ fun RealtimeTranslateApp(
             )
             ZeticWordmarkButton(onOpenSettingsDrawer)
         }
-        Text(
-            status,
-            color = TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.semantics { contentDescription = "Session status: $status" },
-        )
-        if (state.speechLanguageCatalogLoading) {
-            Text("Checking installed on-device languages", color = TextSecondary, fontSize = 12.sp)
+        // The status strip is one short line with its whole trailing half empty, so the app's only
+        // always-present control lands there without crowding the header or adding a row of chrome.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                status,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = statusAccessibility },
+            )
+            SoundToggle(isMuted, onToggleMute)
         }
-        state.speechLanguageCatalogMessage?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
+        if (state.speechLanguageCatalogLoading) {
+            Text(stringResource(R.string.speech_catalog_loading), color = TextSecondary, fontSize = 12.sp)
+        }
+        state.speechLanguageCatalogMessage?.let { Text(it.text(), color = TextSecondary, fontSize = 12.sp) }
     }
     HorizontalDivider(color = DividerLine)
+}
+
+/**
+ * The one sound control: a speaker glyph when sound is on, a crossed-out speaker when it is off.
+ * The glyph is its whole face, so the state is announced in words rather than left to the icon.
+ */
+@Composable private fun SoundToggle(isMuted: Boolean, onToggle: () -> Unit) {
+    // The label is the state in words, so the control needs no separate state description: an
+    // Android switch would announce its own `on` after a label that already said which it is.
+    val label = stringResource(if (isMuted) R.string.sound_off_label else R.string.sound_on_label)
+    IconButton(
+        onClick = onToggle,
+        modifier = Modifier.size(28.dp).semantics(mergeDescendants = true) {
+            contentDescription = label
+            role = Role.Button
+        },
+    ) {
+        Icon(
+            painterResource(if (isMuted) R.drawable.ic_volume_off else R.drawable.ic_volume_up),
+            contentDescription = null,
+            tint = if (isMuted) TextSecondary else Accent,
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }
 
 /**
@@ -200,10 +244,13 @@ fun RealtimeTranslateApp(
 private fun canEditLanguages(state: SessionUiState): Boolean =
     state.activeSpeaker() == null && state.phase != SessionPhase.LoadingModel
 
-/** Chips render the short form; the menu entries keep the full display name. */
-private fun shortLanguageName(language: SpeechLanguage): String = when (language) {
-    SpeechLanguage.Automatic -> "Automatic"
-    is SpeechLanguage.Installed -> language.displayName
+/**
+ * Chips render the short form; the menu entries keep the full display name. `Automatic` loses its
+ * parenthetical here rather than gaining a second catalog entry, so the two can never drift.
+ */
+@Composable private fun shortLanguageName(language: SpeechLanguage): String = when (language) {
+    SpeechLanguage.Automatic -> stringResource(R.string.speech_language_automatic).substringBefore(" (")
+    is SpeechLanguage.Installed -> language.name
 }
 
 /** One chip per speaker, mirroring the side their chat bubbles appear on. */
@@ -229,6 +276,7 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
     val enabled = canEditLanguages(state)
     val reading = settings.readingLanguage.displayName
     val speaking = shortLanguageName(settings.inputLanguage)
+    val chipAccessibility = stringResource(R.string.language_chip_accessibility, speaker.label, reading, speaking)
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
         OutlinedButton(
@@ -238,9 +286,7 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             border = BorderStroke(1.dp, if (enabled) speakerBorder(speaker) else DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            modifier = Modifier.semantics {
-                contentDescription = "Speaker ${speaker.label} languages: reads $reading, speaks $speaking"
-            },
+            modifier = Modifier.semantics { contentDescription = chipAccessibility },
         ) {
             Text(
                 buildAnnotatedString {
@@ -260,7 +306,7 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
-            MenuSectionHeader("Reading language")
+            MenuSectionHeader(stringResource(R.string.menu_reading_language))
             HyMt2Languages.all.forEach { language ->
                 DropdownMenuItem(
                     text = { Text(language.displayName) },
@@ -268,10 +314,10 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
                 )
             }
             HorizontalDivider(color = DividerLine)
-            MenuSectionHeader("Spoken language")
+            MenuSectionHeader(stringResource(R.string.menu_spoken_language))
             state.speechLanguages.forEach { language ->
                 DropdownMenuItem(
-                    text = { Text(language.displayName) },
+                    text = { Text(language.displayName.text()) },
                     onClick = { expanded = false; onAction(UiAction.SelectInput(speaker, language)) },
                 )
             }
@@ -292,30 +338,44 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
 @Composable private fun SessionBanner(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit) {
     when (state.phase) {
         SessionPhase.PermissionRequired -> Banner {
-            Text("Turn Translate needs microphone access to recognize speech on this device.", color = TextPrimary, fontSize = 14.sp)
+            Text(stringResource(R.string.banner_permission_body), color = TextPrimary, fontSize = 14.sp)
             if (state.permissionPermanentlyDenied) {
-                BannerAction("Open app settings", "Open app settings", onOpenAppSettings)
+                val open = stringResource(R.string.banner_open_app_settings)
+                BannerAction(open, open, onOpenAppSettings)
             } else {
-                BannerAction("Allow microphone", "Request microphone permission") { onAction(UiAction.RequestPermission) }
+                BannerAction(
+                    stringResource(R.string.banner_allow_microphone),
+                    stringResource(R.string.banner_request_permission_accessibility),
+                ) { onAction(UiAction.RequestPermission) }
             }
         }
         SessionPhase.LoadingModel -> Banner {
-            Text("Loading translation model ${(state.modelLoadProgress * 100).toInt()}%", color = TextPrimary, fontSize = 14.sp)
+            Text(
+                stringResource(R.string.banner_loading_model, (state.modelLoadProgress * 100).toInt()),
+                color = TextPrimary,
+                fontSize = 14.sp,
+            )
             LinearProgressIndicator(
                 progress = { state.modelLoadProgress },
                 modifier = Modifier.fillMaxWidth(),
                 color = Accent,
                 trackColor = DividerLine,
             )
-            Text("Speaker controls unlock when the model is ready.", color = TextSecondary, fontSize = 12.sp)
+            Text(stringResource(R.string.banner_controls_unlock), color = TextSecondary, fontSize = 12.sp)
         }
         SessionPhase.ModelLoadFailed -> Banner {
-            Text(state.errorMessage ?: "The translation model could not be loaded.", color = Error, fontSize = 14.sp)
-            BannerAction("Retry model load", "Retry model load") { onAction(UiAction.Retry) }
+            Text(
+                state.errorMessage?.text() ?: stringResource(R.string.error_model_load_failed),
+                color = Error,
+                fontSize = 14.sp,
+            )
+            val retry = stringResource(R.string.banner_retry_model_load)
+            BannerAction(retry, retry) { onAction(UiAction.Retry) }
         }
         SessionPhase.Error -> Banner {
-            Text(state.errorMessage.orEmpty(), color = Error, fontSize = 14.sp)
-            BannerAction("Try again", "Try again") { onAction(UiAction.Retry) }
+            Text(state.errorMessage?.text().orEmpty(), color = Error, fontSize = 14.sp)
+            val tryAgain = stringResource(R.string.banner_try_again)
+            BannerAction(tryAgain, tryAgain) { onAction(UiAction.Retry) }
         }
         else -> Unit
     }
@@ -340,7 +400,13 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
     ) { Text(label, fontSize = 14.sp) }
 }
 
-@Composable private fun ConversationList(state: SessionUiState, modifier: Modifier, onCopyBubble: (ConversationItem) -> Unit) {
+@Composable private fun ConversationList(
+    state: SessionUiState,
+    modifier: Modifier,
+    onCopyBubble: (ConversationItem) -> Unit,
+    isMuted: Boolean,
+    onReplayBubble: (ConversationItem) -> Unit,
+) {
     val listState = rememberLazyListState()
     LaunchedEffect(state.conversations.size) {
         if (state.conversations.isNotEmpty()) listState.animateScrollToItem(state.conversations.lastIndex)
@@ -353,15 +419,15 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
     ) {
         if (state.conversations.isEmpty()) {
             item {
-                val hint = if (state.conversationStarted) {
-                    "Speaker A or B can begin speaking."
-                } else {
-                    "Choose the languages above, then start the session."
-                }
+                val hint = stringResource(
+                    if (state.conversationStarted) R.string.transcript_empty_live else R.string.transcript_empty_idle,
+                )
                 Text(hint, color = TextSecondary, fontSize = 14.sp)
             }
         }
-        items(state.conversations, key = { it.id }) { MessageBubble(it, onCopyBubble) }
+        items(state.conversations, key = { it.id }) {
+            MessageBubble(it, onCopyBubble, isMuted, state.isRecognizerLive, onReplayBubble)
+        }
     }
 }
 
@@ -371,10 +437,18 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
  * exposes it to the accessibility service. A bubble with nothing to copy offers no action at all.
  */
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun MessageBubble(item: ConversationItem, onCopyBubble: (ConversationItem) -> Unit) {
+@Composable private fun MessageBubble(
+    item: ConversationItem,
+    onCopyBubble: (ConversationItem) -> Unit,
+    isMuted: Boolean,
+    isRecognizerLive: Boolean,
+    onReplayBubble: (ConversationItem) -> Unit,
+) {
     val isA = item.speaker == Speaker.A
     var menuExpanded by remember { mutableStateOf(false) }
     val copyable = item.copyableText != null
+    val copyAction = stringResource(R.string.bubble_copy_action)
+    val bubbleAccessibility = stringResource(R.string.bubble_accessibility, item.speaker.label)
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isA) Arrangement.Start else Arrangement.End,
@@ -388,34 +462,77 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
                     enabled = copyable,
                     onClick = {},
                     onLongClick = { menuExpanded = true },
-                    onLongClickLabel = SettingsDrawerCopy.BUBBLE_COPY_ACTION,
+                    onLongClickLabel = copyAction,
                 )
                 .padding(12.dp)
-                .semantics { contentDescription = "Speaker ${item.speaker.label} utterance" },
+                .semantics { contentDescription = bubbleAccessibility },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(
-                    text = { Text(SettingsDrawerCopy.BUBBLE_COPY_ACTION) },
+                    text = { Text(copyAction) },
                     onClick = { menuExpanded = false; onCopyBubble(item) },
                 )
             }
             Text(
-                "Speaker ${item.speaker.label}",
+                stringResource(R.string.bubble_speaker_heading, item.speaker.label),
                 color = speakerDeep(item.speaker),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(item.transcript, fontSize = 16.sp, color = TextPrimary)
             HorizontalDivider(color = DividerLine)
-            Text("To ${item.speaker.other().label} - ${item.targetLanguage.displayName}", color = TextSecondary, fontSize = 12.sp)
-            when {
-                item.translation != null -> Text(item.translation, fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                item.translationError != null -> Text(item.translationError, color = Error, fontSize = 12.sp)
-                item.isFinal -> Text("Translation pending", color = TextSecondary, fontSize = 12.sp)
-                else -> Text("Recognizing speech", color = TextSecondary, fontSize = 12.sp)
+            Text(
+                stringResource(R.string.bubble_destination, item.speaker.other().label, item.targetLanguage.displayName),
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
+            // The replay control sits in the bottom trailing corner of the translation region, as a
+            // separate element from the bubble, so the bubble's own label and its copy long press
+            // are unchanged.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                Box(Modifier.weight(1f)) {
+                    when {
+                        item.translation != null ->
+                            Text(item.translation, fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        item.translationError != null -> Text(item.translationError.text(), color = Error, fontSize = 12.sp)
+                        item.isFinal -> Text(stringResource(R.string.bubble_translation_pending), color = TextSecondary, fontSize = 12.sp)
+                        else -> Text(stringResource(R.string.bubble_recognizing), color = TextSecondary, fontSize = 12.sp)
+                    }
+                }
+                if (ReplayControl.isPresent(item)) {
+                    ReplayButton(
+                        enabled = ReplayControl.isEnabled(item, isMuted, isRecognizerLive),
+                        onClick = { onReplayBubble(item) },
+                    )
+                }
             }
         }
+    }
+}
+
+/** Absent, not disabled, on a bubble with nothing to play; disabled while nothing can be heard. */
+@Composable private fun ReplayButton(enabled: Boolean, onClick: () -> Unit) {
+    val label = stringResource(R.string.replay_label)
+    val hint = stringResource(R.string.replay_hint)
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(28.dp).semantics(mergeDescendants = true) {
+            contentDescription = label
+            // Compose has no hint slot, so the sentence that says what the tap will do rides on the
+            // click label the accessibility service reads out with the action.
+            onClick(label = hint) { onClick(); true }
+            role = Role.Button
+            if (!enabled) disabled()
+        },
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_volume_up),
+            contentDescription = null,
+            tint = if (enabled) speakerDeep(Speaker.A) else TextSecondary,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
@@ -429,21 +546,21 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
             PttControl(Speaker.A, state, onAction, Modifier.weight(1f))
             PttControl(Speaker.B, state, onAction, Modifier.weight(1f))
         }
-        Text(bottomHint(state), color = TextSecondary, fontSize = 12.sp)
+        Text(bottomHint(state).text(), color = TextSecondary, fontSize = 12.sp)
         SessionButton(state, onAction)
     }
 }
 
-private fun bottomHint(state: SessionUiState): String {
+private fun bottomHint(state: SessionUiState): UiText {
     val active = state.activeSpeaker()
     return when {
-        state.phase == SessionPhase.PermissionRequired -> "Grant microphone access to enable push-to-talk."
+        state.phase == SessionPhase.PermissionRequired -> UiText.res(R.string.hint_grant_microphone)
         state.phase == SessionPhase.LoadingModel || state.phase == SessionPhase.ModelLoadFailed ->
-            "Push-to-talk unlocks once the translation model is ready."
-        state.phase == SessionPhase.Error -> "Resolve the error above to continue."
-        !state.conversationStarted -> "Tap Start conversation to load the translation model."
-        active != null -> "Speaker ${active.other().label} cannot begin while speaker ${active.label} is active."
-        else -> "Hold a button to talk, or tap once to start and again to stop."
+            UiText.res(R.string.hint_model_not_ready)
+        state.phase == SessionPhase.Error -> UiText.res(R.string.hint_resolve_error)
+        !state.conversationStarted -> UiText.res(R.string.hint_start_conversation)
+        active != null -> UiText.res(R.string.hint_other_speaker_active, active.other().label, active.label)
+        else -> UiText.res(R.string.hint_push_to_talk)
     }
 }
 
@@ -451,11 +568,11 @@ private fun bottomHint(state: SessionUiState): String {
     val active = state.activeSpeaker()
     val listening = state.phase == if (speaker == Speaker.A) SessionPhase.ListeningA else SessionPhase.ListeningB
     val enabled = state.conversationStarted && (state.phase == SessionPhase.Ready || listening)
-    val actionLabel = if (listening) "Stop speaker ${speaker.label}" else "Start speaker ${speaker.label}"
+    val actionLabel = stringResource(if (listening) R.string.ptt_stop else R.string.ptt_start, speaker.label)
     val blockedLabel = if (active != null) {
-        "Speaker ${speaker.label} cannot start while speaker ${active.label} is active"
+        stringResource(R.string.ptt_blocked_by_other, speaker.label, active.label)
     } else {
-        "Speaker ${speaker.label} push-to-talk unlocks when the translation model is ready"
+        stringResource(R.string.ptt_blocked_model_not_ready, speaker.label)
     }
     val container = when {
         listening -> speakerAccent(speaker)
@@ -477,9 +594,10 @@ private fun bottomHint(state: SessionUiState): String {
         enabled -> speakerBorder(speaker)
         else -> DividerLine
     }
+    val caption = stringResource(if (listening) R.string.ptt_caption_recording else R.string.ptt_caption_idle)
     val label = buildAnnotatedString {
         withStyle(SpanStyle(color = prefixColor, fontWeight = FontWeight.Bold)) { append(speaker.label) }
-        append(if (listening) " recording - release to stop" else " - hold to talk")
+        append(caption)
     }
     Box(
         modifier
@@ -515,14 +633,16 @@ private fun bottomHint(state: SessionUiState): String {
 }
 
 @Composable private fun SessionButton(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    val endLabel = stringResource(R.string.session_end)
+    val startLabel = stringResource(R.string.session_start)
     if (state.conversationStarted) {
         OutlinedButton(
             onClick = { onAction(UiAction.EndSession) },
             shape = ControlShape,
             border = BorderStroke(1.dp, DividerLine),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "End session" },
-        ) { Text("End session", fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = endLabel },
+        ) { Text(endLabel, fontSize = 14.sp) }
     } else {
         Button(
             onClick = { onAction(UiAction.StartConversation) },
@@ -534,7 +654,7 @@ private fun bottomHint(state: SessionUiState): String {
                 disabledContainerColor = SurfaceSubtle,
                 disabledContentColor = TextSecondary,
             ),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Start conversation" },
-        ) { Text("Start conversation", fontSize = 14.sp) }
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = startLabel },
+        ) { Text(startLabel, fontSize = 14.sp) }
     }
 }

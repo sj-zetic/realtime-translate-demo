@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish (es). Tú throughout, controls infinitive, neutral international
+     Spanish. Start conversation is 'Empezar', never 'Iniciar sesión', which in
+     Spanish means log in. No em dash, no en dash. -->
+<resources>
+
+    <!-- The product name, the brand and the address are constants in code, not here. -->
+
+    <!-- Status strip -->
+    <string name="status_permission_required">Falta permiso de micrófono</string>
+    <string name="status_preparing_model">Preparando el modelo de traducción</string>
+    <string name="status_model_unavailable">Modelo no disponible</string>
+    <string name="status_conversation_ready">Listo para hablar</string>
+    <string name="status_ready_to_start">Listo para empezar</string>
+    <string name="status_listening">El hablante %1$s está hablando</string>
+    <string name="status_finalizing">Finalizando la transcripción de %1$s</string>
+    <string name="status_translating">Traduciendo para %1$s</string>
+    <string name="status_error">Se produjo un error</string>
+    <string name="status_accessibility">Estado de la sesión: %1$s</string>
+    <string name="speech_catalog_loading">Comprobando los idiomas instalados</string>
+
+    <!-- Header and language bar -->
+    <string name="zetic_opens_settings">ZETIC, abre los ajustes</string>
+    <string name="speech_language_automatic">Automático (reconocimiento del dispositivo)</string>
+    <string name="language_chip_accessibility">Idiomas del hablante %1$s: lee %2$s, habla %3$s</string>
+    <string name="menu_reading_language">Idioma de lectura</string>
+    <string name="menu_spoken_language">Idioma hablado</string>
+
+    <!-- Session banner -->
+    <string name="banner_permission_body">Turn Translate necesita acceso al micrófono para reconocer la voz en este dispositivo.</string>
+    <string name="banner_open_app_settings">Abrir Ajustes</string>
+    <string name="banner_allow_microphone">Permitir el micrófono</string>
+    <string name="banner_request_permission_accessibility">Solicitar permiso del micrófono</string>
+    <string name="banner_loading_model">Cargando el modelo de traducción %1$d%%</string>
+    <string name="banner_controls_unlock">Los controles de los hablantes se activan cuando el modelo esté listo.</string>
+    <string name="banner_retry_model_load">Volver a cargar el modelo</string>
+    <string name="banner_try_again">Reintentar</string>
+
+    <!-- Transcript -->
+    <string name="transcript_empty_live">El hablante A o el B ya puede hablar.</string>
+    <string name="transcript_empty_idle">Elige los idiomas de arriba y empieza la sesión.</string>
+    <string name="bubble_speaker_heading">Hablante %1$s</string>
+    <string name="bubble_accessibility">Turno del hablante %1$s</string>
+    <string name="bubble_destination">Para %1$s - %2$s</string>
+    <string name="bubble_translation_pending">Traducción pendiente</string>
+    <string name="bubble_recognizing">Reconociendo la voz</string>
+    <string name="bubble_copy_action">Copiar</string>
+    <string name="toast_copied">Copiado</string>
+
+    <!-- Bottom bar -->
+    <string name="hint_grant_microphone">Permite el acceso al micrófono para hablar.</string>
+    <string name="hint_model_not_ready">Los botones para hablar se activan cuando el modelo esté listo.</string>
+    <string name="hint_resolve_error">Resuelve el error de arriba para continuar.</string>
+    <string name="hint_start_conversation">Toca Empezar conversación para cargar el modelo de traducción.</string>
+    <string name="hint_other_speaker_active">El hablante %1$s no puede empezar mientras el %2$s está hablando.</string>
+    <string name="hint_push_to_talk">Mantén pulsado un botón para hablar, o tócalo una vez para empezar y otra para parar.</string>
+    <string name="ptt_start">Empezar el turno de %1$s</string>
+    <string name="ptt_stop">Terminar el turno de %1$s</string>
+    <string name="ptt_blocked_by_other">El hablante %1$s no puede empezar mientras el hablante %2$s está hablando</string>
+    <string name="ptt_blocked_model_not_ready">El botón para hablar del hablante %1$s se activa cuando el modelo esté listo</string>
+    <string name="ptt_caption_idle">" - mantén pulsado"</string>
+    <string name="ptt_caption_recording">" grabando - suelta para parar"</string>
+    <string name="session_start">Empezar conversación</string>
+    <string name="session_end">Terminar sesión</string>
+
+    <!-- Spoken translation -->
+    <string name="sound_on_label">Traducción hablada activada</string>
+    <string name="sound_off_label">Traducción hablada desactivada</string>
+    <string name="sound_on_hint">Desactiva la traducción hablada.</string>
+    <string name="sound_off_hint">Activa la traducción hablada.</string>
+    <string name="replay_label">Reproducir la traducción</string>
+    <string name="replay_hint">Vuelve a decir esta traducción en voz alta.</string>
+
+    <!-- Settings drawer -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_close">Cerrar los ajustes</string>
+    <string name="settings_clear_title">Borrar conversación</string>
+    <string name="settings_clear_subtitle">Mantiene la sesión y los idiomas</string>
+    <string name="settings_clear_accessibility_available">%1$s, mantiene la sesión y los idiomas</string>
+    <string name="settings_clear_accessibility_unavailable">%1$s, no disponible, no hay nada que borrar</string>
+    <string name="toast_conversation_cleared">Conversación borrada</string>
+    <string name="settings_app_language_title">Idioma de la app</string>
+    <string name="settings_app_language_accessibility">Idioma de la app, %1$s</string>
+    <string name="app_language_system">Sistema</string>
+    <string name="toast_language_applied">El idioma se aplica por completo al reabrir la app</string>
+    <string name="settings_website_title">Visitar zetic.ai</string>
+    <string name="settings_website_accessibility">Visitar zetic.ai, abre el navegador</string>
+    <string name="settings_contact_title">Contáctanos</string>
+    <string name="settings_contact_accessibility">Contáctanos, copia %1$s en el portapapeles</string>
+    <string name="toast_email_copied">Dirección copiada</string>
+    <string name="settings_about_title">Información</string>
+    <string name="settings_privacy_line">La voz, la traducción, todo se queda en este teléfono.</string>
+    <string name="about_version_line">Versión %1$s (%2$s)</string>
+
+    <!-- First run -->
+    <string name="first_run_welcome_tagline">Dos personas, dos idiomas, un teléfono.</string>
+    <string name="first_run_welcome_privacy">La voz y la traducción funcionan en este teléfono. No se envía nada a ningún servidor.</string>
+    <string name="first_run_welcome_action">Empezar</string>
+    <string name="first_run_priming_title">Micrófono y voz</string>
+    <string name="first_run_priming_microphone">Micrófono: para oír a quien mantiene pulsado un botón.</string>
+    <string name="first_run_priming_speech">Reconocimiento de voz: para convertir ese audio en texto.</string>
+    <string name="first_run_priming_privacy">Ambos funcionan en este teléfono. Ni el audio ni el texto salen del dispositivo.</string>
+    <string name="first_run_priming_next">Android te pedirá el micrófono a continuación.</string>
+    <string name="first_run_priming_action">Continuar</string>
+    <string name="first_run_decline">Ahora no</string>
+    <string name="first_run_consent_title">Descargar el modelo de traducción</string>
+    <string name="first_run_consent_size">El modelo de traducción ocupa %1$s.</string>
+    <string name="model_size_approximate">unos %1$s</string>
+    <string name="first_run_consent_once">Se descarga una vez y se queda en este teléfono.</string>
+    <string name="first_run_consent_cellular">No estás conectado a Wi-Fi. Una descarga tan grande es mejor con Wi-Fi.</string>
+    <string name="first_run_consent_action">Descargar ahora</string>
+
+    <!-- Speech recognition failures -->
+    <string name="speech_error_main_thread">El reconocimiento de voz local debe iniciarse en el hilo principal de Android.</string>
+    <string name="speech_error_recognition_failed">Falló el reconocimiento de voz local (error %1$d).</string>
+    <string name="speech_error_android_version">Este dispositivo necesita Android 12 (API 31) o una versión posterior para el reconocimiento de voz local.</string>
+    <string name="speech_error_permission">Se necesita permiso del micrófono.</string>
+    <string name="speech_error_no_recognizer">Este dispositivo no tiene reconocimiento de voz local. La app no recurre al reconocimiento en línea.</string>
+    <string name="speech_catalog_no_recognizer">Este dispositivo no tiene reconocimiento de voz local.</string>
+    <string name="speech_catalog_unavailable">La lista de idiomas instalados no está disponible (error %1$d).</string>
+
+    <!-- Translation failures -->
+    <string name="error_model_load_failed">No se pudo cargar el modelo de traducción.</string>
+    <string name="error_model_not_loaded">El modelo de traducción no está cargado.</string>
+    <string name="error_model_start_failed">El modelo de traducción no pudo iniciarse.</string>
+    <string name="error_model_stopped">El modelo de traducción se detuvo de forma inesperada.</string>
+    <string name="error_model_empty_result">El modelo de traducción devolvió un resultado vacío.</string>
+    <string name="error_translation_failed">Falló la traducción.</string>
+</resources>

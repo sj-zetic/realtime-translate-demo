@@ -11,6 +11,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/**
+ * A translation that could not be produced, carrying the sentence the banner or the bubble shows.
+ *
+ * The runtime's own failures are the only user-facing strings the Melange boundary produces, so
+ * they travel as [UiText] like every other one rather than as an English exception message the view
+ * model would have to pass through untranslated.
+ */
+class TranslationFailure(val text: UiText) : IllegalStateException(text.toString())
+
 interface HyMt2Translator {
     suspend fun load(context: Context, onProgress: (Float) -> Unit)
     suspend fun translate(prompt: String): String
@@ -51,17 +60,19 @@ class MelangeHyMt2Translator(
 
     override suspend fun translate(prompt: String): String = withContext(Dispatchers.IO) {
         inferenceMutex.withLock {
-            val loadedModel = checkNotNull(model) { "Translation model is not loaded." }
+            val loadedModel = model ?: throw TranslationFailure(UiText.res(R.string.error_model_not_loaded))
             try {
-                check(loadedModel.run(prompt).status == 0) { "The translation model could not start." }
+                if (loadedModel.run(prompt).status != 0) {
+                    throw TranslationFailure(UiText.res(R.string.error_model_start_failed))
+                }
                 buildString {
                     while (true) {
                         val token = loadedModel.waitForNextToken()
-                        check(token.status == 0) { "The translation model stopped unexpectedly." }
+                        if (token.status != 0) throw TranslationFailure(UiText.res(R.string.error_model_stopped))
                         append(token.token)
                         if (token.isFinal || token.token.isEmpty()) break
                     }
-                }.trim().ifEmpty { error("The translation model returned no text.") }
+                }.trim().ifEmpty { throw TranslationFailure(UiText.res(R.string.error_model_empty_result)) }
             } finally {
                 loadedModel.cleanUp()
             }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The languages this build ships, so the phone's own Settings app can offer the
+     same per-app language list the drawer's `App language` row offers. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="fr" />
+    <locale android:name="es" />
+</locale-config>

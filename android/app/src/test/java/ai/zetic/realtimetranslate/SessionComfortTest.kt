@@ -94,7 +94,7 @@ class SessionComfortTest {
     @Test fun `a failed translation still copies the source transcript`() {
         assertEquals(
             "hello",
-            bubble(transcript = "hello", translation = null).copy(translationError = "Translation failed.").copyableText,
+            bubble(transcript = "hello", translation = null).copy(translationError = UiText.raw("Translation failed.")).copyableText,
         )
     }
 

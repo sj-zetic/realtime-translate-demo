@@ -1,10 +1,24 @@
 <resources>
-    <style name="Theme.RealtimeTranslate" parent="android:style/Theme.Material.Light.NoActionBar">
+    <!-- AppCompat is the parent for one reason: the drawer's `App language` row writes
+         the platform's per-app locale, and below Android 13 the androidx backport needs
+         an AppCompat delegate to re-apply that choice. -->
+    <style name="Theme.RealtimeTranslate" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#2DBDB2</item>
         <item name="android:colorBackground">#FFFFFF</item>
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">#FFFFFF</item>
+    </style>
+
+    <!-- Cold launch shows the ZETIC lockup centered on `color.surface`, so the first
+         frame is the app's own background rather than a blank white flash and the
+         transition into the header is a continuation of the same surface. This is the
+         Android half of the iOS `UILaunchScreen`; the two draw the same lockup on the
+         same white. -->
+    <style name="Theme.RealtimeTranslate.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.RealtimeTranslate</item>
     </style>
 </resources>

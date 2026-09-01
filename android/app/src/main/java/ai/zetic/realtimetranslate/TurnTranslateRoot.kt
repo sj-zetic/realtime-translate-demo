@@ -32,6 +32,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,9 +45,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
@@ -91,9 +94,20 @@ fun TurnTranslateRoot(
     var primingSeen by remember { mutableStateOf(preferences.permissionPrimingSeen) }
     var consent by remember { mutableStateOf<ConsentPrompt?>(null) }
     var pendingStart by remember { mutableStateOf<UiAction?>(null) }
+    // Seeded from the stored preference rather than defaulted, so a launch that starts muted never
+    // speaks before the screen appears.
+    var isMuted by remember { mutableStateOf(preferences.speechMuted) }
+    var appLanguage by remember { mutableStateOf(AppLanguageStore.current()) }
+
+    val clearedToast = stringResource(R.string.toast_conversation_cleared)
+    val emailCopiedToast = stringResource(R.string.toast_email_copied)
+    val bubbleCopiedToast = stringResource(R.string.toast_copied)
+    val languageToast = stringResource(R.string.toast_language_applied)
 
     KeepScreenAwake(state)
     ComfortHaptics(state, haptics)
+    val announcer = rememberSpokenTranslationAnnouncer(state.conversations)
+    SpokenTranslations(state, isMuted, announcer)
 
     // The one honest signal this build has that a model is already on the phone. Written the first
     // time a load succeeds, so the second session never asks for consent to a download that is not
@@ -131,9 +145,29 @@ fun TurnTranslateRoot(
                     is UiAction.PttRelease -> haptics(HapticEvent.TurnEnded)
                     else -> Unit
                 }
+                // Nothing is ever spoken while the microphone is open, so a turn beginning stops
+                // speech synchronously before the recognizer starts. Ending a session stops it too.
+                when (action) {
+                    is UiAction.PttPress, is UiAction.TogglePtt, UiAction.EndSession -> announcer.stop()
+                    else -> Unit
+                }
                 onAction(action)
             }
         }
+    }
+
+    /** Muting is what someone reaches for to make the phone stop talking, so it stops it. */
+    fun toggleMute() {
+        isMuted = !isMuted
+        preferences.speechMuted = isMuted
+        if (isMuted) announcer.stop()
+    }
+
+    /** The drawer stays open: the thing worth seeing afterwards is the row showing the new value. */
+    fun selectAppLanguage(language: AppLanguage) {
+        if (!AppLanguageStore.apply(language)) return
+        appLanguage = language
+        drawerToast.show(languageToast)
     }
 
     fun copy(text: String, confirmation: String, toast: ToastState) {
@@ -165,14 +199,19 @@ fun TurnTranslateRoot(
                                 SettingsDrawerContent(
                                     appInfo = appInfo,
                                     canClearConversation = state.canClearConversation,
+                                    appLanguage = appLanguage,
                                     onClearConversation = {
+                                        // The sentence being spoken belongs to a bubble that is
+                                        // going away.
+                                        announcer.stop()
                                         onAction(UiAction.ClearConversation)
                                         scope.launch { drawerState.close() }
-                                        drawerToast.show(SettingsDrawerCopy.CLEAR_CONFIRMATION)
+                                        drawerToast.show(clearedToast)
                                     },
+                                    onSelectAppLanguage = ::selectAppLanguage,
                                     onVisitWebsite = onVisitWebsite,
                                     onCopyContact = {
-                                        copy(SettingsDrawerCopy.CONTACT_EMAIL, SettingsDrawerCopy.COPY_CONFIRMATION, drawerToast)
+                                        copy(SettingsDrawerCopy.CONTACT_EMAIL, emailCopiedToast, drawerToast)
                                     },
                                     onClose = { scope.launch { drawerState.close() } },
                                 )
@@ -188,9 +227,12 @@ fun TurnTranslateRoot(
                         onOpenAppSettings = onOpenAppSettings,
                         onOpenSettingsDrawer = { scope.launch { drawerState.open() } },
                         onCopyBubble = { item ->
-                            item.copyableText?.let { copy(it, SettingsDrawerCopy.BUBBLE_COPY_CONFIRMATION, copyToast) }
+                            item.copyableText?.let { copy(it, bubbleCopiedToast, copyToast) }
                         },
                         copyToast = copyToast,
+                        isMuted = isMuted,
+                        onToggleMute = ::toggleMute,
+                        onReplayBubble = { announcer.replay(it, isMuted) },
                     )
                 }
             }
@@ -252,6 +294,38 @@ private fun KeepScreenAwake(state: SessionUiState) {
     DisposableEffect(view, keepAwake) {
         view.keepScreenOn = keepAwake
         onDispose { view.keepScreenOn = false }
+    }
+}
+
+/**
+ * The platform synthesizer, alive for as long as the screen is. Shut down on the way out rather
+ * than left holding an engine connection the process no longer has a use for.
+ */
+@Composable
+private fun rememberSpokenTranslationAnnouncer(seed: List<ConversationItem>): SpokenTranslationAnnouncer {
+    val context = LocalContext.current
+    // `seed` is read once, at creation: it is the transcript that is already on screen and must not
+    // be read aloud, not a value the announcer should follow.
+    val initial = rememberUpdatedState(seed)
+    val output = remember(context) { AndroidSpeechOutput(context) }
+    val announcer = remember(output) { SpokenTranslationAnnouncer(output).seed(initial.value) }
+    DisposableEffect(output) { onDispose { output.shutdown() } }
+    return announcer
+}
+
+/**
+ * A translation is spoken exactly once, at the moment its bubble reaches the translated state. The
+ * announcer owns which ones those are; this is only the effect that hands it each new transcript.
+ */
+@Composable
+private fun SpokenTranslations(
+    state: SessionUiState,
+    isMuted: Boolean,
+    announcer: SpokenTranslationAnnouncer,
+) {
+    val muted = rememberUpdatedState(isMuted)
+    LaunchedEffect(state.conversations) {
+        announcer.onConversationsChanged(state.conversations, muted.value)
     }
 }
 
@@ -318,12 +392,12 @@ private fun WelcomeSurface(onGetStarted: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 ZeticLockup()
                 Text(FirstRunCopy.PRODUCT_NAME, color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
-                Text(FirstRunCopy.WELCOME_TAGLINE, color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.first_run_welcome_tagline), color = TextPrimary, fontSize = 16.sp)
                 HorizontalDivider(color = DividerLine)
-                Text(FirstRunCopy.WELCOME_PRIVACY, color = TextSecondary, fontSize = 14.sp)
+                Text(stringResource(R.string.first_run_welcome_privacy), color = TextSecondary, fontSize = 14.sp)
             }
         },
-        actions = { PrimaryAction(FirstRunCopy.WELCOME_ACTION, onGetStarted) },
+        actions = { PrimaryAction(stringResource(R.string.first_run_welcome_action), onGetStarted) },
     )
 }
 
@@ -332,18 +406,18 @@ private fun PermissionPrimingSurface(onContinue: () -> Unit, onDecline: () -> Un
     FirstRunSurface(
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(FirstRunCopy.PRIMING_TITLE, color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                Text(FirstRunCopy.PRIMING_MICROPHONE, color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.first_run_priming_title), color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.first_run_priming_microphone), color = TextPrimary, fontSize = 16.sp)
                 HorizontalDivider(color = DividerLine)
-                Text(FirstRunCopy.PRIMING_SPEECH, color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.first_run_priming_speech), color = TextPrimary, fontSize = 16.sp)
                 HorizontalDivider(color = DividerLine)
-                Text(FirstRunCopy.PRIMING_PRIVACY, color = TextSecondary, fontSize = 14.sp)
-                Text(FirstRunCopy.PRIMING_NEXT, color = TextSecondary, fontSize = 14.sp)
+                Text(stringResource(R.string.first_run_priming_privacy), color = TextSecondary, fontSize = 14.sp)
+                Text(stringResource(R.string.first_run_priming_next), color = TextSecondary, fontSize = 14.sp)
             }
         },
         actions = {
-            PrimaryAction(FirstRunCopy.PRIMING_ACTION, onContinue)
-            SecondaryAction(FirstRunCopy.PRIMING_DECLINE, onDecline)
+            PrimaryAction(stringResource(R.string.first_run_priming_action), onContinue)
+            SecondaryAction(stringResource(R.string.first_run_decline), onDecline)
         },
     )
 }
@@ -380,16 +454,16 @@ private fun ModelConsentCard(prompt: ConsentPrompt, onDownload: () -> Unit, onDi
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(FirstRunCopy.CONSENT_TITLE, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text(FirstRunCopy.CONSENT_SIZE, color = TextPrimary, fontSize = 16.sp)
-                Text(FirstRunCopy.CONSENT_ONCE, color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.first_run_consent_title), color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(ConsentSizeLine.text(), color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.first_run_consent_once), color = TextPrimary, fontSize = 16.sp)
                 if (prompt.cellularWarning) {
                     HorizontalDivider(color = DividerLine)
-                    Text(FirstRunCopy.CONSENT_CELLULAR, color = TextSecondary, fontSize = 14.sp)
+                    Text(stringResource(R.string.first_run_consent_cellular), color = TextSecondary, fontSize = 14.sp)
                 }
             }
-            PrimaryAction(FirstRunCopy.CONSENT_ACTION, onDownload)
-            SecondaryAction(FirstRunCopy.CONSENT_DECLINE, onDismiss)
+            PrimaryAction(stringResource(R.string.first_run_consent_action), onDownload)
+            SecondaryAction(stringResource(R.string.first_run_decline), onDismiss)
         }
     }
 }

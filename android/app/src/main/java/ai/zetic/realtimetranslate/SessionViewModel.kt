@@ -97,7 +97,7 @@ class SessionViewModel(
             }.onSuccess {
                 mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = true, modelLoadProgress = 1f)
             }.onFailure { error ->
-                mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.message ?: "The translation model could not be loaded.")
+                mutableState.value = mutableState.value.copy(phase = SessionPhase.ModelLoadFailed, errorMessage = error.asUiText(R.string.error_model_load_failed))
             }
         }
     }
@@ -136,7 +136,7 @@ class SessionViewModel(
             owner.destroy()
             finalize(speaker, owner)
         }
-        override fun onError(message: String) = fail(message, owner)
+        override fun onError(message: UiText) = fail(message, owner)
     }
 
     private fun updateTranscript(speaker: Speaker, transcript: String, isFinal: Boolean, owner: SpeechTranscriber) {
@@ -172,7 +172,7 @@ class SessionViewModel(
         viewModelScope.launch {
             runCatching { translator.translate(prompt) }
                 .onSuccess { completeTranslation(item.id, it) }
-                .onFailure { failTranslation(item.id, it.message ?: "Translation failed.") }
+                .onFailure { failTranslation(item.id, it.asUiText(R.string.error_translation_failed)) }
         }
     }
 
@@ -181,12 +181,12 @@ class SessionViewModel(
         if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, translationError = null) else it })
     }
-    private fun failTranslation(id: String, message: String) {
+    private fun failTranslation(id: String, message: UiText) {
         val current = mutableState.value
         if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translationError = message) else it })
     }
-    private fun fail(message: String, owner: SpeechTranscriber? = transcriber) {
+    private fun fail(message: UiText, owner: SpeechTranscriber? = transcriber) {
         if (owner !== transcriber || !mutableState.value.conversationStarted) return
         owner?.destroy(); transcriber = null
         mutableState.value = mutableState.value.copy(phase = SessionPhase.Error, errorMessage = message)
@@ -225,6 +225,14 @@ class SessionViewModel(
     }
     override fun onCleared() { transcriber?.destroy(); transcriber = null; translator.close() }
 }
+
+/**
+ * The sentence a failure shows. A [TranslationFailure] already carries its own, and anything else
+ * is a runtime or SDK error this app did not write and cannot translate, so its message is passed
+ * through as-is and the generic line stands in when there is none.
+ */
+private fun Throwable.asUiText(fallback: Int): UiText =
+    (this as? TranslationFailure)?.text ?: message?.takeIf { it.isNotBlank() }?.let(UiText::raw) ?: UiText.res(fallback)
 
 private fun listeningPhase(speaker: Speaker) = if (speaker == Speaker.A) SessionPhase.ListeningA else SessionPhase.ListeningB
 private fun finalizingPhase(speaker: Speaker) = if (speaker == Speaker.A) SessionPhase.FinalizingA else SessionPhase.FinalizingB
