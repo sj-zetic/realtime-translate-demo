@@ -16,6 +16,8 @@ Turn Translate is a single screen. Setup, model loading, conversation, and error
 6. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
 7. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
 
+The bottom bar's contract is those two controls, the hint, and the session action. The hint row's empty trailing half carries the one [typed-input](#typed-input) affordance; nothing else is added down here.
+
 ### Launch
 
 Cold launch shows the official ZETIC logo lockup centered on `color.surface`, so the first frame is the app's own background rather than a blank white flash, and the transition into the header is a continuation of the same surface. iOS declares this with the image-based `UILaunchScreen` in `Sources/Info.plist` (`UIImageName` = `LaunchLogo`, `UIColorName` = `LaunchBackground`); there is no storyboard. `LaunchLogo` is a 240 pt wide render of the lockup at 1x/2x/3x, roughly 60% of the screen width, because the launch screen draws the image at its natural size instead of scaling it to fit. Android parity is pending.
@@ -44,7 +46,7 @@ Conversation ready                              ((*
                             Bonjour       ((*
 ------------------------------------
  [ A - hold to talk  ]        [ B - hold to talk  ]
- Hold a button to talk, or tap once to start and again to stop.
+ Hold a button to talk, or tap once to start and again to stop.  [keyb]
  [ End session ]
 ```
 
@@ -147,13 +149,16 @@ The first-run states are forced through launch arguments so they can be exercise
 
 ## Settings drawer
 
-The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Nothing in it affects a live session, so it can be opened at any state. Implemented on iOS; Android parity is pending.
+The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Opening it never changes session state, so it can be opened at any state; the one row that changes anything, `Clear conversation`, empties the transcript and leaves the session, the model, and both language chips exactly as they were. Implemented on iOS; Android parity is pending.
 
 - **Opening**: tap the `ZETIC` wordmark in the header. **Closing**: the header's close control, a tap anywhere on the scrim outside the panel, or a swipe toward the trailing edge. There is no back stack entry and no navigation transition; the main screen never unloads.
 - **Panel**: full height, 280 dp/pt wide at most, `color.surface` fill with a hairline `color.divider` on its leading edge, and hairline dividers between regions. Row labels are terse and left-aligned; each row's trailing icon is a quiet `color.textSecondary` glyph that repeats what the label already says.
 
 ```text
  Settings                    X
+------------------------------
+ Clear conversation          🗑
+ Keeps the session and the languages
 ------------------------------
  Visit zetic.ai              ↗
 ------------------------------
@@ -167,7 +172,7 @@ The only secondary surface. It slides in from the trailing edge over the main sc
 ```
 
 1. **Header**: the title `Settings` and a close control.
-2. **Row list**: `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
+2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
 3. **About**: the app display name, version, and build read from the platform bundle, plus one privacy line: `Speech, translation, everything stays on this phone.`
 
 - **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
@@ -243,6 +248,46 @@ Recognition runs the audio session as `.record` with `.measurement` mode, which 
 - The session is claimed and released once each, never per sentence: replacing one translation with a newer one is a cut, not a route change, and the delegate callback that reports the cancelled utterance cannot deactivate a session the recognizer has since claimed. A session that refuses to activate speaks nothing and is retried on the next translation.
 - A session state machine (`SpeechAudioCoordinator` on iOS) owns that handoff over an injected session seam, so the ordering is unit tested even though the audio route itself is only verifiable on a device.
 
+## Typed input
+
+Speech is the primary way to take a turn, not the only one. A loud room, a quiet room, a proper noun the recognizer keeps mangling, or a speaker who would rather not talk at a stranger's phone all need the same turn produced by hand. Implemented on iOS; Android parity is pending.
+
+Typed text is not a second kind of message. It is a finalized transcript, handed to the exact path a released push-to-talk control hands one to, so the target language, the Hy-MT2 request, the bubble, and the spoken translation are all unchanged. There is one translation pipeline and one entry point into it.
+
+### The affordance
+
+One shared control, a small keyboard glyph at the trailing end of the bottom bar's hint row. The bottom bar's contract stays the A and B controls, the hint, and the session action: a keyboard button beside each push-to-talk control would make that row four controls wide and crowd all three. The hint row is one short sentence with its trailing half empty, so the control lands there the same way the sound toggle lands on the status strip, without adding a row of chrome.
+
+- It carries the accessibility label `Type a message` and, when it is locked, the hint `Typing unlocks once the translation model is ready.`
+- It is enabled under exactly the push-to-talk rule: only an idle live session accepts a new utterance. Nothing can be typed before the model is ready, after the session ends, or while either speaker's utterance is recording, finalizing, or translating.
+
+### The sheet
+
+Tapping it opens a half-height sheet, which is the surface a screen reader already treats as modal:
+
+```text
+ Cancel            Type a message            Send
+ [ Speaker A ][ Speaker B ]
+ Speaker A types in English. It is translated into Korean for B.
+ [ Good morning                                        ]
+```
+
+1. **Speaker**: a two-item segmented control. The A/B choice lives here rather than in the bottom bar, because there is room here to name both languages instead of implying them. The last speaker typed for is remembered across openings; the draft is not.
+2. **Guidance**: one line naming both ends of the turn, because the sheet covers the language bar.
+3. **Field**: a multi-line text field, focused on appearance, placeheld with `Type in <that speaker's reading language>`. Each speaker types in their own reading language, the same language their chip shows.
+4. **Send**: disabled while the draft is empty or whitespace only, and while an utterance is in flight. Sending trims the text, dismisses the sheet, and produces that speaker's bubble already finalized, because there was never a partial to show. A committed typed turn plays the same light `turnEnded` tap a released push-to-talk control plays, and its delivered translation the same soft tick.
+
+## Clear the conversation
+
+One action, in the settings drawer's row list, that empties the transcript without ending the session: the model stays resident, both language chips stay as they are, and the next turn starts straight away. Implemented on iOS; Android parity is pending.
+
+- The row reads `Clear conversation` with the subtitle `Keeps the session and the languages` and a quiet trash glyph. It is the first row, because it is the one row someone opens the drawer in order to use.
+- No confirmation. Nothing was ever stored, so there is nothing to lose that a next turn does not replace.
+- Disabled, not hidden, when the transcript is empty or an utterance is recording, finalizing, or translating, so the row never moves and never strands a bubble a translation is about to land in. Its accessibility label says which of the two it is.
+- Clearing stops whatever is being spoken, because that sentence belongs to a bubble that is going away.
+- The confirmation is the shared toast, reading exactly `Conversation cleared`, posted as an accessibility announcement as well as shown. The drawer closes first, so the emptied transcript is what the toast lands over.
+- One obvious place only: the drawer row. There is no duplicate on the transcript, on the bottom bar, or in a bubble's context menu.
+
 ## Language selection on the main screen
 
 - Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
@@ -251,6 +296,18 @@ Recognition runs the audio session as `.record` with `.measurement` mode, which 
 - Languages can be changed before, between, and during a session without reloading the model. A reading-language change affects future translation prompts only. A recognition-language change applies at the next utterance start.
 - Both speakers' chips are locked while any utterance is recording, finalizing, or translating, and while the model is loading or unloading. Locking both, rather than only the active speaker's, keeps an in-flight utterance's target language stable.
 - Defaults are English and Korean reading languages with recognition aligned to each (falling back to `Automatic` when no matching recognizer exists), so the first session needs no language taps.
+
+### Remembering the selections
+
+Both speakers' language selections survive a relaunch, so the pair who set up Korean and Japanese yesterday are not setting it up again today. They are kept in platform preferences alongside the sound toggle's `speech.muted` (iOS keys `language.reading.A` / `language.spoken.A` and the B pair), as codes and recognizer identifiers rather than as objects. Implemented on iOS; Android parity is pending.
+
+The restore is not symmetric, because the two selections are not equally authored:
+
+1. **Reading languages restore first, verbatim.** A reading language is only ever chosen by a person. A stored code this build no longer offers falls back to the default rather than leaving the chip blank.
+2. **The spoken language then derives from the restored reading language**, through the same chip coupling a fresh launch uses.
+3. **A stored spoken language is applied on top only when it differs from that derived value and still names a recognizer this device has.** So an explicit override survives a relaunch, while a value that was only ever the derived default re-derives. A device that lost a recognition locale between launches re-derives rather than pinning an identifier it can no longer listen with.
+
+The mute preference already persists under its own key and is not duplicated here. Nothing else is remembered: no transcript, no session, no audio, no text.
 
 ## Shared state transitions
 
@@ -274,13 +331,13 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 ## A/B input and accessibility
 
-- The primary action is push-to-talk: recording lasts while the user holds a button and stops when it is released.
+- The primary action is push-to-talk: recording lasts while the user holds a button and stops when it is released. [Typed input](#typed-input) is the fallback for the same turn, under the same gate.
 - The same control supports tap-to-start and tap-to-stop as an accessibility alternative. The current interaction is shown as text.
 - Accessibility labels include the current action and speaker, such as `Start speaker A` / `Start A Turn`, `Stop speaker A` / `End A Turn`, and the B equivalents.
 - A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while speaker A is active`. A control disabled because no model is loaded explains that instead.
 - Every language chip announces both selections for its speaker, such as `Speaker A languages: reads English, speaks Automatic`.
 - The main screen uses no icons. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
-- The header wordmark, the settings drawer, and the two spoken-output controls are the exceptions, and only for chrome and for sound: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, the copy glyph on `Contact us`, the status strip's speaker toggle, and a bubble's replay glyph. The drawer's glyphs each sit next to a text label that already says what the control does. The two speaker glyphs are the one place a glyph stands alone, because a speaker is the one icon that means sound in every app on the phone; both announce their meaning and, for the toggle, their state in words.
+- The header wordmark, the settings drawer, the two spoken-output controls, and the typed-input control are the exceptions, and only for chrome, for sound, and for the keyboard: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, the copy glyph on `Contact us`, the trash glyph on `Clear conversation`, the status strip's speaker toggle, a bubble's replay glyph, and the bottom bar's keyboard glyph. The drawer's glyphs each sit next to a text label that already says what the control does. The two speaker glyphs and the keyboard glyph are the only places a glyph stands alone, because a speaker and a keyboard are the two icons that mean sound and typing in every app on the phone; all three announce their meaning, and the toggle its state, in words.
 - The wordmark control announces `ZETIC, opens settings`; the drawer's rows announce their action and, for `Contact us`, the address being copied; the copy confirmation is posted as an accessibility announcement as well as shown.
 
 ## On-device STT prerequisites
@@ -364,6 +421,11 @@ The accent cap applies to the product chrome only, where the accent means "this 
 | Translation succeeds with sound off | iOS only for now: nothing is spoken and every replay control is disabled; the bubble is unchanged. Android parity is pending |
 | Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation. Android parity is pending |
 | Start a turn while a translation is being spoken | iOS only for now: speech stops immediately and the microphone opens; the audio session is never held by both. Android parity is pending |
+| Relaunch after changing a reading language | iOS only for now: both chips come back as they were left, with the spoken language derived from the restored reading language. Android parity is pending |
+| Relaunch after overriding a spoken language | iOS only for now: the override comes back; a stored recognizer the device no longer has re-derives from the reading chip instead. Android parity is pending |
+| Type a message and send it | iOS only for now: the same bubble, target language, request, and spoken translation a released push-to-talk control would have produced. Android parity is pending |
+| Open typed input while an utterance is in flight | iOS only for now: the keyboard control is disabled under exactly the push-to-talk rule, with the same explanatory text. Android parity is pending |
+| Clear the conversation from the drawer | iOS only for now: the transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears. Android parity is pending |
 
 ## Verification
 
@@ -381,4 +443,9 @@ The accent cap applies to the product chrome only, where the accent means "this 
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
 - A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
 - No user-facing string in the spoken-output controls contains an em dash.
+- Both speakers' language selections come back after a relaunch. An explicit spoken-language override survives; a spoken language that was only ever the derived default, and a stored recognizer identifier the device no longer offers, both re-derive from the restored reading language. The restore rule is covered by unit tests case by case, including the stale-identifier case.
+- A typed message produces exactly the bubble, target language, Hy-MT2 request, and spoken translation the speech path produces for the same text; a unit test compares the two requests directly rather than trusting that they were written the same way. The typed control and the send action are locked under the same rule as push-to-talk.
+- The typed-input sheet is fully navigable with a screen reader: the speaker control, the guidance line, the field, `Cancel`, and `Send` each carry a label, and the sheet is announced as modal.
+- Clearing the conversation from the drawer empties the transcript, leaves the session state, the model, and both language chips untouched, and shows the `Conversation cleared` toast; the row is disabled with nothing to clear and while an utterance is in flight.
+- No user-facing string in the typed-input sheet or the clear action contains an em dash.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.

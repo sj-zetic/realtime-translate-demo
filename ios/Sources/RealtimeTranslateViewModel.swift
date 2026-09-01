@@ -4,13 +4,23 @@ import UIKit
 @MainActor
 final class RealtimeTranslateViewModel: ObservableObject {
   @Published private(set) var state: SessionState
-  @Published var sourceLanguageA: SpeechSourceLanguage
-  @Published var targetLanguageA: TargetLanguage {
-    didSet { alignSpokenLanguage(with: targetLanguageA, for: .a) }
+  @Published var sourceLanguageA: SpeechSourceLanguage {
+    didSet { preferences.setSpokenIdentifier(sourceLanguageA.identifier, for: .a) }
   }
-  @Published var sourceLanguageB: SpeechSourceLanguage
+  @Published var targetLanguageA: TargetLanguage {
+    didSet {
+      preferences.setReadingCode(targetLanguageA.code, for: .a)
+      alignSpokenLanguage(with: targetLanguageA, for: .a)
+    }
+  }
+  @Published var sourceLanguageB: SpeechSourceLanguage {
+    didSet { preferences.setSpokenIdentifier(sourceLanguageB.identifier, for: .b) }
+  }
   @Published var targetLanguageB: TargetLanguage {
-    didSet { alignSpokenLanguage(with: targetLanguageB, for: .b) }
+    didSet {
+      preferences.setReadingCode(targetLanguageB.code, for: .b)
+      alignSpokenLanguage(with: targetLanguageB, for: .b)
+    }
   }
   @Published private(set) var items: [ConversationItem]
   @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
@@ -26,6 +36,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private let translationRuntime: any TranslationRuntime
   private let haptics: any HapticSink
   private let speechOutput: any SpeechOutput
+  private let preferences: any LanguagePreferenceStoring
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
   private var sessionTask: Task<Void, Never>?
@@ -40,43 +51,61 @@ final class RealtimeTranslateViewModel: ObservableObject {
        translationRuntime: (any TranslationRuntime)? = nil,
        haptics: (any HapticSink)? = nil,
        speechOutput: (any SpeechOutput)? = nil,
-       isMuted: Bool = UserDefaults.standard.bool(forKey: SpeechOutputDefaults.mutedKey)) {
+       isMuted: Bool = UserDefaults.standard.bool(forKey: SpeechOutputDefaults.mutedKey),
+       preferences: (any LanguagePreferenceStoring)? = nil) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
+    let store = preferences ?? EphemeralLanguagePreferences()
     self.state = state
     // A speaker's chip language drives what the recognizer listens for: an unset (automatic)
     // spoken language follows the reading language whenever a matching recognizer exists, so
-    // "B: Korean" never transcribes in the device locale.
-    let resolvedA = supported.contains(sourceLanguageA) ? sourceLanguageA : .automatic
-    self.sourceLanguageA = resolvedA == .automatic
-      ? Self.matchedSourceLanguage(for: targetLanguageA, in: supported) ?? .automatic : resolvedA
-    self.targetLanguageA = targetLanguageA
-    let resolvedB = supported.contains(sourceLanguageB) ? sourceLanguageB : .automatic
-    self.sourceLanguageB = resolvedB == .automatic
-      ? Self.matchedSourceLanguage(for: targetLanguageB, in: supported) ?? .automatic : resolvedB
-    self.targetLanguageB = targetLanguageB
+    // "B: Korean" never transcribes in the device locale. A remembered pair enters through the
+    // same resolver, so a restored launch and a fresh one agree by construction.
+    let restoredA = LanguageRestore.selection(
+      storedReading: store.readingCode(for: .a), storedSpoken: store.spokenIdentifier(for: .a),
+      fallbackReading: targetLanguageA, fallbackSpoken: sourceLanguageA, available: supported
+    )
+    self.sourceLanguageA = restoredA.spoken
+    self.targetLanguageA = restoredA.reading
+    let restoredB = LanguageRestore.selection(
+      storedReading: store.readingCode(for: .b), storedSpoken: store.spokenIdentifier(for: .b),
+      fallbackReading: targetLanguageB, fallbackSpoken: sourceLanguageB, available: supported
+    )
+    self.sourceLanguageB = restoredB.spoken
+    self.targetLanguageB = restoredB.reading
     self.items = items
     self.speechRecognizer = recognizer
     self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
     self.haptics = haptics ?? SystemHaptics()
     self.speechOutput = speechOutput ?? SystemSpeechOutput()
     self.isMuted = isMuted
+    self.preferences = store
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
   }
 
+  /// The app's composition root, and the one place the persisting store is injected: everywhere
+  /// else a view model remembers nothing, so a test is never reading what the host app last wrote.
   static func fromLaunchArguments() -> RealtimeTranslateViewModel {
     let value = ProcessInfo.processInfo.arguments.drop { $0 != "-uiState" }.dropFirst().first
+    let store = UserDefaultsLanguagePreferences()
     switch value {
-    case "listeningA": return RealtimeTranslateViewModel(state: .listening(.a), items: previewItems)
-    case "finalizingA": return RealtimeTranslateViewModel(state: .finalizing(.a), items: previewItems)
-    case "translationError": return RealtimeTranslateViewModel(state: .ready, items: failedPreviewItems)
-    case "ended": return RealtimeTranslateViewModel(state: .ended, items: previewItems)
-    case "loadingModel": return RealtimeTranslateViewModel(state: .loadingModel(0.5))
-    case "modelLoadFailed": return RealtimeTranslateViewModel(state: .modelLoadFailed("Try again."))
-    case "ready": return RealtimeTranslateViewModel(state: .ready)
-    case "permissionRequired": return RealtimeTranslateViewModel(state: .permissionRequired)
-    default: return RealtimeTranslateViewModel()
+    case "listeningA":
+      return RealtimeTranslateViewModel(state: .listening(.a), items: previewItems, preferences: store)
+    case "finalizingA":
+      return RealtimeTranslateViewModel(state: .finalizing(.a), items: previewItems, preferences: store)
+    case "translationError":
+      return RealtimeTranslateViewModel(state: .ready, items: failedPreviewItems, preferences: store)
+    case "ended":
+      return RealtimeTranslateViewModel(state: .ended, items: previewItems, preferences: store)
+    case "loadingModel":
+      return RealtimeTranslateViewModel(state: .loadingModel(0.5), preferences: store)
+    case "modelLoadFailed":
+      return RealtimeTranslateViewModel(state: .modelLoadFailed("Try again."), preferences: store)
+    case "ready": return RealtimeTranslateViewModel(state: .ready, preferences: store)
+    case "permissionRequired":
+      return RealtimeTranslateViewModel(state: .permissionRequired, preferences: store)
+    default: return RealtimeTranslateViewModel(preferences: store)
     }
   }
 
@@ -172,6 +201,47 @@ final class RealtimeTranslateViewModel: ObservableObject {
     if let transcript = pendingFinalTranscript, state == .finalizing(speaker) {
       completeTurn(transcript, speaker: speaker)
     }
+  }
+
+  // MARK: - Typed turns
+
+  /// A typed turn is gated exactly like a push-to-talk one: only an idle live session accepts a
+  /// new utterance, so nothing can be typed over someone who is mid-sentence.
+  var canSubmitTypedTranscript: Bool { state == .ready }
+
+  /// Hands typed text to the same path a released push-to-talk hands a finalized transcript to.
+  /// Everything after this line, target language included, is the speech flow untouched: the
+  /// bubble is created already finalized because there was never a partial to show.
+  func submitTypedTranscript(_ text: String, speaker: Speaker) {
+    let transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard canSubmitTypedTranscript, !transcript.isEmpty else { return }
+    let item = ConversationItem(
+      id: UUID(), speaker: speaker, transcript: transcript,
+      targetLanguage: targetLanguage(for: speaker.counterpart), translation: nil, state: .finalizing
+    )
+    items.append(item)
+    activeItemID = item.id
+    pendingFinalTranscript = nil
+    state = .finalizing(speaker)
+    haptics.play(.turnEnded)
+    completeTurn(transcript, speaker: speaker)
+  }
+
+  // MARK: - Clearing the conversation
+
+  /// Nothing is stored, so clearing asks nothing: it only has to be impossible mid-utterance,
+  /// where it would strand the bubble a translation is about to land in, and pointless on an
+  /// already empty transcript.
+  var canClearConversation: Bool { !items.isEmpty && state.activeSpeaker == nil }
+
+  /// Empties the transcript without touching the session: the model stays resident, the languages
+  /// stay chosen, and the next turn starts straight away. Whatever was being read aloud belongs to
+  /// a bubble that is going away, so it stops with it.
+  func clearConversation() {
+    guard canClearConversation else { return }
+    speechOutput.stop()
+    items = []
+    mostRecentTranslationRequest = nil
   }
 
   /// Ending a session clears the conversation but keeps the model resident, so the next
@@ -300,6 +370,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
     completeTurn(transcript, speaker: speaker)
   }
 
+  /// The one path a finalized transcript takes, whatever produced it: a released push-to-talk or
+  /// a typed message. It resolves the counterpart's reading language, releases the recognizer
+  /// (already idle for a typed turn), issues exactly one Hy-MT2 request, and speaks the result.
   private func completeTurn(_ transcript: String, speaker: Speaker) {
     guard state == .finalizing(speaker) else { return }
     let target = targetLanguage(for: speaker.counterpart)

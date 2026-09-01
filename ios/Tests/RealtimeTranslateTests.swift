@@ -1044,6 +1044,309 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertNotEqual(SpeechOutputCopy.soundOnLabel, SpeechOutputCopy.soundOffLabel)
   }
 
+  // MARK: - Remembered languages
+
+  func testLanguageRestoreHonoursAnOverrideAndReDerivesEverythingElse() {
+    let available: [SpeechSourceLanguage] = [
+      .automatic,
+      SpeechSourceLanguage(identifier: "en-GB", name: "English (United Kingdom)"),
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+      SpeechSourceLanguage(identifier: "ko-KR", name: "Korean (South Korea)")
+    ]
+    let english = TargetLanguage(code: "en", name: "English")
+    func resolve(_ reading: String?, _ spoken: String?) -> LanguageSelection {
+      LanguageRestore.selection(storedReading: reading, storedSpoken: spoken,
+                                fallbackReading: english, fallbackSpoken: .automatic,
+                                available: available)
+    }
+
+    // Nothing remembered: the caller's chip, with the spoken language derived from it.
+    XCTAssertEqual(resolve(nil, nil), LanguageSelection(reading: english, spoken: available[2]))
+    // A remembered reading language drives a fresh derivation rather than a stored one.
+    XCTAssertEqual(resolve("ko", nil).reading.code, "ko")
+    XCTAssertEqual(resolve("ko", nil).spoken.identifier, "ko-KR")
+    // An explicit override differs from the derived default, so it survives.
+    XCTAssertEqual(resolve("en", "en-GB").spoken.identifier, "en-GB")
+    // A stale recognizer id re-derives instead of pinning a locale the device cannot hear.
+    XCTAssertEqual(resolve("en", "en-AU").spoken.identifier, "en-US")
+    // `Automatic` was never an override; it means "follow the chip".
+    XCTAssertEqual(resolve("ko", "automatic").spoken.identifier, "ko-KR")
+    // A reading code this build no longer offers falls back rather than vanishing.
+    XCTAssertEqual(resolve("xx", nil).reading, english)
+  }
+
+  func testBothSpeakersLanguagesSurviveARelaunch() {
+    let store = EphemeralLanguagePreferences()
+    let recognizer = FakeSpeechRecognizer()
+    recognizer.sourceLanguages = [
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+      SpeechSourceLanguage(identifier: "ja-JP", name: "Japanese (Japan)"),
+      SpeechSourceLanguage(identifier: "ko-KR", name: "Korean (South Korea)")
+    ]
+
+    let first = RealtimeTranslateViewModel(state: .setup, speechRecognizer: recognizer,
+                                           preferences: store)
+    first.targetLanguageA = TargetLanguage(code: "ja", name: "Japanese")
+    XCTAssertEqual(first.sourceLanguageA.identifier, "ja-JP")
+
+    let relaunched = RealtimeTranslateViewModel(state: .setup, speechRecognizer: recognizer,
+                                                preferences: store)
+    XCTAssertEqual(relaunched.targetLanguageA.code, "ja")
+    XCTAssertEqual(relaunched.sourceLanguageA.identifier, "ja-JP")
+    // B was never touched, so it comes back as the default pair rather than as nothing.
+    XCTAssertEqual(relaunched.targetLanguageB.code, "ko")
+    XCTAssertEqual(relaunched.sourceLanguageB.identifier, "ko-KR")
+  }
+
+  func testAnExplicitSpokenOverrideSurvivesAndAStaleOneReDerives() {
+    let store = EphemeralLanguagePreferences()
+    let recognizer = FakeSpeechRecognizer()
+    recognizer.sourceLanguages = [
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+      SpeechSourceLanguage(identifier: "fr-BE", name: "French (Belgium)"),
+      SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    ]
+
+    let first = RealtimeTranslateViewModel(state: .setup, speechRecognizer: recognizer,
+                                           preferences: store)
+    first.targetLanguageB = TargetLanguage(code: "fr", name: "French")
+    XCTAssertEqual(first.sourceLanguageB.identifier, "fr-FR")
+    first.sourceLanguageB = SpeechSourceLanguage(identifier: "fr-BE", name: "French (Belgium)")
+
+    let sameDevice = RealtimeTranslateViewModel(state: .setup, speechRecognizer: recognizer,
+                                                preferences: store)
+    XCTAssertEqual(sameDevice.targetLanguageB.code, "fr")
+    XCTAssertEqual(sameDevice.sourceLanguageB.identifier, "fr-BE")
+
+    // The Belgian recognizer is gone on this launch, so the chip re-derives.
+    let narrowed = FakeSpeechRecognizer()
+    narrowed.sourceLanguages = [
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+      SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    ]
+    let migrated = RealtimeTranslateViewModel(state: .setup, speechRecognizer: narrowed,
+                                              preferences: store)
+    XCTAssertEqual(migrated.targetLanguageB.code, "fr")
+    XCTAssertEqual(migrated.sourceLanguageB.identifier, "fr-FR")
+  }
+
+  func testLanguagePreferencesRoundTripThroughPlatformDefaultsAndReset() throws {
+    let suite = "LanguagePreferences-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: suite) }
+    let store = UserDefaultsLanguagePreferences(defaults: defaults)
+
+    store.setReadingCode("ja", for: .a)
+    store.setSpokenIdentifier("ja-JP", for: .a)
+    XCTAssertEqual(store.readingCode(for: .a), "ja")
+    XCTAssertEqual(store.spokenIdentifier(for: .a), "ja-JP")
+    XCTAssertNil(store.readingCode(for: .b))
+
+    LanguagePreferenceDefaults.applyLaunchArguments([], to: defaults)
+    XCTAssertEqual(store.readingCode(for: .a), "ja")
+
+    LanguagePreferenceDefaults.applyLaunchArguments(["-resetLanguages"], to: defaults)
+    XCTAssertNil(store.readingCode(for: .a))
+    XCTAssertNil(store.spokenIdentifier(for: .a))
+  }
+
+  /// The store is injected at the app's composition root and nowhere else, which is what keeps one
+  /// test's language change out of the next test's view model, and the host app's remembered
+  /// choices out of both.
+  func testAPlainViewModelNeverWritesToPlatformPreferences() {
+    LanguagePreferenceDefaults.reset()
+    addTeardownBlock { LanguagePreferenceDefaults.reset() }
+    let viewModel = RealtimeTranslateViewModel(state: .setup, speechRecognizer: FakeSpeechRecognizer())
+
+    viewModel.targetLanguageA = TargetLanguage(code: "ja", name: "Japanese")
+
+    XCTAssertNil(UserDefaultsLanguagePreferences().readingCode(for: .a))
+    XCTAssertEqual(
+      RealtimeTranslateViewModel(state: .setup, speechRecognizer: FakeSpeechRecognizer())
+        .targetLanguageA.code, "en")
+  }
+
+  // MARK: - Typed input
+
+  func testATypedTurnBuildsExactlyTheRequestTheSpeechPathBuilds() async {
+    let recognizer = FakeSpeechRecognizer()
+    let spokenRuntime = FakeTranslationRuntime(result: "Bonjour")
+    let spoken = readyViewModel(recognizer, runtime: spokenRuntime)
+    spoken.targetLanguageB = .hyMT2Candidates[2]
+    spoken.beginTurn(.a)
+    recognizer.sendFinal("Good morning")
+    spoken.endTurn(.a)
+    await waitUntil { spoken.state == .ready }
+
+    let typedRuntime = FakeTranslationRuntime(result: "Bonjour")
+    let speechOutput = FakeSpeechOutput()
+    let typed = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: FakeSpeechRecognizer(), translationRuntime: typedRuntime,
+      speechOutput: speechOutput
+    )
+    typed.targetLanguageB = .hyMT2Candidates[2]
+
+    // Trimmed on the way in, so a stray trailing newline never reaches the model.
+    typed.submitTypedTranscript("  Good morning \n", speaker: .a)
+    await waitUntil { typed.state == .ready }
+
+    XCTAssertEqual(typed.mostRecentTranslationRequest, spoken.mostRecentTranslationRequest)
+    XCTAssertEqual(typedRuntime.prompts, spokenRuntime.prompts)
+    XCTAssertEqual(typedRuntime.prompts.count, 1)
+    XCTAssertEqual(typed.items.count, 1)
+    XCTAssertEqual(typed.items.last?.speaker, .a)
+    XCTAssertEqual(typed.items.last?.transcript, "Good morning")
+    XCTAssertEqual(typed.items.last?.translation, "Bonjour")
+    XCTAssertEqual(typed.items.last?.targetLanguage.code, "fr")
+    // The same bubble is spoken, in the same voice language, as a recognized one.
+    XCTAssertEqual(speechOutput.spoken.map(\.languageCode), ["fr"])
+    XCTAssertEqual(speechOutput.spoken.map(\.text), ["Bonjour"])
+  }
+
+  func testATypedTurnTapsOnSubmitAndOnDelivery() async {
+    let haptics = FakeHaptics()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour"), haptics: haptics,
+      speechOutput: FakeSpeechOutput()
+    )
+
+    viewModel.submitTypedTranscript("Good morning", speaker: .a)
+    await waitUntil { viewModel.state == .ready }
+
+    XCTAssertEqual(haptics.played, [.turnEnded, .translationDelivered])
+  }
+
+  func testTypedInputIsGatedExactlyLikePushToTalk() {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "Bonjour")
+    let viewModel = readyViewModel(recognizer, runtime: runtime)
+    XCTAssertTrue(viewModel.canSubmitTypedTranscript)
+
+    viewModel.beginTurn(.a)
+    XCTAssertFalse(viewModel.canSubmitTypedTranscript)
+    viewModel.submitTypedTranscript("Hello", speaker: .b)
+    XCTAssertEqual(viewModel.items.count, 1)
+    XCTAssertNil(viewModel.mostRecentTranslationRequest)
+    XCTAssertEqual(runtime.prompts, [])
+
+    // Nothing can be typed before the model is loaded, or after the session ends, either.
+    for state in [SessionState.setup, .ended, .loadingModel(0.5), .permissionRequired] {
+      let idle = RealtimeTranslateViewModel(state: state, speechRecognizer: FakeSpeechRecognizer(),
+                                            translationRuntime: FakeTranslationRuntime())
+      XCTAssertFalse(idle.canSubmitTypedTranscript, "\(state)")
+      idle.submitTypedTranscript("Hello", speaker: .a)
+      XCTAssertTrue(idle.items.isEmpty, "\(state)")
+    }
+  }
+
+  func testAWhitespaceOnlyDraftIsNotATurn() {
+    let runtime = FakeTranslationRuntime(result: "Bonjour")
+    let viewModel = readyViewModel(FakeSpeechRecognizer(), runtime: runtime)
+
+    viewModel.submitTypedTranscript("   \n\t ", speaker: .a)
+
+    XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertEqual(runtime.prompts, [])
+  }
+
+  func testTypedInputSheetSendsOnlyARealDraftAndRemembersTheSpeakerNotTheText() {
+    let model = TypedInputModel()
+
+    XCTAssertFalse(model.isPresented)
+    model.open()
+    XCTAssertTrue(model.isPresented)
+    XCTAssertFalse(model.hasDraft)
+    model.text = "   \n "
+    XCTAssertFalse(model.hasDraft)
+    model.text = "  Good morning  "
+    XCTAssertTrue(model.hasDraft)
+    XCTAssertEqual(model.trimmedText, "Good morning")
+
+    model.speaker = .b
+    model.close()
+    XCTAssertFalse(model.isPresented)
+    model.open()
+    XCTAssertEqual(model.speaker, .b)
+    XCTAssertEqual(model.text, "")
+  }
+
+  func testTypedInputCopyNamesBothLanguagesAndUsesNoEmDash() {
+    let guidance = TypedInputCopy.guidance(speaker: .a, typing: .hyMT2Candidates[1],
+                                           translatedTo: .hyMT2Candidates[9])
+    XCTAssertEqual(guidance, "Speaker A types in English. It is translated into Korean for B.")
+    XCTAssertEqual(TypedInputCopy.placeholder(for: .hyMT2Candidates[9]), "Type in Korean")
+
+    let copy = [
+      TypedInputCopy.action, TypedInputCopy.hint, TypedInputCopy.blockedHint, TypedInputCopy.send,
+      TypedInputCopy.cancel, TypedInputCopy.speakerPickerLabel, TypedInputCopy.fieldLabel, guidance,
+      SettingsDrawerModel.clearConversationTitle, SettingsDrawerModel.clearConversationSubtitle,
+      SettingsDrawerModel.clearConversationConfirmation
+    ]
+    for line in copy {
+      XCTAssertFalse(line.contains("\u{2014}"), line)
+      XCTAssertFalse(line.contains("\u{2013}"), line)
+      XCTAssertFalse(line.isEmpty)
+    }
+  }
+
+  // MARK: - Clearing the conversation
+
+  func testClearingTheConversationEmptiesTheTranscriptAndLeavesTheSessionLive() {
+    let speechOutput = FakeSpeechOutput()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speechOutput
+    )
+
+    XCTAssertTrue(viewModel.canClearConversation)
+    viewModel.clearConversation()
+
+    XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertTrue(viewModel.isSessionLive)
+    XCTAssertNil(viewModel.mostRecentTranslationRequest)
+    // Whatever was being read aloud belonged to a bubble that just went away.
+    XCTAssertEqual(speechOutput.stopCount, 1)
+
+    // An empty transcript has nothing to clear, so a second call is a no-op, not a second toast.
+    XCTAssertFalse(viewModel.canClearConversation)
+    viewModel.clearConversation()
+    XCTAssertEqual(speechOutput.stopCount, 1)
+  }
+
+  func testClearingIsUnavailableWhileAnUtteranceIsInFlight() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good morning")
+
+    XCTAssertFalse(viewModel.canClearConversation)
+    viewModel.clearConversation()
+    XCTAssertEqual(viewModel.items.count, 1)
+  }
+
+  func testTheDrawersClearRowRunsTheClearClosesTheDrawerAndConfirmsIt() async {
+    var cleared = 0
+    var announcements: [String] = []
+    let model = SettingsDrawerModel(
+      appInfo: .main, pasteboard: FakePasteboard(), toastDuration: 0.02, openURL: { _ in },
+      announce: { announcements.append($0) }
+    )
+    model.open()
+
+    model.clearConversation { cleared += 1 }
+
+    XCTAssertEqual(cleared, 1)
+    XCTAssertFalse(model.isOpen)
+    XCTAssertEqual(model.toast, "Conversation cleared")
+    XCTAssertEqual(announcements, ["Conversation cleared"])
+
+    await waitUntil { model.toast == nil }
+  }
+
   private var previewTranslatedItem: ConversationItem {
     ConversationItem(
       id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
