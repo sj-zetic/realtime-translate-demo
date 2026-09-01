@@ -23,10 +23,20 @@ enum SessionState: Equatable {
   case ended
   case error(String)
 
+  /// The speaker whose utterance is currently recording, finalizing, or translating.
+  var activeSpeaker: Speaker? {
+    switch self {
+    case let .listening(speaker): return speaker
+    case let .finalizing(speaker): return speaker
+    case let .translating(speaker): return speaker
+    default: return nil
+    }
+  }
+
   var title: String {
     switch self {
     case .permissionRequired: "Microphone Permission Required"
-    case .setup: "Set Up a Session"
+    case .setup: "Ready to Start"
     case .loadingModel: "Preparing Translation"
     case .modelLoadFailed: "Translation Model Unavailable"
     case .endingSession: "Closing Translation Session"

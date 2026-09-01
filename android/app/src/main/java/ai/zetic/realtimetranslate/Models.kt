@@ -37,6 +37,15 @@ data class SpeakerSettings(
     val readingLanguage: TranslationLanguage = HyMt2Languages.all.first { it.code == "en" },
 )
 
+/**
+ * Defaults let a first session start in one tap: automatic recognition for both speakers and two
+ * different reading languages, so the very first utterance is actually translated.
+ */
+fun defaultSpeakerSettings(): Map<Speaker, SpeakerSettings> = mapOf(
+    Speaker.A to SpeakerSettings(readingLanguage = HyMt2Languages.all.first { it.code == "en" }),
+    Speaker.B to SpeakerSettings(readingLanguage = HyMt2Languages.all.first { it.code == "ko" }),
+)
+
 data class ConversationItem(
     val id: String,
     val speaker: Speaker,
@@ -51,7 +60,7 @@ data class ConversationItem(
 data class SessionUiState(
     val phase: SessionPhase,
     val permissionPermanentlyDenied: Boolean = false,
-    val settings: Map<Speaker, SpeakerSettings> = Speaker.entries.associateWith { SpeakerSettings() },
+    val settings: Map<Speaker, SpeakerSettings> = defaultSpeakerSettings(),
     val conversations: List<ConversationItem> = emptyList(),
     val conversationStarted: Boolean = false,
     val modelLoadProgress: Float = 0f,

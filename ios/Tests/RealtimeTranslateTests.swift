@@ -41,6 +41,16 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(runtime.prompts.count, 1)
   }
 
+  func testDefaultReadingLanguagesDifferSoTheFirstSessionTranslates() {
+    let viewModel = RealtimeTranslateViewModel(state: .setup, speechRecognizer: FakeSpeechRecognizer())
+
+    XCTAssertEqual(viewModel.sourceLanguageA, .automatic)
+    XCTAssertEqual(viewModel.sourceLanguageB, .automatic)
+    XCTAssertEqual(viewModel.targetLanguageA.code, "en")
+    XCTAssertEqual(viewModel.targetLanguageB.code, "ko")
+    XCTAssertTrue(viewModel.canStartSession)
+  }
+
   func testSourceLanguagesStartWithAutomaticThenUsePlatformLocales() {
     let recognizer = FakeSpeechRecognizer()
     recognizer.sourceLanguages = [SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")]
@@ -204,10 +214,60 @@ final class RealtimeTranslateTests: XCTestCase {
 
     viewModel.startSession()
     XCTAssertEqual(viewModel.state, .loadingModel(nil))
-    XCTAssertFalse(viewModel.canEditSessionSettings)
+    XCTAssertFalse(viewModel.canEditLanguages)
+    XCTAssertFalse(viewModel.canStartSession)
     await waitUntil { viewModel.state == .ready }
-    XCTAssertTrue(viewModel.canEditSessionSettings)
+    XCTAssertTrue(viewModel.canEditLanguages)
+    XCTAssertTrue(viewModel.isSessionLive)
     XCTAssertEqual(runtime.loadCount, 1)
+  }
+
+  func testLanguageChipsLockWhileAnUtteranceIsActiveAndUnlockAfterward() async {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    XCTAssertTrue(viewModel.canEditLanguages)
+    viewModel.beginTurn(.a)
+    XCTAssertFalse(viewModel.canEditLanguages)
+    recognizer.sendFinal("hello")
+    viewModel.endTurn(.a)
+
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertTrue(viewModel.canEditLanguages)
+  }
+
+  func testReadingLanguageChangeMidSessionAppliesWithoutReloadingTheModel() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "Translated")
+    let viewModel = readyViewModel(recognizer, runtime: runtime)
+
+    XCTAssertEqual(viewModel.targetLanguageB, TargetLanguage.hyMT2Candidates[9])
+    viewModel.targetLanguageB = .hyMT2Candidates[2]
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("hello")
+    viewModel.endTurn(.a)
+
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.targetLanguage, TargetLanguage.hyMT2Candidates[2])
+    XCTAssertEqual(runtime.loadCount, 0)
+  }
+
+  func testSourceLanguageChangeMidSessionAppliesAtTheNextTurnStart() async {
+    let recognizer = FakeSpeechRecognizer()
+    let french = SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    recognizer.sourceLanguages = [french]
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("hello")
+    viewModel.endTurn(.a)
+    await waitUntil { viewModel.state == .ready }
+
+    viewModel.sourceLanguageA = french
+    viewModel.beginTurn(.a)
+
+    XCTAssertEqual(recognizer.startedSources, [.automatic, french])
+    XCTAssertEqual(viewModel.state, .listening(.a))
   }
 
   func testSessionLoadFailureShowsRetryState() async {
@@ -219,11 +279,13 @@ final class RealtimeTranslateTests: XCTestCase {
 
     viewModel.startSession()
     await waitUntil { if case .modelLoadFailed = viewModel.state { return true }; return false }
-    XCTAssertTrue(viewModel.canEditSessionSettings)
+    XCTAssertTrue(viewModel.canEditLanguages)
+    XCTAssertTrue(viewModel.canStartSession)
+    XCTAssertFalse(viewModel.isSessionLive)
     XCTAssertEqual(runtime.loadCount, 1)
   }
 
-  func testEndSessionClosesRuntimeAndReturnsToTargetLanguageSetup() async {
+  func testEndSessionClosesRuntimeAndReturnsToTheIdleMainScreen() async {
     let recognizer = FakeSpeechRecognizer()
     let runtime = FakeTranslationRuntime(result: "Translated", closeDelayNanoseconds: 30_000_000)
     let item = ConversationItem(
@@ -241,6 +303,17 @@ final class RealtimeTranslateTests: XCTestCase {
     await waitUntil { viewModel.state == .setup }
     XCTAssertEqual(viewModel.state, .setup)
     XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertFalse(viewModel.isSessionLive)
+    XCTAssertTrue(viewModel.canStartSession)
+    XCTAssertTrue(viewModel.canEditLanguages)
+  }
+
+  func testActiveSpeakerReportsTheUtteranceOwnerForBlockedControlText() {
+    XCTAssertEqual(SessionState.listening(.a).activeSpeaker, .a)
+    XCTAssertEqual(SessionState.finalizing(.b).activeSpeaker, .b)
+    XCTAssertEqual(SessionState.translating(.a).activeSpeaker, .a)
+    XCTAssertNil(SessionState.ready.activeSpeaker)
+    XCTAssertNil(SessionState.setup.activeSpeaker)
   }
 
   private func readyViewModel(

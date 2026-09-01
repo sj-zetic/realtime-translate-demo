@@ -18,8 +18,10 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private var sessionTask: Task<Void, Never>?
   private(set) var mostRecentTranslationRequest: HyMT2Request?
 
+  // Defaults let a first session start in one tap: automatic recognition for both speakers and two
+  // different reading languages (English for A, Korean for B), matching the Android defaults.
   init(state: SessionState = .permissionRequired, sourceLanguageA: SpeechSourceLanguage = .automatic,
-       targetLanguageA: TargetLanguage = .hyMT2Candidates[0], sourceLanguageB: SpeechSourceLanguage = .automatic,
+       targetLanguageA: TargetLanguage = .hyMT2Candidates[1], sourceLanguageB: SpeechSourceLanguage = .automatic,
        targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
        speechRecognizer: (any SpeechRecognizing)? = nil,
        translationRuntime: (any TranslationRuntime)? = nil) {
@@ -65,7 +67,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   }
 
   func startSession() {
-    guard state == .setup || isModelLoadFailure else { return }
+    guard state == .setup || state == .ended || isModelLoadFailure else { return }
     sessionTask?.cancel()
     state = .loadingModel(nil)
     sessionTask = Task { [weak self] in
@@ -151,10 +153,29 @@ final class RealtimeTranslateViewModel: ObservableObject {
     state = .setup
   }
 
-  var canEditSessionSettings: Bool {
+  /// Language chips stay editable mid-session; only an in-flight utterance or a busy
+  /// model lifecycle step locks them. A reading-language change affects future translation
+  /// prompts, and a recognition-language change applies at the next utterance start.
+  var canEditLanguages: Bool {
     switch state {
-    case .loadingModel, .endingSession: false
+    case .loadingModel, .endingSession, .listening, .finalizing, .translating: false
     default: true
+    }
+  }
+
+  /// The model is loaded, so the A/B controls and `End Session` belong on screen.
+  var isSessionLive: Bool {
+    switch state {
+    case .ready, .listening, .finalizing, .translating, .error: true
+    default: false
+    }
+  }
+
+  /// A single tap can start the first session once permissions are granted.
+  var canStartSession: Bool {
+    switch state {
+    case .setup, .ended, .modelLoadFailed: true
+    default: false
     }
   }
 

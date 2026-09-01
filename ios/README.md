@@ -2,4 +2,8 @@
 
 The iOS implementation uses Swift and SwiftUI. Screen state, design tokens, and accessibility rules follow the [shared UX and design specification](../docs/shared-ux-spec.md).
 
+`RealtimeTranslateRootView.swift` renders the whole product on one screen: a status strip, an inline session banner (permission, model progress, model-load failure and retry, closing, runtime error), a scrolling chat transcript with speaker A left-aligned and speaker B right-aligned, and a bottom safe-area inset holding a `Speaks` chip, a `Reads` chip, and a push-to-talk control per speaker. `DesignToken` holds the ZETIC minimal palette; the teal accent `#2DBDB2` is used only for the active recording control, the `Start Session` action, and the model-load progress indicator.
+
+`RealtimeTranslateViewModel` keeps the same states and the same model and speech lifecycle. The redesign added three read-only view flags: `canEditLanguages` (false while an utterance is in flight or the model is loading or unloading), `isSessionLive` (the model is loaded, so the A/B controls and `End Session` belong on screen), and `canStartSession`.
+
 For a device build, provide `MELANGE_PERSONAL_KEY` as an Xcode build environment variable. The value is expanded into the built app's `Info.plist` so the installed demo can load its model; it is not tracked in this repository. Treat that demo artifact as credential-bearing and do not distribute it.

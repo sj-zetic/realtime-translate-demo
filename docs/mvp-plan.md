@@ -2,22 +2,26 @@
 
 ## Goal
 
-Build native Android and iOS apps for one device, where two people explicitly assign their utterances with A or B controls. Each platform uses on-device STT, and Melange SDK `1.10.0` loads `SJ_zetic/Hy-MT2-1.8B` when a session starts to translate finalized source text into the other person's reading language in a chat-style card.
+Build native Android and iOS apps for one device, where two people explicitly assign their utterances with A or B controls. Each platform uses on-device STT, and Melange SDK `1.10.0` loads `SJ_zetic/Hy-MT2-1.8B` when a session starts to translate finalized source text into the other person's reading language in a chat bubble on a single screen.
 
 ## User flow
 
-1. On the setup screen, users choose `Automatic` or an OS-derived on-device recognition language and a reading language for both A and B, then grant microphone and speech-recognition permissions.
-2. Starting the session loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. The screen reports loading progress or a retryable error. PTT stays disabled until the model is ready.
-3. On the conversation screen, A or B holds their own button. A tap starts recording and a second tap stops it as an accessibility alternative.
-4. Only the active person's partial source text updates. The other button is disabled so exactly one on-device STT session is active.
-5. Releasing the button or tapping to stop finalizes the STT source text.
-6. A source text is translated serially into B's reading language; B source text is translated serially into A's reading language with Hy-MT2. The translation appears in the same card.
-7. Ending the session waits for model cleanup and close, clears the prior conversation, and then returns to the setup screen, where users can select target languages for the next session.
-8. When loading or translation fails, the source text remains visible and the translation area shows an error and retry action instead of a fabricated result.
+Everything happens on one screen. There is no separate speaker-setup destination.
+
+1. The main screen opens with a chat transcript area, a compact `Speaks` and `Reads` chip per speaker, and the A and B push-to-talk buttons. An inline banner asks for microphone and speech-recognition permission when it is missing.
+2. Language chips open their picker in one tap and default to `Automatic` recognition with English for A and Korean for B, so a first session needs one tap on `Start conversation`.
+3. Starting the session loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. The same screen reports loading progress or a retryable error in the banner. PTT stays disabled until the model is ready.
+4. A or B holds their own button. A tap starts recording and a second tap stops it as an accessibility alternative.
+5. Only the active person's partial source text updates. The other button is disabled so exactly one on-device STT session is active.
+6. Releasing the button or tapping to stop finalizes the STT source text.
+7. A source text is translated serially into B's reading language; B source text is translated serially into A's reading language with Hy-MT2. The translation appears inside the same chat bubble, below a hairline divider.
+8. Language chips can be changed mid-session without reloading the model. A reading-language change affects future translation prompts only; a recognition-language change applies at the next utterance start. Both speakers' chips lock while an utterance is recording, finalizing, or translating.
+9. Ending the session waits for model cleanup and close, clears the prior conversation, and returns the same screen to its idle state with the chips still available.
+10. When loading or translation fails, the source text remains visible and the translation area shows an error and retry action instead of a fabricated result.
 
 ## Pipeline
 
-`Setup` -> `Load SJ_zetic/Hy-MT2-1.8B` -> `Ready` -> `User-selected A or B button` -> `Platform on-device STT using Automatic or an OS-derived recognition language` -> `Finalized source text` -> `Serial Hy-MT2 translation` -> `Chat card in the other person's reading language` -> `End, clean up, close, and clear` -> `Setup`
+`Idle main screen` -> `Load SJ_zetic/Hy-MT2-1.8B` -> `Ready` -> `User-selected A or B button` -> `Platform on-device STT using Automatic or an OS-derived recognition language` -> `Finalized source text` -> `Serial Hy-MT2 translation` -> `Chat bubble in the other person's reading language` -> `End, clean up, close, and clear` -> `Idle main screen`
 
 | Stage | Component | Responsibility |
 | --- | --- | --- |
@@ -45,8 +49,9 @@ The app does not preflight or gate a source language. If the platform cannot sta
 
 ## Completion criteria
 
-- Android and iOS implement the same A/B setup, model-loading gate, single-active PTT behavior, translation after source finalization, session-end unload, and error-recovery meaning.
-- Each A/B utterance card shows the speaker label, source text, target language for the other person, translated text, and processing or error state in chronological order.
+- Android and iOS implement the same single-screen information architecture, model-loading gate, single-active PTT behavior, translation after source finalization, session-end unload, and error-recovery meaning.
+- Each A/B utterance appears as a chat bubble, left-aligned for A and right-aligned for B, showing the speaker label, source text, target language for the other person, translated text, and processing or error state in chronological order.
 - Hold-to-talk and tap-toggle provide the same start/stop outcome and have accessibility labels.
-- The reading-language selector matches the 38 official Hy-MT2 entries, and the request builder uses the documented one-user-message prompt.
-- Starting a session loads `SJ_zetic/Hy-MT2-1.8B` with Melange SDK `1.10.0`; ending a session waits for cleanup and close, clears the prior conversation, and returns to target-language setup.
+- The reading-language chip matches the 38 official Hy-MT2 entries, and the request builder uses the documented one-user-message prompt.
+- Language chips are reachable in one tap from the main screen and can be changed mid-session without reloading the model.
+- Starting a session loads `SJ_zetic/Hy-MT2-1.8B` with Melange SDK `1.10.0`; ending a session waits for cleanup and close, clears the prior conversation, and returns the same screen to its idle state.

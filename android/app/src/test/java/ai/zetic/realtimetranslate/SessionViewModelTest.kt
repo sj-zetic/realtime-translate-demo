@@ -30,6 +30,15 @@ class SessionViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
+    @Test fun `default speaker settings let a first session start without language taps`() {
+        val state = SessionUiState(SessionPhase.Ready)
+
+        assertEquals(SpeechLanguage.Automatic, state.settingsFor(Speaker.A).inputLanguage)
+        assertEquals(SpeechLanguage.Automatic, state.settingsFor(Speaker.B).inputLanguage)
+        assertEquals("en", state.settingsFor(Speaker.A).readingLanguage.code)
+        assertEquals("ko", state.settingsFor(Speaker.B).readingLanguage.code)
+    }
+
     @Test fun `starts only after the model finishes loading`() = runTest {
         val translator = FakeTranslator()
         val viewModel = SessionViewModel(translator = translator, initialState = SessionUiState(SessionPhase.Ready))
@@ -68,7 +77,37 @@ class SessionViewModelTest {
         assertEquals(SessionPhase.ModelLoadFailed, viewModel.state.value.phase)
     }
 
-    @Test fun `ending a session unloads the translator before returning to setup`() = runTest {
+    @Test fun `language changes during a live session apply without reloading the model`() = runTest {
+        val translator = FakeTranslator()
+        val transcriber = DelayedTranscriber()
+        val viewModel = SessionViewModel(
+            transcriberFactory = { transcriber },
+            translator = translator,
+            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true),
+        )
+        val korean = HyMt2Languages.all.first { it.code == "ko" }
+        val french = SpeechLanguage.Installed("fr-FR", "French (France)")
+
+        viewModel.dispatch(SessionAction.ReadingLanguageChanged(Speaker.B, korean))
+        viewModel.dispatch(SessionAction.InputLanguageChanged(Speaker.A, french))
+
+        assertEquals(SessionPhase.Ready, viewModel.state.value.phase)
+        assertTrue(viewModel.state.value.conversationStarted)
+        assertEquals(0, translator.loads)
+
+        viewModel.dispatch(SessionAction.PttPress(TestContext(), Speaker.A))
+        transcriber.listener.onFinal("hello")
+        viewModel.dispatch(SessionAction.PttRelease(Speaker.A))
+        transcriber.listener.onStopped()
+        advanceUntilIdle()
+
+        assertEquals(french, transcriber.startedLanguage)
+        assertEquals("ko", viewModel.state.value.conversations.single().targetLanguage.code)
+        assertEquals("translated", viewModel.state.value.conversations.single().translation)
+        assertEquals(0, translator.loads)
+    }
+
+    @Test fun `ending a session returns to the idle main screen without a separate setup step`() = runTest {
         val translator = FakeTranslator()
         val viewModel = SessionViewModel(
             translator = translator,
@@ -176,8 +215,10 @@ class SessionViewModelTest {
 
     private class DelayedTranscriber : SpeechTranscriber {
         lateinit var listener: SpeechTranscriptListener
+        var startedLanguage: SpeechLanguage? = null
         override fun start(language: SpeechLanguage, listener: SpeechTranscriptListener): SpeechStartResult {
             this.listener = listener
+            startedLanguage = language
             return SpeechStartResult.Started
         }
         override fun stop() = Unit
