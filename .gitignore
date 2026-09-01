@@ -1,0 +1,24 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+
+# iOS
+ios/DerivedData/
+ios/build/
+ios/Pods/
+*.xcuserstate
+
+# Local model artifacts and credentials
+models/
+*.ztc
+.env
+
+# Local audit evidence (kept outside the product repository)
+work_logs/

@@ -1,0 +1,49 @@
+name: RealtimeTranslate
+packages:
+  ZeticMLangeiOS:
+    url: https://github.com/zetic-ai/ZeticMLangeiOS.git
+    exactVersion: 1.10.0
+options:
+  minimumXcodeGenVersion: 2.38.0
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.realtimetranslate
+targets:
+  RealtimeTranslate:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: ZeticMLangeiOS
+        product: ZeticMLange
+      - sdk: Accelerate.framework
+    settings:
+      base:
+        INFOPLIST_FILE: Sources/Info.plist
+        PRODUCT_NAME: RealtimeTranslate
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+    scheme:
+      testTargets:
+        - RealtimeTranslateTests
+        - RealtimeTranslateUITests
+  RealtimeTranslateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: RealtimeTranslate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  RealtimeTranslateUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: RealtimeTranslate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
