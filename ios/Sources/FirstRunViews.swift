@@ -116,7 +116,8 @@ struct ModelConsentOverlay: View {
           .contentShape(Rectangle())
           .onTapGesture(perform: dismiss)
           .accessibilityIdentifier("consent-scrim")
-          .accessibilityLabel("Dismiss the model download step")
+          .accessibilityLabel(Text("Dismiss the model download step",
+                                   comment: "Accessibility label for the consent card's scrim"))
           .accessibilityAddTraits(.isButton)
         card(cellularWarning: prompt.cellularWarning)
           .transition(.opacity)
@@ -233,7 +234,8 @@ private struct FirstRunPrimaryButton: View {
 
   var body: some View {
     Button(action: action) {
-      Text(title)
+      // `FirstRunCopy` already localized it, so this is a `String` rendered as it stands.
+      Text(verbatim: title)
         .font(.subheadline).fontWeight(.semibold)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
@@ -255,7 +257,8 @@ private struct FirstRunSecondaryButton: View {
 
   var body: some View {
     Button(action: action) {
-      Text(title)
+      // `FirstRunCopy` already localized it, so this is a `String` rendered as it stands.
+      Text(verbatim: title)
         .font(.subheadline).fontWeight(.semibold)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)

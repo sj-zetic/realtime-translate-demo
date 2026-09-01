@@ -12,26 +12,55 @@ import Foundation
 // MARK: - Copy
 
 enum ModelStorageCopy {
-  static let title = "Storage"
-  static let empty = "No model downloaded"
-  static let deleteAction = "Delete downloaded model"
-  static let keepAction = "Keep it"
-  static let confirmationTitle = "Delete the downloaded model?"
-  static let sessionLive = "End the session first"
-  static let deleted = "Model deleted"
+  static var title: String {
+    String(localized: "Storage", comment: "Settings drawer row title for the downloaded model")
+  }
+  static var empty: String {
+    String(localized: "No model downloaded", comment: "Storage row subtitle when nothing is on disk")
+  }
+  static var deleteAction: String {
+    String(localized: "Delete downloaded model", comment: "Destructive button in the delete confirmation")
+  }
+  static var keepAction: String {
+    String(localized: "Keep it", comment: "Cancel button in the delete confirmation")
+  }
+  static var confirmationTitle: String {
+    String(localized: "Delete the downloaded model?", comment: "Delete confirmation dialog title")
+  }
+  static var sessionLive: String {
+    String(localized: "End the session first",
+           comment: "Storage row subtitle while a session holds the model in memory")
+  }
+  static var deleted: String {
+    String(localized: "Model deleted", comment: "Toast after the model is removed from disk")
+  }
 
   /// The one place a byte count becomes words, so the row, the confirmation, and the accessibility
-  /// label can never disagree about how big the model is.
+  /// label can never disagree about how big the model is. `ByteCountFormatter` localizes the unit
+  /// on its own, so nothing here has to.
   static func size(bytes: Int64) -> String {
     ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
   }
 
-  static func onThisPhone(_ size: String) -> String { "\(size) on this phone" }
+  static func onThisPhone(_ size: String) -> String {
+    String(localized: "storage.onThisPhone", defaultValue: "\(size) on this phone",
+           comment: "Storage row subtitle. %@ is a formatted size such as 1.9 GB")
+  }
 
   /// Says what is reclaimed and what it costs, because the cost is the part someone deleting a
   /// model at the airport needs to hear before they tap.
   static func confirmationMessage(_ size: String) -> String {
-    "This frees \(size). The next session downloads the model again."
+    String(localized: "storage.confirmationMessage",
+           defaultValue: "This frees \(size). The next session downloads the model again.",
+           comment: "Delete confirmation body. %@ is a formatted size such as 1.9 GB")
+  }
+
+  /// The disabled row's accessibility label. The only one of the three that contains fixed words
+  /// of its own; the other two are commas between pieces that are already translated.
+  static func lockedAccessibilityLabel(occupies: String) -> String {
+    String(localized: "storage.accessibility.locked",
+           defaultValue: "\(title), \(occupies), unavailable, \(sessionLive)",
+           comment: "Locked Storage row accessibility label. %1$@ row title, %2$@ size, %3$@ reason")
   }
 }
 
@@ -58,8 +87,7 @@ struct ModelStorageRow: Equatable {
     guard !isSessionLive else {
       return ModelStorageRow(
         subtitle: "\(occupies). \(ModelStorageCopy.sessionLive).", isEnabled: false,
-        accessibilityLabel:
-          "\(ModelStorageCopy.title), \(occupies), unavailable, \(ModelStorageCopy.sessionLive)"
+        accessibilityLabel: ModelStorageCopy.lockedAccessibilityLabel(occupies: occupies)
       )
     }
     return ModelStorageRow(

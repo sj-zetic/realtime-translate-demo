@@ -111,7 +111,12 @@ final class RealtimeTranslateViewModel: ObservableObject {
     case "loadingModel":
       return RealtimeTranslateViewModel(state: .loadingModel(0.5), preferences: store)
     case "modelLoadFailed":
-      return RealtimeTranslateViewModel(state: .modelLoadFailed("Try again."), preferences: store)
+      return RealtimeTranslateViewModel(
+        state: .modelLoadFailed(
+          String(localized: "Try again.", comment: "Placeholder model load failure used by UI tests")
+        ),
+        preferences: store
+      )
     case "ready": return RealtimeTranslateViewModel(state: .ready, preferences: store)
     case "permissionRequired":
       return RealtimeTranslateViewModel(state: .permissionRequired, preferences: store)
@@ -164,7 +169,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
         state = .ready
       } catch {
         guard !Task.isCancelled else { return }
-        state = .modelLoadFailed(error.localizedDescription)
+        // Localized here rather than in the runtime: `MelangeTranslationRuntime` is shared with the
+        // SDK integration and stays free of interface concerns, so the display site translates.
+        state = .modelLoadFailed(TranslationFailureCopy.message(for: error))
       }
     }
   }
@@ -196,7 +203,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
       items.removeAll { $0.id == item.id }
       activeItemID = nil
       speechRecognizer.stop()
-      state = .error(error.localizedDescription)
+      state = .error(TranslationFailureCopy.message(for: error))
       haptics.play(.sessionError)
     }
   }
@@ -454,7 +461,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
         updateItem(id: itemID) { item in
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: nil,
-                           state: .translationFailed(error.localizedDescription))
+                           state: .translationFailed(TranslationFailureCopy.message(for: error)))
         }
       }
       guard state == .translating(speaker) else { return }
@@ -488,10 +495,16 @@ final class RealtimeTranslateViewModel: ObservableObject {
       translation: "Bonjour.", state: .translated
     )
   ]
-  private static let failedPreviewItems = [
-    ConversationItem(
-      id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9], translation: nil,
-      state: .translationFailed("The Hy-MT2 translation model could not complete this request.")
-    )
-  ]
+  private static var failedPreviewItems: [ConversationItem] {
+    [
+      ConversationItem(
+        id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: .hyMT2Candidates[9],
+        translation: nil,
+        state: .translationFailed(
+          String(localized: "The Hy-MT2 translation model could not complete this request.",
+                 comment: "Placeholder translation failure used by UI tests. Hy-MT2 is a model name")
+        )
+      )
+    ]
+  }
 }

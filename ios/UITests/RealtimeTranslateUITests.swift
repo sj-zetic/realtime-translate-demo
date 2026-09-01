@@ -373,13 +373,34 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
 
+  // MARK: - App language
+
+  /// The row exists, sits in the drawer's list, and names the language in force. It deliberately
+  /// does not change the language: every assertion in this file is an English string, and an
+  /// override written here would outlive the test and be read by the next launch.
+  func testTheDrawerNamesTheAppLanguageAndDefaultsToTheSystemOne() {
+    let app = launch(state: "ready")
+    app.buttons["ZETIC, opens settings"].tap()
+
+    let row = app.buttons["settings-app-language"]
+    XCTAssertTrue(row.waitForExistence(timeout: 10))
+    XCTAssertTrue(row.isEnabled)
+    XCTAssertTrue(row.label.contains("App language"))
+    XCTAssertTrue(row.label.contains("System"))
+    // Between the clear row and the storage row, so the list keeps the documented order.
+    XCTAssertGreaterThan(row.frame.minY, app.buttons["settings-clear-conversation"].frame.maxY)
+    XCTAssertLessThan(row.frame.maxY, app.buttons["settings-storage"].frame.minY)
+  }
+
   /// Every existing scenario is a returning user: the first-run flags are forced closed so the
-  /// welcome never stands between the test and the screen it is checking, and the remembered
-  /// languages are cleared so a run never inherits the previous one's chips.
+  /// welcome never stands between the test and the screen it is checking, the remembered languages
+  /// are cleared so a run never inherits the previous one's chips, and the app-language override is
+  /// cleared so every run reads the English strings these assertions are written against.
   private func launch(state: String, firstRun: String = "returning",
                       extra: [String] = []) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchArguments = ["-uiState", state, "-firstRun", firstRun, "-resetLanguages"] + extra
+    app.launchArguments =
+      ["-uiState", state, "-firstRun", firstRun, "-resetLanguages", "-resetAppLanguage"] + extra
     app.launch()
     return app
   }

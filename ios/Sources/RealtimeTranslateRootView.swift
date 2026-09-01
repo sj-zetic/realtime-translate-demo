@@ -50,7 +50,10 @@ private struct ZeticWordmarkButton: View {
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("zetic-settings")
-    .accessibilityLabel("ZETIC, opens settings")
+    // The `Text` overload rather than the string one, so the label can carry a translator comment
+    // and still resolve against the environment locale.
+    .accessibilityLabel(Text("ZETIC, opens settings",
+                             comment: "Accessibility label for the wordmark button in the navigation bar"))
   }
 }
 
@@ -75,6 +78,10 @@ struct RealtimeTranslateRootView: View {
   /// The mute toggle's stored state. The view model seeds itself from the same key, so this is
   /// the one place the preference is written and there is no second copy to drift.
   @AppStorage(SpeechOutputDefaults.mutedKey) private var speechMuted = false
+  /// The app-language override, as its raw value. `@AppStorage` cannot bind an enum without a
+  /// `RawRepresentable` conformance that would then also have to survive an unknown stored value,
+  /// so the raw string is the stored form and `AppLanguage.named` is the one tolerant reader.
+  @AppStorage(AppLanguageDefaults.storageKey) private var appLanguageRaw = AppLanguage.system.rawValue
   @Environment(\.scenePhase) private var scenePhase
   /// Holds the display awake while a session is live. A reference, not observed state: nothing on
   /// screen depends on it, so it must never invalidate the body it is driven from.
@@ -86,14 +93,26 @@ struct RealtimeTranslateRootView: View {
     _firstRun = StateObject(wrappedValue: firstRun)
   }
 
+  /// The chosen app language, or nil while the phone's own order applies.
+  private var localeOverride: Locale? {
+    AppLanguage.named(appLanguageRaw).localeIdentifier.map(Locale.init(identifier:))
+  }
+
   var body: some View {
     mainScreen
       .overlay {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
                               clearConversation: viewModel.clearConversation,
-                              isSessionLive: viewModel.isSessionLive)
+                              isSessionLive: viewModel.isSessionLive,
+                              appLanguage: AppLanguage.named(appLanguageRaw),
+                              selectAppLanguage: selectAppLanguage)
       }
       .overlay { firstRunOverlay }
+      // Half of the localization applies immediately: everything a SwiftUI `Text` resolves from a
+      // literal follows the environment locale, so an override repaints the screen on the spot.
+      // The other half, the strings models build with `String(localized:)`, follows the bundle,
+      // which iOS settles at launch. That is what the row's toast is telling the user about.
+      .environment(\.locale, localeOverride ?? .autoupdatingCurrent)
       .onAppear {
         viewModel.adoptExistingPermission()
         viewModel.setMuted(speechMuted)
@@ -141,6 +160,13 @@ struct RealtimeTranslateRootView: View {
     viewModel.requestMicrophonePermission()
   }
 
+  /// One place the choice is written: `@AppStorage` for this launch's environment locale, and the
+  /// drawer model for the `AppleLanguages` override and the confirmation.
+  private func selectAppLanguage(_ language: AppLanguage) {
+    settings.selectAppLanguage(language)
+    appLanguageRaw = language.rawValue
+  }
+
   /// Every path that would load the model routes through the consent gate, including the retry
   /// after a failed load: that is exactly when a large transfer may be about to start again.
   private func startSession() {
@@ -167,7 +193,9 @@ struct RealtimeTranslateRootView: View {
           }
       }
       .background(DesignToken.surface)
-      .navigationTitle("Turn Translate")
+      // A plain `String`, not a literal: the product name is the same in every language and must
+      // never reach the catalog.
+      .navigationTitle(AppText.productName)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         // iOS 26 wraps toolbar buttons in a glass capsule; the minimal chrome stays flat.
@@ -200,8 +228,10 @@ struct RealtimeTranslateRootView: View {
 
   private var emptyHint: String {
     viewModel.isSessionLive
-      ? "Speaker A or B can begin speaking."
-      : "Choose the languages above, then start the session."
+      ? String(localized: "Speaker A or B can begin speaking.",
+               comment: "Empty transcript hint while a session is live")
+      : String(localized: "Choose the languages above, then start the session.",
+               comment: "Empty transcript hint before a session starts")
   }
 }
 
@@ -260,7 +290,8 @@ private struct StatusStrip: View {
         // "Translation Model" is a status line that says the opposite of what it means.
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel("Session status: \(title)")
+        .accessibilityLabel(Text("Session status: \(title)",
+                                 comment: "Accessibility label for the status strip. %@ is the status"))
       SpeechMuteToggle(isMuted: isMuted, toggle: toggleMute)
     }
     .padding(.leading, 16)
@@ -309,18 +340,26 @@ private struct LanguageBar: View {
     _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>
   ) -> some View {
     Menu {
-      Picker("Reading language", selection: target) {
-        ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
+      // The `label:` form, because the shorthand `Picker("...")` init has nowhere to put a
+      // translator comment. The language names themselves are `verbatim`: see `TargetLanguage`.
+      Picker(selection: target) {
+        ForEach(TargetLanguage.hyMT2Candidates) { Text(verbatim: $0.name).tag($0) }
+      } label: {
+        Text("Reading language", comment: "Section label in a speaker's language menu")
       }
       .pickerStyle(.inline)
-      Picker("Spoken language", selection: source) {
-        ForEach(viewModel.availableSourceLanguages) { Text($0.name).tag($0) }
+      Picker(selection: source) {
+        ForEach(viewModel.availableSourceLanguages) { Text(verbatim: $0.name).tag($0) }
+      } label: {
+        Text("Spoken language", comment: "Section label in a speaker's language menu")
       }
       .pickerStyle(.inline)
     } label: {
+      // `verbatim`, because neither half is copy: one is a speaker label and a separator, the
+      // other is a Hy-MT2 language name. A catalog entry of "%@ ·" would be noise.
       (
-        Text("\(speaker.rawValue) ·").fontWeight(.bold).foregroundColor(speaker.deepColor)
-          + Text(" \(target.wrappedValue.name)").fontWeight(.medium)
+        Text(verbatim: "\(speaker.rawValue) ·").fontWeight(.bold).foregroundColor(speaker.deepColor)
+          + Text(verbatim: " \(target.wrappedValue.name)").fontWeight(.medium)
             .foregroundColor(DesignToken.textPrimary)
       )
       .font(.caption)
@@ -340,8 +379,9 @@ private struct LanguageBar: View {
     .disabled(!viewModel.canEditLanguages)
     .accessibilityIdentifier("languages-\(speaker.rawValue)")
     .accessibilityLabel(
-      "Speaker \(speaker.rawValue) languages: reads \(target.wrappedValue.name), "
-        + "speaks \(source.wrappedValue.name)"
+      String(localized: "languageChip.accessibility",
+             defaultValue: "Speaker \(speaker.rawValue) languages: reads \(target.wrappedValue.name), speaks \(source.wrappedValue.name)",
+             comment: "Language chip accessibility label. %1$@ speaker, %2$@ reading, %3$@ spoken")
     )
   }
 }
@@ -354,11 +394,22 @@ private struct SessionBanner: View {
     switch viewModel.state {
     case .permissionRequired:
       banner {
-        Text("Turn Translate needs microphone and speech recognition access on this device.")
+        Text("Turn Translate needs microphone and speech recognition access on this device.",
+             comment: "Session banner body text. Turn Translate is the product name, keep it as is")
           .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
-        BannerButton(title: "Allow Microphone Access", action: viewModel.requestMicrophonePermission)
-        BannerButton(title: "Open App Settings", action: viewModel.openAppSettings)
+        // `BannerButton` takes a plain `String`, so each title is looked up here rather than
+        // handed over as a literal that would never reach the catalog.
+        BannerButton(
+          title: String(localized: "Allow Microphone Access",
+                        comment: "Session banner button that triggers the system prompts"),
+          action: viewModel.requestMicrophonePermission
+        )
+        BannerButton(
+          title: String(localized: "Open App Settings",
+                        comment: "Session banner button that opens this app's page in iOS Settings"),
+          action: viewModel.openAppSettings
+        )
       }
     case let .loadingModel(progress):
       // A genuine download reports progress and can name a size; a local load reports nothing at
@@ -382,35 +433,46 @@ private struct SessionBanner: View {
         if let value = status.progress {
           ProgressView(value: value).tint(DesignToken.accent)
         }
-        Text("Speaker controls unlock when the model is ready.")
+        Text("Speaker controls unlock when the model is ready.",
+             comment: "Session banner body text while the model loads")
           .font(.caption).foregroundStyle(DesignToken.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
     case let .modelLoadFailed(reason):
       banner {
-        Text(reason).font(.subheadline).foregroundStyle(DesignToken.error)
+        // The reason is already localized: it comes through `TranslationFailureCopy`.
+        Text(verbatim: reason).font(.subheadline).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
-        BannerButton(title: "Retry Model Load", action: startSession)
-          .accessibilityIdentifier("retry-model-load")
+        BannerButton(
+          title: String(localized: "Retry Model Load",
+                        comment: "Session banner button that loads the model again after a failure"),
+          action: startSession
+        )
+        .accessibilityIdentifier("retry-model-load")
       }
     case .endingSession:
       banner {
-        Text("Closing translation session...")
+        Text("Closing translation session...",
+             comment: "Session banner body text while the session unwinds")
           .font(.subheadline).foregroundStyle(DesignToken.textSecondary)
           .accessibilityIdentifier("closing-session")
       }
     case let .error(reason):
       banner {
-        Text(reason).font(.subheadline).foregroundStyle(DesignToken.error)
+        Text(verbatim: reason).font(.subheadline).foregroundStyle(DesignToken.error)
           .fixedSize(horizontal: false, vertical: true)
-        BannerButton(title: "Try Again", action: viewModel.requestMicrophonePermission)
+        BannerButton(
+          title: String(localized: "Try Again",
+                        comment: "Session banner button that retries after a runtime error"),
+          action: viewModel.requestMicrophonePermission
+        )
       }
     default:
       // An interruption is not a failure, so the note borrows the banner's shape but none of its
       // urgency: secondary text, no error color, no button. The next push-to-talk clears it.
       if let notice = viewModel.notice {
         banner {
-          Text(notice)
+          Text(verbatim: notice)
             .font(.subheadline).foregroundStyle(DesignToken.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("session-notice")
@@ -438,7 +500,9 @@ private struct BannerButton: View {
 
   var body: some View {
     Button(action: action) {
-      Text(title)
+      // The caller localizes; this is a `String`, so `verbatim` says so rather than leaving the
+      // overload to look like an oversight.
+      Text(verbatim: title)
         .font(.footnote).fontWeight(.semibold)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -502,12 +566,22 @@ private struct ConversationBubble: View {
     HStack(spacing: 0) {
       if !isA { Spacer(minLength: 32) }
       VStack(alignment: .leading, spacing: 6) {
-        Text("Speaker \(item.speaker.rawValue)")
+        Text("Speaker \(item.speaker.rawValue)",
+             comment: "Chat bubble heading. %@ is the speaker label, A or B")
           .font(.caption).fontWeight(.semibold).foregroundStyle(item.speaker.deepColor)
-        Text(item.transcript.isEmpty ? "Listening..." : item.transcript)
-          .font(.body).foregroundStyle(DesignToken.textPrimary)
+        // Two branches rather than one ternary: a ternary between a literal and a variable is a
+        // `String`, which takes the verbatim `Text` overload and never reaches the catalog.
+        Group {
+          if item.transcript.isEmpty {
+            Text("Listening...", comment: "Chat bubble placeholder before any words are recognized")
+          } else {
+            Text(verbatim: item.transcript)
+          }
+        }
+        .font(.body).foregroundStyle(DesignToken.textPrimary)
         ThinDivider()
-        Text("To \(item.speaker.counterpart.rawValue) - \(item.targetLanguage.name)")
+        Text("To \(item.speaker.counterpart.rawValue) - \(item.targetLanguage.name)",
+             comment: "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name")
           .font(.caption).foregroundStyle(DesignToken.textSecondary)
         deliveryLine
       }
@@ -542,16 +616,19 @@ private struct ConversationBubble: View {
   @ViewBuilder private var deliveryLine: some View {
     switch item.state {
     case .partial:
-      Text("Recognizing speech").font(.caption).foregroundStyle(DesignToken.textSecondary)
+      Text("Recognizing speech", comment: "Chat bubble state while speech is still being recognized")
+        .font(.caption).foregroundStyle(DesignToken.textSecondary)
     case .finalizing:
-      Text("Translation pending").font(.caption).foregroundStyle(DesignToken.textSecondary)
+      Text("Translation pending", comment: "Chat bubble state while a translation is in flight")
+        .font(.caption).foregroundStyle(DesignToken.textSecondary)
     case .translated:
-      Text(item.translation ?? "")
+      Text(verbatim: item.translation ?? "")
         .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
         // Keeps the last line of a long translation clear of the replay glyph in the corner.
         .padding(.trailing, canReplay ? 30 : 0)
     case let .translationFailed(reason):
-      Text(reason).font(.caption).foregroundStyle(DesignToken.error)
+      // Already localized where it was built, by `TranslationFailureCopy` at the display site.
+      Text(verbatim: reason).font(.caption).foregroundStyle(DesignToken.error)
     }
   }
 }
@@ -611,28 +688,36 @@ private struct BottomBar: View {
   private var hint: String {
     switch viewModel.state {
     case .permissionRequired:
-      return "Grant microphone access to enable push-to-talk."
+      return String(localized: "Grant microphone access to enable push-to-talk.",
+                    comment: "Bottom bar hint while the microphone prompt is unanswered")
     case .loadingModel, .modelLoadFailed:
-      return "Push-to-talk unlocks once the translation model is ready."
+      return String(localized: "Push-to-talk unlocks once the translation model is ready.",
+                    comment: "Bottom bar hint while the model is not ready")
     case .error:
-      return "Resolve the error above to continue."
+      return String(localized: "Resolve the error above to continue.",
+                    comment: "Bottom bar hint while a session error banner is showing")
     case .endingSession:
-      return "Wait while the session ends."
+      return String(localized: "Wait while the session ends.",
+                    comment: "Bottom bar hint while the session is unwinding")
     case .setup, .ended:
-      return "Tap Start Session to begin translating."
+      return String(localized: "Tap Start Session to begin translating.",
+                    comment: "Bottom bar hint before a session starts. Start Session is a button")
     default:
       break
     }
     if let active = viewModel.state.activeSpeaker {
-      return "Speaker \(active.counterpart.rawValue) cannot begin while speaker \(active.rawValue) is active."
+      return String(localized: "bottomBar.otherSpeakerActive",
+                    defaultValue: "Speaker \(active.counterpart.rawValue) cannot begin while speaker \(active.rawValue) is active.",
+                    comment: "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one")
     }
-    return "Hold a button to talk, or tap once to start and again to stop."
+    return String(localized: "Hold a button to talk, or tap once to start and again to stop.",
+                  comment: "Bottom bar hint while the session is idle and ready")
   }
 
   @ViewBuilder private var sessionButton: some View {
     if viewModel.isSessionLive {
       Button(action: viewModel.endSession) {
-        Text("End Session")
+        Text("End Session", comment: "Bottom bar action that ends a live session")
           .font(.footnote).fontWeight(.semibold)
           .frame(maxWidth: .infinity)
           .padding(.vertical, 12)
@@ -647,7 +732,7 @@ private struct BottomBar: View {
       .accessibilityLabel("End Session")
     } else {
       Button(action: startSession) {
-        Text("Start Session")
+        Text("Start Session", comment: "Bottom bar action that starts a session")
           .font(.footnote).fontWeight(.semibold)
           .frame(maxWidth: .infinity)
           .padding(.vertical, 12)
@@ -677,10 +762,21 @@ private struct PTTButton: View {
     default: return true
     }
   }
+  /// The speaker letter, then one translated phrase. The separating space is punctuation and lives
+  /// in the code, so neither catalog entry has to begin with a space a translator might drop.
   private var label: Text {
-    Text(speaker.rawValue).fontWeight(.bold).foregroundColor(prefixColor)
-      + Text(isListening ? " recording - release to stop" : " - hold to talk")
-        .fontWeight(.semibold).foregroundColor(contentColor)
+    Text(verbatim: "\(speaker.rawValue) ").fontWeight(.bold).foregroundColor(prefixColor)
+      + suffix.fontWeight(.semibold).foregroundColor(contentColor)
+  }
+
+  /// The phrase after the speaker letter. Two `Text` branches rather than one ternary between two
+  /// literals, so each half can carry its own translator comment.
+  private var suffix: Text {
+    isListening
+      ? Text("recording - release to stop",
+             comment: "Push-to-talk button, after the speaker letter, while recording")
+      : Text("- hold to talk",
+             comment: "Push-to-talk button, after the speaker letter, while idle")
   }
   private var prefixColor: Color {
     if isListening { return DesignToken.surface }
@@ -692,9 +788,12 @@ private struct PTTButton: View {
   }
   private var blockedHint: String {
     if let active = state.activeSpeaker, active != speaker {
-      return "Speaker \(speaker.rawValue) cannot start while speaker \(active.rawValue) is active."
+      return String(localized: "ptt.blockedByOtherSpeaker",
+                    defaultValue: "Speaker \(speaker.rawValue) cannot start while speaker \(active.rawValue) is active.",
+                    comment: "Push-to-talk accessibility hint. %1$@ is this speaker, %2$@ the active one")
     }
-    return "Push-to-talk unlocks once the translation model is ready."
+    return String(localized: "Push-to-talk unlocks once the translation model is ready.",
+                  comment: "Bottom bar hint while the model is not ready")
   }
   private var containerColor: Color {
     if isListening { return speaker.accentColor }
@@ -724,9 +823,18 @@ private struct PTTButton: View {
     .simultaneousGesture(LongPressGesture(minimumDuration: 0.15).onEnded { _ in
       if !isListening && !isBlocked { begin(speaker) }
     })
-    .accessibilityLabel(isListening ? "End \(speaker.rawValue) Turn" : "Start \(speaker.rawValue) Turn")
+    .accessibilityLabel(
+      isListening
+        ? String(localized: "ptt.accessibility.end", defaultValue: "End \(speaker.rawValue) Turn",
+                 comment: "Push-to-talk accessibility label while recording. %@ is A or B")
+        : String(localized: "ptt.accessibility.start", defaultValue: "Start \(speaker.rawValue) Turn",
+                 comment: "Push-to-talk accessibility label while idle. %@ is A or B")
+    )
     .accessibilityHint(
-      isBlocked ? blockedHint : "Hold to talk, or tap once to start and again to end."
+      isBlocked
+        ? blockedHint
+        : String(localized: "Hold to talk, or tap once to start and again to end.",
+                 comment: "Push-to-talk accessibility hint while it is available")
     )
   }
 }

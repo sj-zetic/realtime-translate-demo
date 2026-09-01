@@ -125,8 +125,13 @@ enum ModelDownloadSize {
   /// Held in tenths because that is the unit the progress line is rounded to, and unlike 1.9 a
   /// whole number of tenths is exact in binary floating point.
   static let tenthsOfAGigabyte = 19
+  /// A byte size, not a sentence: the digits and the unit are the same in every language this app
+  /// ships, so the figure stays a plain constant and only the words around it are translated.
   static let total = "1.9 GB"
-  static let approximate = "about 1.9 GB"
+  static var approximate: String {
+    String(localized: "modelSize.approximate", defaultValue: "about \(total)",
+           comment: "Model download size, hedged. %@ is a formatted size such as 1.9 GB")
+  }
 }
 
 /// Whether starting a session has to ask first. A model already on disk loads locally in seconds
@@ -165,9 +170,16 @@ struct ModelPreparationStatus: Equatable {
     // reads as the "1.0" a reader expects rather than the "0.9" that 0.5 * 1.9 formats to.
     let tenths = (progress * Double(ModelDownloadSize.tenthsOfAGigabyte)).rounded()
     let transferred = String(format: "%.1f", tenths / 10)
+    let percent = Int((progress * 100).rounded())
+    // Written out in full rather than composed from `downloadingModel` and a number: a catalog
+    // entry that is only a placeholder and a percent sign gives a translator nothing to work with.
     return ModelPreparationStatus(
-      headline: "\(FirstRunCopy.downloadingModel) \(Int((progress * 100).rounded()))%",
-      detail: "\(transferred) of \(ModelDownloadSize.total)",
+      headline: String(localized: "modelPreparation.downloading",
+                       defaultValue: "Downloading translation model \(percent)%",
+                       comment: "Model download headline. %lld is the percentage complete"),
+      detail: String(localized: "modelPreparation.transferred",
+                     defaultValue: "\(transferred) of \(ModelDownloadSize.total)",
+                     comment: "Model download detail: %1$@ is the amount transferred, %2$@ the total"),
       progress: progress
     )
   }
@@ -176,29 +188,80 @@ struct ModelPreparationStatus: Equatable {
 // MARK: - Copy
 
 /// Every first-run string in one place, in the app's terse voice and with no em dash anywhere.
+///
+/// Computed rather than stored, so each one is a catalog lookup at the moment it is read. The
+/// welcome title is the exception: it is the product name, which is not translated.
 enum FirstRunCopy {
-  static let welcomeTitle = "Turn Translate"
-  static let welcomeTagline = "Two people, two languages, one phone."
-  static let welcomePrivacy = "Speech and translation run on this phone. Nothing is sent to a server."
-  static let welcomeAction = "Get started"
+  static let welcomeTitle = AppText.productName
+  static var welcomeTagline: String {
+    String(localized: "Two people, two languages, one phone.",
+           comment: "Welcome screen tagline, body text")
+  }
+  static var welcomePrivacy: String {
+    String(localized: "Speech and translation run on this phone. Nothing is sent to a server.",
+           comment: "Welcome screen privacy line, body text")
+  }
+  static var welcomeAction: String {
+    String(localized: "Get started", comment: "Welcome screen primary button")
+  }
 
-  static let primingTitle = "Microphone and speech"
-  static let primingMicrophone = "Microphone: to hear whoever is holding a button."
-  static let primingSpeech = "Speech recognition: to turn that audio into text."
-  static let primingPrivacy = "Both run on this phone. No audio and no text leave the device."
-  static let primingNext = "iOS asks for each one next."
-  static let primingAction = "Continue"
-  static let primingDecline = "Not now"
+  static var primingTitle: String {
+    String(localized: "Microphone and speech", comment: "Permission priming screen title")
+  }
+  static var primingMicrophone: String {
+    String(localized: "Microphone: to hear whoever is holding a button.",
+           comment: "Permission priming screen: what the microphone is for, body text")
+  }
+  static var primingSpeech: String {
+    String(localized: "Speech recognition: to turn that audio into text.",
+           comment: "Permission priming screen: what speech recognition is for, body text")
+  }
+  static var primingPrivacy: String {
+    String(localized: "Both run on this phone. No audio and no text leave the device.",
+           comment: "Permission priming screen privacy line, body text")
+  }
+  static var primingNext: String {
+    String(localized: "iOS asks for each one next.",
+           comment: "Permission priming screen: what happens after the button, body text")
+  }
+  static var primingAction: String {
+    String(localized: "Continue", comment: "Permission priming screen primary button")
+  }
+  static var primingDecline: String {
+    String(localized: "Not now", comment: "Secondary button that dismisses a first run step")
+  }
 
-  static let consentTitle = "Download the translation model"
-  static let consentSize = "The translation model is \(ModelDownloadSize.approximate)."
-  static let consentOnce = "It downloads once, then it stays on this phone."
-  static let consentCellular = "You are not on Wi-Fi. A download this large is better on Wi-Fi."
-  static let consentAction = "Download now"
-  static let consentDecline = "Not now"
+  static var consentTitle: String {
+    String(localized: "Download the translation model", comment: "Model download consent card title")
+  }
+  static var consentSize: String {
+    String(localized: "consent.size",
+           defaultValue: "The translation model is \(ModelDownloadSize.approximate).",
+           comment: "Consent card body text. %@ is a hedged size such as about 1.9 GB")
+  }
+  static var consentOnce: String {
+    String(localized: "It downloads once, then it stays on this phone.",
+           comment: "Consent card body text")
+  }
+  static var consentCellular: String {
+    String(localized: "You are not on Wi-Fi. A download this large is better on Wi-Fi.",
+           comment: "Consent card warning shown on an expensive or constrained network")
+  }
+  static var consentAction: String {
+    String(localized: "Download now", comment: "Consent card primary button")
+  }
+  static var consentDecline: String {
+    String(localized: "Not now", comment: "Secondary button that dismisses a first run step")
+  }
 
-  static let preparingModel = "Preparing translation model"
-  static let downloadingModel = "Downloading translation model"
+  static var preparingModel: String {
+    String(localized: "Preparing translation model",
+           comment: "Session banner headline while a local model loads")
+  }
+  static var downloadingModel: String {
+    String(localized: "Downloading translation model",
+           comment: "Session banner headline while the model downloads, without a percentage")
+  }
 }
 
 // MARK: - Flow

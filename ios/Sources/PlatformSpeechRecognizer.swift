@@ -13,12 +13,39 @@ enum PlatformSpeechError: LocalizedError {
   case unsupportedLanguage(String)
   case unavailable(String)
 
+  /// These land in the session banner, so they are translated. The two cases carrying a `reason`
+  /// were already localized where the reason was built, so they pass it through untouched.
   var errorDescription: String? {
     switch self {
-    case .microphonePermissionRequired: "Microphone permission is required."
-    case .speechPermissionRequired: "Speech recognition permission is required."
+    case .microphonePermissionRequired:
+      String(localized: "Microphone permission is required.",
+             comment: "Session banner error when the microphone prompt was refused")
+    case .speechPermissionRequired:
+      String(localized: "Speech recognition permission is required.",
+             comment: "Session banner error when the speech recognition prompt was refused")
     case let .unsupportedLanguage(reason), let .unavailable(reason): reason
     }
+  }
+}
+
+/// The reasons the two pass-through errors carry, localized where they are built.
+enum PlatformSpeechCopy {
+  static func recognitionUnavailable(language: String) -> String {
+    String(localized: "speech.recognitionUnavailable",
+           defaultValue: "\(language) speech recognition is unavailable on this device.",
+           comment: "Session banner error. %@ is a spoken language name")
+  }
+
+  static func onDeviceUnsupported(language: String) -> String {
+    String(localized: "speech.onDeviceUnsupported",
+           defaultValue: "\(language) does not support on-device speech recognition on this device.",
+           comment: "Session banner error. %@ is a spoken language name")
+  }
+
+  static func microphoneUnavailable(reason: String) -> String {
+    String(localized: "speech.microphoneUnavailable",
+           defaultValue: "Unable to start the microphone: \(reason)",
+           comment: "Session banner error. %@ is the underlying system error, which iOS localizes")
   }
 }
 
@@ -83,17 +110,19 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
       try session.setCategory(.record, mode: .measurement, options: [])
       try session.setActive(true, options: .notifyOthersOnDeactivation)
     } catch {
-      throw PlatformSpeechError.unavailable("Unable to start the microphone: \(error.localizedDescription)")
+      throw PlatformSpeechError.unavailable(
+        PlatformSpeechCopy.microphoneUnavailable(reason: error.localizedDescription)
+      )
     }
 
     guard let recognizer = SFSpeechRecognizer(locale: source.locale) else {
       throw PlatformSpeechError.unsupportedLanguage(
-        "\(source.name) speech recognition is unavailable on this device."
+        PlatformSpeechCopy.recognitionUnavailable(language: source.name)
       )
     }
     guard recognizer.supportsOnDeviceRecognition else {
       throw PlatformSpeechError.unsupportedLanguage(
-        "\(source.name) does not support on-device speech recognition on this device."
+        PlatformSpeechCopy.onDeviceUnsupported(language: source.name)
       )
     }
     let request = SFSpeechAudioBufferRecognitionRequest()
@@ -125,7 +154,9 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
       try engine.start()
     } catch {
       stop()
-      throw PlatformSpeechError.unavailable("Unable to start the microphone: \(error.localizedDescription)")
+      throw PlatformSpeechError.unavailable(
+        PlatformSpeechCopy.microphoneUnavailable(reason: error.localizedDescription)
+      )
     }
   }
 

@@ -33,25 +33,47 @@ enum SessionState: Equatable {
     }
   }
 
+  /// The status strip's one line. Built through the catalog rather than from literals, because it
+  /// is the most-read sentence in the app and the only running commentary a person gets.
   var title: String {
     switch self {
-    case .permissionRequired: "Microphone Permission Required"
-    case .setup: "Ready to Start"
-    case .loadingModel: "Preparing Translation"
-    case .modelLoadFailed: "Translation Model Unavailable"
-    case .endingSession: "Closing Translation Session"
-    case .ready: "Ready to Talk"
-    case let .listening(speaker): "\(speaker.rawValue) is speaking"
-    case let .finalizing(speaker): "Finalizing \(speaker.rawValue)'s transcript"
-    case let .translating(speaker): "Translating for \(speaker.counterpart.rawValue)"
-    case .ended: "Session Ended"
-    case .error: "Unable to Process"
+    case .permissionRequired:
+      String(localized: "Microphone Permission Required",
+             comment: "Status strip: the microphone and speech prompts are unanswered")
+    case .setup:
+      String(localized: "Ready to Start", comment: "Status strip: idle, before a session starts")
+    case .loadingModel:
+      String(localized: "Preparing Translation", comment: "Status strip: the model is loading")
+    case .modelLoadFailed:
+      String(localized: "Translation Model Unavailable", comment: "Status strip: the model failed to load")
+    case .endingSession:
+      String(localized: "Closing Translation Session", comment: "Status strip: the session is unwinding")
+    case .ready:
+      String(localized: "Ready to Talk", comment: "Status strip: the model is loaded and idle")
+    case let .listening(speaker):
+      String(localized: "status.listening", defaultValue: "\(speaker.rawValue) is speaking",
+             comment: "Status strip: %@ is the speaker label, A or B")
+    case let .finalizing(speaker):
+      String(localized: "status.finalizing", defaultValue: "Finalizing \(speaker.rawValue)'s transcript",
+             comment: "Status strip: %@ is the speaker label, A or B")
+    case let .translating(speaker):
+      String(localized: "status.translating",
+             defaultValue: "Translating for \(speaker.counterpart.rawValue)",
+             comment: "Status strip: %@ is the receiving speaker's label, A or B")
+    case .ended:
+      String(localized: "Session Ended", comment: "Status strip: the session has finished")
+    case .error:
+      String(localized: "Unable to Process", comment: "Status strip: the session hit an error")
     }
   }
 }
 
 struct SpeechSourceLanguage: Identifiable, Hashable {
-  static let automatic = SpeechSourceLanguage(identifier: "automatic", name: "Automatic")
+  static let automatic = SpeechSourceLanguage(
+    identifier: "automatic",
+    name: String(localized: "Automatic",
+                 comment: "Spoken language option: let iOS pick the recognition language")
+  )
 
   let identifier: String
   let name: String
@@ -59,8 +81,16 @@ struct SpeechSourceLanguage: Identifiable, Hashable {
   var id: String { identifier }
 }
 
+/// One Hy-MT2 reading language.
+///
+/// `name` is deliberately not localized. It is not only a label: it is the argument the Hy-MT2
+/// prompt is built from ("Translate the following text into French"), and that instruction has to
+/// stay in English whatever language the interface is in. Giving the picker translated names means
+/// a second, display-only name, which is a change to the model catalogue rather than to the
+/// localization plumbing, so it is left to the language passes that follow.
 struct TargetLanguage: Identifiable, Hashable {
   let code: String
+  /// The English name, used both in the picker and in the Hy-MT2 instruction. See above.
   let name: String
   var id: String { code }
 

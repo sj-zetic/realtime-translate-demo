@@ -11,22 +11,46 @@ import SwiftUI
 // MARK: - Copy
 
 enum TypedInputCopy {
-  static let action = "Type a message"
-  static let hint = "Opens a box to type a turn instead of speaking it."
-  static let blockedHint = "Typing unlocks once the translation model is ready."
-  static let send = "Send"
-  static let cancel = "Cancel"
-  static let speakerPickerLabel = "Who is speaking"
-  static let fieldLabel = "Message"
+  static var action: String {
+    String(localized: "Type a message", comment: "Typed input sheet title and button label")
+  }
+  static var hint: String {
+    String(localized: "Opens a box to type a turn instead of speaking it.",
+           comment: "Accessibility hint for the keyboard glyph on the bottom bar")
+  }
+  static var blockedHint: String {
+    String(localized: "Typing unlocks once the translation model is ready.",
+           comment: "Shown in the typed input sheet, and as a hint, while typing is blocked")
+  }
+  static var send: String {
+    String(localized: "Send", comment: "Typed input sheet confirmation button")
+  }
+  static var cancel: String {
+    String(localized: "Cancel", comment: "Typed input sheet dismissal button")
+  }
+  static var speakerPickerLabel: String {
+    String(localized: "Who is speaking", comment: "Typed input sheet A/B segmented control label")
+  }
+  static var fieldLabel: String {
+    String(localized: "Message", comment: "Accessibility label for the typed input text field")
+  }
 
   /// Names both ends of the turn about to be sent, because the sheet covers the language bar.
   static func guidance(speaker: Speaker, typing: TargetLanguage, translatedTo: TargetLanguage)
     -> String {
-    "Speaker \(speaker.rawValue) types in \(typing.name). "
-      + "It is translated into \(translatedTo.name) for \(speaker.counterpart.rawValue)."
+    // Deliberately one literal rather than two joined pieces: a sentence that is split in English
+    // cannot be reordered by a translator whose language puts the halves the other way round.
+    String(
+      localized: "typedInput.guidance",
+      defaultValue: "Speaker \(speaker.rawValue) types in \(typing.name). It is translated into \(translatedTo.name) for \(speaker.counterpart.rawValue).",
+      comment: "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages"
+    )
   }
 
-  static func placeholder(for language: TargetLanguage) -> String { "Type in \(language.name)" }
+  static func placeholder(for language: TargetLanguage) -> String {
+    String(localized: "typedInput.placeholder", defaultValue: "Type in \(language.name)",
+           comment: "Typed input field placeholder. %@ is a language name")
+  }
 }
 
 // MARK: - State

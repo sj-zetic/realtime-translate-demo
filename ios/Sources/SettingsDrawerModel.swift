@@ -20,7 +20,7 @@ struct AppInfo: Equatable {
   init(info: [String: Any]?) {
     let name = info?["CFBundleDisplayName"] as? String
     let fallbackName = info?["CFBundleName"] as? String
-    displayName = name ?? fallbackName ?? "Turn Translate"
+    displayName = name ?? fallbackName ?? AppText.productName
     version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
     build = info?["CFBundleVersion"] as? String ?? "1"
   }
@@ -28,20 +28,50 @@ struct AppInfo: Equatable {
   static var main: AppInfo { AppInfo(info: Bundle.main.infoDictionary) }
 
   /// One terse line for the About block: `Version 1.0 (1)`.
-  var versionLine: String { "Version \(version) (\(build))" }
+  var versionLine: String {
+    String(localized: "about.versionLine", defaultValue: "Version \(version) (\(build))",
+           comment: "About block. %1$@ is the marketing version, %2$@ the build number")
+  }
 }
 
 /// Drawer state and the two side effects its rows perform. Kept out of the view so the
 /// clipboard copy and the toast can be exercised without driving the UI.
 @MainActor
 final class SettingsDrawerModel: ObservableObject {
+  /// An address and a URL, so neither is a catalog entry.
   static let contactEmail = "contact@zetic.ai"
   static let website = URL(string: "https://zetic.ai")!
-  static let copyConfirmation = "Email address copied"
-  static let privacyLine = "Speech, translation, everything stays on this phone."
-  static let clearConversationTitle = "Clear conversation"
-  static let clearConversationSubtitle = "Keeps the session and the languages"
-  static let clearConversationConfirmation = "Conversation cleared"
+
+  static var copyConfirmation: String {
+    String(localized: "Email address copied",
+           comment: "Toast after the Contact us row copies the address")
+  }
+  static var privacyLine: String {
+    String(localized: "Speech, translation, everything stays on this phone.",
+           comment: "Settings drawer About block, body text")
+  }
+  static var clearConversationTitle: String {
+    String(localized: "Clear conversation", comment: "Settings drawer row title")
+  }
+  static var clearConversationSubtitle: String {
+    String(localized: "Keeps the session and the languages",
+           comment: "Settings drawer row subtitle under Clear conversation")
+  }
+  static var clearConversationConfirmation: String {
+    String(localized: "Conversation cleared", comment: "Toast after the transcript is emptied")
+  }
+
+  /// The drawer's language row, spelled out here so the accessibility label and the visible row
+  /// can never disagree about the fixed words between them.
+  static func clearConversationAccessibilityLabel(isEnabled: Bool) -> String {
+    isEnabled
+      ? String(localized: "settings.clearConversation.accessibility.available",
+               defaultValue: "\(clearConversationTitle), keeps the session and the languages",
+               comment: "Accessibility label for the Clear conversation row. %@ is the row title")
+      : String(localized: "settings.clearConversation.accessibility.unavailable",
+               defaultValue: "\(clearConversationTitle), unavailable, there is nothing to clear",
+               comment: "Accessibility label for the disabled Clear conversation row. %@ is the row title")
+  }
 
   @Published private(set) var isOpen = false
   /// What the model occupies right now. Re-read every time the drawer opens and again after a
@@ -60,6 +90,9 @@ final class SettingsDrawerModel: ObservableObject {
   private let pasteboard: SettingsPasteboard
   private let openURL: (URL) -> Void
   private let modelStorage: any ModelStorageManaging
+  /// Where the app-language override is written. Injected so a test never touches the preferences
+  /// the host app and the UI tests are running out of.
+  private let languageDefaults: UserDefaults
 
   init(
     appInfo: AppInfo = .main,
@@ -69,12 +102,14 @@ final class SettingsDrawerModel: ObservableObject {
     announce: @escaping (String) -> Void = {
       UIAccessibility.post(notification: .announcement, argument: $0)
     },
-    modelStorage: (any ModelStorageManaging)? = nil
+    modelStorage: (any ModelStorageManaging)? = nil,
+    languageDefaults: UserDefaults = .standard
   ) {
     self.appInfo = appInfo
     self.pasteboard = pasteboard
     self.openURL = openURL
     self.modelStorage = modelStorage ?? LocalModelStorage()
+    self.languageDefaults = languageDefaults
     toasts = ToastCenter(duration: toastDuration, announce: announce)
   }
 
@@ -116,6 +151,23 @@ final class SettingsDrawerModel: ObservableObject {
     refreshStorage()
     guard outcome == .deleted else { return }
     toasts.show(ModelStorageCopy.deleted)
+  }
+
+  // MARK: - App language
+
+  /// What the language row shows right now.
+  var appLanguage: AppLanguage { AppLanguageDefaults.stored(languageDefaults) }
+
+  /// Records the choice, writes the `AppleLanguages` override iOS reads at launch, and says so.
+  /// Choosing the language that is already selected is not a change, so it confirms nothing: a
+  /// toast about reopening the app would be a lie about a tap that did nothing.
+  ///
+  /// The drawer deliberately stays open, unlike the clear row: the thing worth seeing afterwards is
+  /// this row showing the new language, and the toast lives outside the panel either way.
+  func selectAppLanguage(_ language: AppLanguage) {
+    guard language != appLanguage else { return }
+    AppLanguageDefaults.apply(language, to: languageDefaults)
+    toasts.show(AppLanguageCopy.restartNotice)
   }
 
   func openWebsite() { openURL(Self.website) }

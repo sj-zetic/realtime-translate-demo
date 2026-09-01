@@ -1,0 +1,586 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "- hold to talk" : {
+      "comment" : "Push-to-talk button, after the speaker letter, while idle"
+    },
+    "About" : {
+      "comment" : "Settings drawer section heading above the app name and version"
+    },
+    "Allow Microphone Access" : {
+      "comment" : "Session banner button that triggers the system prompts"
+    },
+    "App language" : {
+      "comment" : "Settings drawer row: chooses the app's own language"
+    },
+    "Automatic" : {
+      "comment" : "Spoken language option: let iOS pick the recognition language"
+    },
+    "Both run on this phone. No audio and no text leave the device." : {
+      "comment" : "Permission priming screen privacy line, body text"
+    },
+    "Cancel" : {
+      "comment" : "Typed input sheet dismissal button"
+    },
+    "Choose the languages above, then start the session." : {
+      "comment" : "Empty transcript hint before a session starts"
+    },
+    "Clear conversation" : {
+      "comment" : "Settings drawer row title"
+    },
+    "Close settings" : {
+      "comment" : "Accessibility label for the drawer scrim and close button"
+    },
+    "Closing Translation Session" : {
+      "comment" : "Status strip: the session is unwinding"
+    },
+    "Closing translation session..." : {
+      "comment" : "Session banner body text while the session unwinds"
+    },
+    "Contact us" : {
+      "comment" : "Settings drawer row title"
+    },
+    "Continue" : {
+      "comment" : "Permission priming screen primary button"
+    },
+    "Conversation cleared" : {
+      "comment" : "Toast after the transcript is emptied"
+    },
+    "Copied" : {
+      "comment" : "Toast after a chat bubble is copied to the clipboard"
+    },
+    "Copy" : {
+      "comment" : "Long press menu action on a chat bubble"
+    },
+    "Delete downloaded model" : {
+      "comment" : "Destructive button in the delete confirmation"
+    },
+    "Delete the downloaded model?" : {
+      "comment" : "Delete confirmation dialog title"
+    },
+    "Dismiss the model download step" : {
+      "comment" : "Accessibility label for the consent card's scrim"
+    },
+    "Download now" : {
+      "comment" : "Consent card primary button"
+    },
+    "Download the translation model" : {
+      "comment" : "Model download consent card title"
+    },
+    "Downloading translation model" : {
+      "comment" : "Session banner headline while the model downloads, without a percentage"
+    },
+    "Email address copied" : {
+      "comment" : "Toast after the Contact us row copies the address"
+    },
+    "End Session" : {
+      "comment" : "Bottom bar action that ends a live session"
+    },
+    "End the session first" : {
+      "comment" : "Storage row subtitle while a session holds the model in memory"
+    },
+    "Get started" : {
+      "comment" : "Welcome screen primary button"
+    },
+    "Grant microphone access to enable push-to-talk." : {
+      "comment" : "Bottom bar hint while the microphone prompt is unanswered"
+    },
+    "Hold a button to talk, or tap once to start and again to stop." : {
+      "comment" : "Bottom bar hint while the session is idle and ready"
+    },
+    "Hold to talk, or tap once to start and again to end." : {
+      "comment" : "Push-to-talk accessibility hint while it is available"
+    },
+    "Interrupted. Tap to talk again." : {
+      "comment" : "Session banner note after a call, alarm, or Siri took the audio session"
+    },
+    "It downloads once, then it stays on this phone." : {
+      "comment" : "Consent card body text"
+    },
+    "Keep it" : {
+      "comment" : "Cancel button in the delete confirmation"
+    },
+    "Keeps the session and the languages" : {
+      "comment" : "Settings drawer row subtitle under Clear conversation"
+    },
+    "Language applies fully after reopening the app" : {
+      "comment" : "Toast confirming an app language change"
+    },
+    "Listening..." : {
+      "comment" : "Chat bubble placeholder before any words are recognized"
+    },
+    "Message" : {
+      "comment" : "Accessibility label for the typed input text field"
+    },
+    "Microphone Permission Required" : {
+      "comment" : "Status strip: the microphone and speech prompts are unanswered"
+    },
+    "Microphone and speech" : {
+      "comment" : "Permission priming screen title"
+    },
+    "Microphone permission is required." : {
+      "comment" : "Session banner error when the microphone prompt was refused"
+    },
+    "Microphone: to hear whoever is holding a button." : {
+      "comment" : "Permission priming screen: what the microphone is for, body text"
+    },
+    "Model deleted" : {
+      "comment" : "Toast after the model is removed from disk"
+    },
+    "No model downloaded" : {
+      "comment" : "Storage row subtitle when nothing is on disk"
+    },
+    "Not now" : {
+      "comment" : "Secondary button that dismisses a first run step"
+    },
+    "Open App Settings" : {
+      "comment" : "Session banner button that opens this app's page in iOS Settings"
+    },
+    "Opens a box to type a turn instead of speaking it." : {
+      "comment" : "Accessibility hint for the keyboard glyph on the bottom bar"
+    },
+    "Play translation" : {
+      "comment" : "Accessibility label for a bubble's replay control"
+    },
+    "Preparing Translation" : {
+      "comment" : "Status strip: the model is loading"
+    },
+    "Preparing translation model" : {
+      "comment" : "Session banner headline while a local model loads"
+    },
+    "Push-to-talk unlocks once the translation model is ready." : {
+      "comment" : "Bottom bar hint while the model is not ready"
+    },
+    "Reading language" : {
+      "comment" : "Section label in a speaker's language menu"
+    },
+    "Ready to Start" : {
+      "comment" : "Status strip: idle, before a session starts"
+    },
+    "Ready to Talk" : {
+      "comment" : "Status strip: the model is loaded and idle"
+    },
+    "Recognizing speech" : {
+      "comment" : "Chat bubble state while speech is still being recognized"
+    },
+    "Resolve the error above to continue." : {
+      "comment" : "Bottom bar hint while a session error banner is showing"
+    },
+    "Retry Model Load" : {
+      "comment" : "Session banner button that loads the model again after a failure"
+    },
+    "Send" : {
+      "comment" : "Typed input sheet confirmation button"
+    },
+    "Session Ended" : {
+      "comment" : "Status strip: the session has finished"
+    },
+    "Session status: %@" : {
+      "comment" : "Accessibility label for the status strip. %@ is the status"
+    },
+    "Settings" : {
+      "comment" : "Settings drawer panel heading"
+    },
+    "Speaker %@" : {
+      "comment" : "Chat bubble heading. %@ is the speaker label, A or B"
+    },
+    "Speaker A or B can begin speaking." : {
+      "comment" : "Empty transcript hint while a session is live"
+    },
+    "Speaker controls unlock when the model is ready." : {
+      "comment" : "Session banner body text while the model loads"
+    },
+    "Speaks this translation again." : {
+      "comment" : "Accessibility hint for a bubble's replay control"
+    },
+    "Speech and translation run on this phone. Nothing is sent to a server." : {
+      "comment" : "Welcome screen privacy line, body text"
+    },
+    "Speech recognition permission is required." : {
+      "comment" : "Session banner error when the speech recognition prompt was refused"
+    },
+    "Speech recognition: to turn that audio into text." : {
+      "comment" : "Permission priming screen: what speech recognition is for, body text"
+    },
+    "Speech, translation, everything stays on this phone." : {
+      "comment" : "Settings drawer About block, body text"
+    },
+    "Spoken language" : {
+      "comment" : "Section label in a speaker's language menu"
+    },
+    "Spoken translation off" : {
+      "comment" : "Accessibility label for the sound toggle while it is muted"
+    },
+    "Spoken translation on" : {
+      "comment" : "Accessibility label for the sound toggle while it is unmuted"
+    },
+    "Start Session" : {
+      "comment" : "Bottom bar action that starts a session"
+    },
+    "Storage" : {
+      "comment" : "Settings drawer row title for the downloaded model"
+    },
+    "System" : {
+      "comment" : "App language option: follow the language chosen in iOS Settings"
+    },
+    "Tap Start Session to begin translating." : {
+      "comment" : "Bottom bar hint before a session starts. Start Session is a button"
+    },
+    "The Hy-MT2 translation model could not complete this request." : {
+      "comment" : "Placeholder translation failure used by UI tests. Hy-MT2 is a model name"
+    },
+    "The Melange personal key is not configured in this app build." : {
+      "comment" : "Model load failure: the build has no Melange credential"
+    },
+    "The translation model is not loaded." : {
+      "comment" : "Translation failure: a request arrived before the model was ready"
+    },
+    "The translation model returned an empty result." : {
+      "comment" : "Translation failure: the model produced no text"
+    },
+    "To %@ - %@" : {
+      "comment" : "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To %1$@ - %2$@"
+          }
+        }
+      }
+    },
+    "Translation Model Unavailable" : {
+      "comment" : "Status strip: the model failed to load"
+    },
+    "Translation pending" : {
+      "comment" : "Chat bubble state while a translation is in flight"
+    },
+    "Try Again" : {
+      "comment" : "Session banner button that retries after a runtime error"
+    },
+    "Try again." : {
+      "comment" : "Placeholder model load failure used by UI tests"
+    },
+    "Turn Translate needs microphone and speech recognition access on this device." : {
+      "comment" : "Session banner body text. Turn Translate is the product name, keep it as is"
+    },
+    "Turns spoken translation off." : {
+      "comment" : "Accessibility hint for the sound toggle while it is unmuted"
+    },
+    "Turns spoken translation on." : {
+      "comment" : "Accessibility hint for the sound toggle while it is muted"
+    },
+    "Two people, two languages, one phone." : {
+      "comment" : "Welcome screen tagline, body text"
+    },
+    "Type a message" : {
+      "comment" : "Typed input sheet title and button label"
+    },
+    "Typing unlocks once the translation model is ready." : {
+      "comment" : "Shown in the typed input sheet, and as a hint, while typing is blocked"
+    },
+    "Unable to Process" : {
+      "comment" : "Status strip: the session hit an error"
+    },
+    "Visit zetic.ai" : {
+      "comment" : "Settings drawer row title. zetic.ai is a domain, keep it as is"
+    },
+    "Visit zetic.ai, opens the website" : {
+      "comment" : "Accessibility label for the Visit zetic.ai row"
+    },
+    "Wait while the session ends." : {
+      "comment" : "Bottom bar hint while the session is unwinding"
+    },
+    "Who is speaking" : {
+      "comment" : "Typed input sheet A/B segmented control label"
+    },
+    "You are not on Wi-Fi. A download this large is better on Wi-Fi." : {
+      "comment" : "Consent card warning shown on an expensive or constrained network"
+    },
+    "ZETIC, opens settings" : {
+      "comment" : "Accessibility label for the wordmark button in the navigation bar"
+    },
+    "about.versionLine" : {
+      "comment" : "About block. %1$@ is the marketing version, %2$@ the build number",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "bottomBar.otherSpeakerActive" : {
+      "comment" : "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speaker %1$@ cannot begin while speaker %2$@ is active."
+          }
+        }
+      }
+    },
+    "consent.size" : {
+      "comment" : "Consent card body text. %@ is a hedged size such as about 1.9 GB",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation model is %@."
+          }
+        }
+      }
+    },
+    "iOS asks for each one next." : {
+      "comment" : "Permission priming screen: what happens after the button, body text"
+    },
+    "languageChip.accessibility" : {
+      "comment" : "Language chip accessibility label. %1$@ speaker, %2$@ reading, %3$@ spoken",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speaker %1$@ languages: reads %2$@, speaks %3$@"
+          }
+        }
+      }
+    },
+    "modelPreparation.downloading" : {
+      "comment" : "Model download headline. %lld is the percentage complete",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading translation model %lld%%"
+          }
+        }
+      }
+    },
+    "modelPreparation.transferred" : {
+      "comment" : "Model download detail: %1$@ is the amount transferred, %2$@ the total",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ of %2$@"
+          }
+        }
+      }
+    },
+    "modelSize.approximate" : {
+      "comment" : "Model download size, hedged. %@ is a formatted size such as 1.9 GB",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@"
+          }
+        }
+      }
+    },
+    "ptt.accessibility.end" : {
+      "comment" : "Push-to-talk accessibility label while recording. %@ is A or B",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End %@ Turn"
+          }
+        }
+      }
+    },
+    "ptt.accessibility.start" : {
+      "comment" : "Push-to-talk accessibility label while idle. %@ is A or B",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start %@ Turn"
+          }
+        }
+      }
+    },
+    "ptt.blockedByOtherSpeaker" : {
+      "comment" : "Push-to-talk accessibility hint. %1$@ is this speaker, %2$@ the active one",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speaker %1$@ cannot start while speaker %2$@ is active."
+          }
+        }
+      }
+    },
+    "recording - release to stop" : {
+      "comment" : "Push-to-talk button, after the speaker letter, while recording"
+    },
+    "settings.clearConversation.accessibility.available" : {
+      "comment" : "Accessibility label for the Clear conversation row. %@ is the row title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, keeps the session and the languages"
+          }
+        }
+      }
+    },
+    "settings.clearConversation.accessibility.unavailable" : {
+      "comment" : "Accessibility label for the disabled Clear conversation row. %@ is the row title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, unavailable, there is nothing to clear"
+          }
+        }
+      }
+    },
+    "settings.contactUs.accessibility" : {
+      "comment" : "Accessibility label for the Contact us row. %@ is an email address",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contact us, copies %@"
+          }
+        }
+      }
+    },
+    "speech.microphoneUnavailable" : {
+      "comment" : "Session banner error. %@ is the underlying system error, which iOS localizes",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to start the microphone: %@"
+          }
+        }
+      }
+    },
+    "speech.onDeviceUnsupported" : {
+      "comment" : "Session banner error. %@ is a spoken language name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ does not support on-device speech recognition on this device."
+          }
+        }
+      }
+    },
+    "speech.recognitionUnavailable" : {
+      "comment" : "Session banner error. %@ is a spoken language name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ speech recognition is unavailable on this device."
+          }
+        }
+      }
+    },
+    "status.finalizing" : {
+      "comment" : "Status strip: %@ is the speaker label, A or B",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalizing %@'s transcript"
+          }
+        }
+      }
+    },
+    "status.listening" : {
+      "comment" : "Status strip: %@ is the speaker label, A or B",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is speaking"
+          }
+        }
+      }
+    },
+    "status.translating" : {
+      "comment" : "Status strip: %@ is the receiving speaker's label, A or B",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating for %@"
+          }
+        }
+      }
+    },
+    "storage.accessibility.locked" : {
+      "comment" : "Locked Storage row accessibility label. %1$@ row title, %2$@ size, %3$@ reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@, unavailable, %3$@"
+          }
+        }
+      }
+    },
+    "storage.confirmationMessage" : {
+      "comment" : "Delete confirmation body. %@ is a formatted size such as 1.9 GB",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This frees %@. The next session downloads the model again."
+          }
+        }
+      }
+    },
+    "storage.onThisPhone" : {
+      "comment" : "Storage row subtitle. %@ is a formatted size such as 1.9 GB",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ on this phone"
+          }
+        }
+      }
+    },
+    "translationFailure.generationFailed" : {
+      "comment" : "Translation failure: %lld is a numeric code from the runtime",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation model failed with code %lld."
+          }
+        }
+      }
+    },
+    "typedInput.guidance" : {
+      "comment" : "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speaker %1$@ types in %2$@. It is translated into %3$@ for %4$@."
+          }
+        }
+      }
+    },
+    "typedInput.placeholder" : {
+      "comment" : "Typed input field placeholder. %@ is a language name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type in %@"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

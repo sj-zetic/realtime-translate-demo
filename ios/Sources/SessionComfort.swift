@@ -187,8 +187,12 @@ extension ConversationItem {
 /// Kept out of the view so the copy is exercised without driving a long press.
 @MainActor
 final class ConversationCopyModel: ObservableObject {
-  static let confirmation = "Copied"
-  static let action = "Copy"
+  static var confirmation: String {
+    String(localized: "Copied", comment: "Toast after a chat bubble is copied to the clipboard")
+  }
+  static var action: String {
+    String(localized: "Copy", comment: "Long press menu action on a chat bubble")
+  }
 
   let toasts: ToastCenter
 

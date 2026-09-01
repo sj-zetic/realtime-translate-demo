@@ -1726,6 +1726,174 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(storage?.footprint(), LocalModelStore.Footprint.none)
   }
 
+  // MARK: - Localization
+
+  /// The override is two writes that have to stay in step: the app's own remembered value, and the
+  /// `AppleLanguages` key iOS reads while it builds `Bundle.main` at launch.
+  func testChoosingAnAppLanguageWritesBothTheStoredValueAndAppleLanguages() throws {
+    let scratch = try makeScratchDefaults()
+
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .system)
+    XCTAssertNil(scratch.appleLanguages)
+
+    AppLanguageDefaults.apply(.french, to: scratch.defaults)
+
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .french)
+    XCTAssertEqual(scratch.appleLanguages, ["fr"])
+
+    AppLanguageDefaults.apply(.spanish, to: scratch.defaults)
+
+    XCTAssertEqual(scratch.appleLanguages, ["es"])
+  }
+
+  /// `System` removes the key rather than pinning the current device language, so a phone that
+  /// changes its language later is followed instead of frozen.
+  func testChoosingSystemRemovesTheAppleLanguagesOverrideRatherThanPinningALanguage() throws {
+    let scratch = try makeScratchDefaults()
+    AppLanguageDefaults.apply(.english, to: scratch.defaults)
+    XCTAssertEqual(scratch.appleLanguages, ["en"])
+
+    AppLanguageDefaults.apply(.system, to: scratch.defaults)
+
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .system)
+    XCTAssertNil(scratch.appleLanguages)
+  }
+
+  func testAnUnknownStoredLanguageFallsBackToTheDeviceLanguage() throws {
+    let scratch = try makeScratchDefaults()
+    scratch.defaults.set("klingon", forKey: AppLanguageDefaults.storageKey)
+
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .system)
+    XCTAssertEqual(AppLanguage.named(nil), .system)
+    XCTAssertNil(AppLanguage.system.localeIdentifier)
+    XCTAssertEqual(AppLanguage.allCases.compactMap(\.localeIdentifier), ["en", "fr", "es"])
+  }
+
+  func testTheResetLaunchArgumentClearsBothHalvesOfTheOverride() throws {
+    let scratch = try makeScratchDefaults()
+    AppLanguageDefaults.apply(.french, to: scratch.defaults)
+
+    AppLanguageDefaults.applyLaunchArguments([], to: scratch.defaults)
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .french)
+
+    AppLanguageDefaults.applyLaunchArguments(["-resetAppLanguage"], to: scratch.defaults)
+
+    XCTAssertEqual(AppLanguageDefaults.stored(scratch.defaults), .system)
+    XCTAssertNil(scratch.appleLanguages)
+  }
+
+  /// The drawer's side of it: the row writes through the model, which confirms with the same toast
+  /// behaviour every other drawer action uses, and says nothing when the choice did not change.
+  func testTheLanguageRowConfirmsAChangeAndStaysQuietWhenNothingChanged() throws {
+    let scratch = try makeScratchDefaults()
+    var announcements: [String] = []
+    let model = SettingsDrawerModel(toastDuration: 60, announce: { announcements.append($0) },
+                                    modelStorage: FixedModelStorage(.none),
+                                    languageDefaults: scratch.defaults)
+
+    model.selectAppLanguage(.system)
+    XCTAssertNil(model.toast)
+    XCTAssertEqual(announcements, [])
+
+    model.selectAppLanguage(.spanish)
+
+    XCTAssertEqual(model.appLanguage, .spanish)
+    XCTAssertEqual(model.toast, "Language applies fully after reopening the app")
+    XCTAssertEqual(announcements, ["Language applies fully after reopening the app"])
+    XCTAssertFalse(AppLanguageCopy.restartNotice.contains("\u{2014}"))
+  }
+
+  /// Proves the catalog is actually wired up, rather than every lookup quietly falling through to
+  /// its own key. Each of these has an explicit key, so a missing or uncompiled catalog would make
+  /// the assertion read `status.listening` instead of `A is speaking`.
+  func testExplicitCatalogKeysResolveToTheirEnglishStrings() {
+    XCTAssertEqual(SessionState.listening(.a).title, "A is speaking")
+    XCTAssertEqual(SessionState.finalizing(.b).title, "Finalizing B's transcript")
+    XCTAssertEqual(SessionState.translating(.a).title, "Translating for B")
+    XCTAssertEqual(ModelStorageCopy.onThisPhone("1.9 GB"), "1.9 GB on this phone")
+    XCTAssertEqual(ModelStorageCopy.confirmationMessage("1.9 GB"),
+                   "This frees 1.9 GB. The next session downloads the model again.")
+    XCTAssertEqual(ModelDownloadSize.approximate, "about 1.9 GB")
+    XCTAssertEqual(AppInfo(info: ["CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"]).versionLine,
+                   "Version 1.2 (7)")
+    XCTAssertEqual(TypedInputCopy.placeholder(for: .hyMT2Candidates[9]), "Type in Korean")
+    XCTAssertEqual(
+      TranslationFailureCopy.message(for: TranslationRuntimeError.generationFailed(3)),
+      "The translation model failed with code 3."
+    )
+  }
+
+  /// The other half of the same proof: strings whose key is their own English text. A build with no
+  /// catalog would still pass these, so the explicit-key test above is the one that catches a
+  /// missing catalog; this one catches a wording change that was made in only one of two places.
+  func testCatalogBackedCopyStillReadsInEnglish() {
+    XCTAssertEqual(SessionState.ready.title, "Ready to Talk")
+    XCTAssertEqual(SettingsDrawerModel.clearConversationTitle, "Clear conversation")
+    XCTAssertEqual(ModelStorageCopy.title, "Storage")
+    XCTAssertEqual(SpeechOutputCopy.replayAction, "Play translation")
+    XCTAssertEqual(AudioInterruptionCopy.notice, "Interrupted. Tap to talk again.")
+    XCTAssertEqual(AppLanguageCopy.title, "App language")
+    XCTAssertEqual(SpeechSourceLanguage.automatic.name, "Automatic")
+    XCTAssertEqual(AppText.productName, "Turn Translate")
+  }
+
+  /// The compiled catalog has to reach the app bundle, not just the source tree. Only the entries
+  /// whose key differs from their English value produce a line here; the rest resolve to their key.
+  func testTheCompiledEnglishCatalogIsInTheAppBundle() throws {
+    let url = try XCTUnwrap(
+      Bundle.main.url(forResource: "Localizable", withExtension: "strings", subdirectory: "en.lproj"),
+      "en.lproj/Localizable.strings is missing from the app bundle"
+    )
+    let compiled = try XCTUnwrap(
+      PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: String]
+    )
+
+    XCTAssertEqual(compiled["status.listening"], "%@ is speaking")
+    XCTAssertEqual(compiled["storage.onThisPhone"], "%@ on this phone")
+    XCTAssertFalse(compiled.isEmpty)
+    for (key, value) in compiled {
+      XCTAssertFalse(value.contains("\u{2014}"), key)
+    }
+  }
+
+  /// The whole catalog, read as the file the language experts will be handed. English is the only
+  /// populated language until the French and Spanish passes land, every entry carries a comment so
+  /// a translator is never guessing what a string is for, and no value anywhere uses an em dash.
+  func testTheStringCatalogIsEnglishOnlyFullyCommentedAndFreeOfEmDashes() throws {
+    let catalog = try Self.stringCatalog()
+
+    XCTAssertEqual(catalog.sourceLanguage, "en")
+    XCTAssertFalse(catalog.strings.isEmpty)
+    for (key, entry) in catalog.strings {
+      XCTAssertFalse(key.contains("\u{2014}"), key)
+      XCTAssertFalse(key.contains("\u{2013}"), key)
+      XCTAssertFalse(entry.comment?.isEmpty ?? true, "\(key) has no translator comment")
+      XCTAssertNotEqual(entry.extractionState, "stale", "\(key) is no longer used in source")
+      for (language, value) in entry.values {
+        XCTAssertEqual(language, "en", "\(key) is translated into \(language) already")
+        XCTAssertFalse(value.contains("\u{2014}"), "\(key): \(value)")
+        XCTAssertFalse(value.contains("\u{2013}"), "\(key): \(value)")
+        XCTAssertFalse(value.isEmpty, key)
+      }
+      // The one that bites after a re-sync: `xcstringstool sync` marks a freshly extracted entry
+      // `new`, and `xcstringstool compile` silently drops anything that is not `translated`, so an
+      // unreviewed entry ships as its own raw key.
+      for (language, state) in entry.states {
+        XCTAssertEqual(state, "translated", "\(key) is \(state) in \(language) and will not compile")
+      }
+    }
+  }
+
+  /// A `UserDefaults` domain of this test's own. Nothing here may touch `.standard`: the host app
+  /// and the UI tests run out of it, and an `AppleLanguages` value left behind would put the next
+  /// UI test run into another language.
+  private func makeScratchDefaults() throws -> ScratchDefaults {
+    let name = "ai.zetic.turntranslate.tests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+    addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: name) }
+    return ScratchDefaults(name: name, defaults: defaults)
+  }
+
   private var previewTranslatedItem: ConversationItem {
     ConversationItem(
       id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
@@ -1809,6 +1977,67 @@ final class RealtimeTranslateTests: XCTestCase {
 }
 
 private enum TestError: Error { case failed }
+
+/// A throwaway `UserDefaults` suite, plus the one reading that has to bypass the search list.
+///
+/// `AppleLanguages` lives in the global domain on every device, so `array(forKey:)` on a suite
+/// falls through and answers with the phone's own language order whatever the suite holds. Reading
+/// the suite's persistent domain is the only way to see what this app actually wrote.
+private struct ScratchDefaults {
+  let name: String
+  let defaults: UserDefaults
+
+  var appleLanguages: [String]? {
+    UserDefaults.standard.persistentDomain(forName: name)?[AppLanguageDefaults.appleLanguagesKey]
+      as? [String]
+  }
+}
+
+/// `Sources/Localizable.xcstrings`, read as JSON.
+///
+/// The catalog is a build input, not a bundled resource: what ships is the compiled
+/// `en.lproj/Localizable.strings`, which cannot answer questions about comments, extraction state,
+/// or which languages are populated. So this reads the source file from the checkout, located from
+/// `#filePath`, which is where the language experts will read it from too.
+struct StringCatalogFixture {
+  struct Entry {
+    let comment: String?
+    let extractionState: String?
+    /// Language to value. Empty for an entry whose key is its own English value.
+    let values: [String: String]
+    /// Language to translation state. `xcstringstool compile` emits only `translated` entries.
+    let states: [String: String]
+  }
+
+  let sourceLanguage: String
+  let strings: [String: Entry]
+}
+
+extension RealtimeTranslateTests {
+  static func stringCatalog(file: StaticString = #filePath) throws -> StringCatalogFixture {
+    let url = URL(fileURLWithPath: "\(file)")
+      .deletingLastPathComponent()      // Tests
+      .deletingLastPathComponent()      // ios
+      .appendingPathComponent("Sources/Localizable.xcstrings")
+    let root = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+      "Localizable.xcstrings is not readable at \(url.path)"
+    )
+    let strings = try XCTUnwrap(root["strings"] as? [String: [String: Any]])
+    return StringCatalogFixture(
+      sourceLanguage: try XCTUnwrap(root["sourceLanguage"] as? String),
+      strings: strings.mapValues { entry in
+        let localizations = entry["localizations"] as? [String: [String: Any]] ?? [:]
+        return StringCatalogFixture.Entry(
+          comment: entry["comment"] as? String,
+          extractionState: entry["extractionState"] as? String,
+          values: localizations.compactMapValues { ($0["stringUnit"] as? [String: Any])?["value"] as? String },
+          states: localizations.compactMapValues { ($0["stringUnit"] as? [String: Any])?["state"] as? String }
+        )
+      }
+    )
+  }
+}
 
 private final class FakePasteboard: SettingsPasteboard {
   private(set) var written: [String] = []
