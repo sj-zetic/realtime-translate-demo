@@ -100,15 +100,66 @@ final class SourceLanguageCache: @unchecked Sendable {
   }
 }
 
+/// The one thing the microphone tap writes to, so the recognition request underneath a running
+/// audio engine can be swapped out between segments without the engine, the tap, or the audio
+/// session noticing.
+///
+/// Lock guarded rather than actor isolated because the tap is called on the audio render thread,
+/// which cannot await anything, while the swap happens on the main actor.
+final class RecognitionRequestSink: @unchecked Sendable {
+  private let lock = NSLock()
+  private var request: SFSpeechAudioBufferRecognitionRequest?
+
+  /// Points the tap at a new request and closes the one it was feeding.
+  func use(_ next: SFSpeechAudioBufferRecognitionRequest?) {
+    lock.lock()
+    let previous = request
+    request = next
+    lock.unlock()
+    previous?.endAudio()
+  }
+
+  func append(_ buffer: AVAudioPCMBuffer) {
+    lock.lock()
+    let current = request
+    lock.unlock()
+    current?.append(buffer)
+  }
+
+  /// Ends the audio of whatever is in flight and stops feeding anything further.
+  func finish() { use(nil) }
+}
+
 @MainActor
 final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
   /// Shared by every recognizer this launch builds, because the answer is the device's, not any
   /// one recognizer's.
   static let languageCache = SourceLanguageCache()
 
+  /// How many segments in a row may fail to produce anything before the turn is given up on.
+  ///
+  /// A restart is the answer to a segment that ended, however it ended. A restart that immediately
+  /// fails the same way is a recognizer that is not going to work again this turn, and retrying it
+  /// forever would spin a callback loop instead of handing the words back.
+  static let segmentRestartLimit = 3
+
   private var audioEngine: AVAudioEngine?
-  private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+  private let requestSink = RecognitionRequestSink()
   private var recognitionTask: SFSpeechRecognitionTask?
+  /// Held across segments: a restart needs the same recognizer, and building a second one costs
+  /// the locale enumeration again.
+  private var recognizer: SFSpeechRecognizer?
+  /// The words so far. The button owns where an utterance ends, so a final that arrives before the
+  /// release only ends a segment. See `UtteranceAccumulator`.
+  private var accumulator = UtteranceAccumulator()
+  private var partialHandler: ((String) -> Void)?
+  private var finalHandler: ((String) -> Void)?
+  /// Whether `finish()` has been called: the difference between a final that ends a segment and a
+  /// final that ends the turn.
+  private var isFinishing = false
+  /// Exactly one `onFinal` per turn reaches the caller, whatever the segments underneath did.
+  private var hasDeliveredFinal = false
+  private var consecutiveSegmentFailures = 0
 
   func requestPermissions() async -> SpeechPermission {
     let microphoneGranted = await requestMicrophonePermission()
@@ -175,30 +226,26 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
         PlatformSpeechCopy.onDeviceUnsupported(language: source.name)
       )
     }
-    let request = SFSpeechAudioBufferRecognitionRequest()
-    Self.configure(request)
+    self.recognizer = recognizer
+    partialHandler = onPartial
+    finalHandler = onFinal
+    accumulator = UtteranceAccumulator()
+    isFinishing = false
+    hasDeliveredFinal = false
+    consecutiveSegmentFailures = 0
+
+    // The engine and its tap are installed once for the whole turn and feed the sink, not any one
+    // request. That is what lets a segment be replaced mid-utterance without the microphone or the
+    // audio session being torn down and rebuilt in front of someone who is still talking.
     let engine = AVAudioEngine()
     let inputNode = engine.inputNode
     let inputFormat = inputNode.outputFormat(forBus: 0)
+    let sink = requestSink
     inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { buffer, _ in
-      request.append(buffer)
-    }
-
-    recognitionTask = recognizer.recognitionTask(with: request) { result, error in
-      if let result {
-        let transcript = result.bestTranscription.formattedString
-        if result.isFinal {
-          onFinal(transcript)
-        } else {
-          onPartial(transcript)
-        }
-      }
-      if let error, !Self.isCancellation(error) {
-        onFinal("")
-      }
+      sink.append(buffer)
     }
     audioEngine = engine
-    recognitionRequest = request
+    beginSegment()
     do {
       engine.prepare()
       try engine.start()
@@ -210,23 +257,127 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     }
   }
 
-  func stop() {
-    audioEngine?.inputNode.removeTap(onBus: 0)
-    audioEngine?.stop()
-    recognitionRequest?.endAudio()
-    recognitionTask?.cancel()
-    recognitionTask = nil
-    recognitionRequest = nil
-    audioEngine = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  /// Opens a recognition request on the already-running engine and points the tap at it.
+  ///
+  /// Used for the first segment of a turn and for every restart after it, which is the whole of
+  /// the difference between them: nothing about the engine, the tap, or the audio session is
+  /// touched here. The few milliseconds of audio between one segment's final and this request
+  /// being installed are lost, which is the pause itself.
+  @discardableResult
+  private func beginSegment() -> Bool {
+    guard let recognizer else { return false }
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    Self.configure(request)
+    requestSink.use(request)
+    recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+      guard let self else { return }
+      if let result {
+        receive(result.bestTranscription.formattedString, isFinal: result.isFinal)
+        // A final and an error delivered together is the error reporting the same segment ending
+        // that the final already described, and the final is the half carrying the words. Taking
+        // both would bank the segment and then immediately restart the segment that banking just
+        // opened.
+        if result.isFinal { return }
+      }
+      if let error, !Self.isCancellation(error) {
+        receiveSegmentFailure()
+      }
+    }
+    return true
   }
 
+  /// One result from the segment in flight.
+  ///
+  /// The only interesting case is a final that arrives while the control is still held, which is
+  /// what a pause mid-sentence produces: the recognizer has decided the utterance is over and the
+  /// button says otherwise. The button wins. The segment is banked, a new one opens on the same
+  /// audio, and the partial the caller sees is every word so far rather than only the new ones.
+  private func receive(_ transcript: String, isFinal: Bool) {
+    guard !hasDeliveredFinal else { return }
+    consecutiveSegmentFailures = 0
+    guard isFinal else {
+      partialHandler?(accumulator.receivePartial(transcript))
+      return
+    }
+    guard !isFinishing else {
+      deliverFinal(concludingWith: transcript)
+      return
+    }
+    let text = accumulator.commitSegment(transcript)
+    recognitionTask = nil
+    if beginSegment() {
+      partialHandler?(text)
+    } else {
+      deliverFinal()
+    }
+  }
+
+  /// A segment that ended in a recognition failure rather than a result.
+  ///
+  /// Mid-hold this is treated as one more reason to start a new segment, not as the end of the
+  /// turn: a failure arriving after two sentences have already been recognized must not throw
+  /// those two sentences away. A turn-level failure is surfaced only once restarting has stopped
+  /// working, and then it carries whatever was accumulated, which for a turn that never recognized
+  /// anything is the empty final this class has always synthesized.
+  private func receiveSegmentFailure() {
+    guard !hasDeliveredFinal else { return }
+    recognitionTask = nil
+    guard !isFinishing else {
+      deliverFinal()
+      return
+    }
+    accumulator.commitSegment()
+    consecutiveSegmentFailures += 1
+    guard consecutiveSegmentFailures < Self.segmentRestartLimit, beginSegment() else {
+      deliverFinal()
+      return
+    }
+    partialHandler?(accumulator.text)
+  }
+
+  /// The one `onFinal` a turn is allowed, carrying the whole utterance.
+  private func deliverFinal(concludingWith transcript: String? = nil) {
+    guard !hasDeliveredFinal else { return }
+    hasDeliveredFinal = true
+    let text = accumulator.concluded(with: transcript)
+    let handler = finalHandler
+    releaseRecognition()
+    handler?(text)
+  }
+
+  func stop() {
+    // Nothing further may be delivered for this turn, including by a callback already in flight.
+    hasDeliveredFinal = true
+    isFinishing = false
+    consecutiveSegmentFailures = 0
+    accumulator = UtteranceAccumulator()
+    releaseRecognition()
+  }
+
+  /// Stops feeding the recognizer and waits for the segment in flight to have its last word, which
+  /// then concludes the whole utterance. A turn with no segment left to answer, because restarting
+  /// stopped working, concludes here instead of waiting for a callback that is not coming.
   func finish() {
+    guard !hasDeliveredFinal else { return }
+    isFinishing = true
     audioEngine?.inputNode.removeTap(onBus: 0)
     audioEngine?.stop()
-    recognitionRequest?.endAudio()
     audioEngine = nil
-    recognitionRequest = nil
+    requestSink.finish()
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    if recognitionTask == nil { deliverFinal() }
+  }
+
+  private func releaseRecognition() {
+    audioEngine?.inputNode.removeTap(onBus: 0)
+    audioEngine?.stop()
+    requestSink.finish()
+    recognitionTask?.cancel()
+    recognitionTask = nil
+    audioEngine = nil
+    recognizer = nil
+    partialHandler = nil
+    finalHandler = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 

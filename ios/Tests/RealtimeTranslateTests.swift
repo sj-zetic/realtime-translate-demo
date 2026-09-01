@@ -541,6 +541,147 @@ final class RealtimeTranslateTests: XCTestCase {
     }
   }
 
+  // MARK: - A pause mid-sentence
+
+  /// The field-reported bug, as the pure type sees it. An on-device recognizer reads a breath
+  /// mid-sentence as the end of the utterance and finalizes there; every hypothesis after that
+  /// describes only the audio that followed. Showing each one in place wiped the first half of the
+  /// sentence off the screen. The button owns where an utterance ends, so the segment is banked
+  /// and the partials that follow are appended to it rather than substituted for it.
+  func testAPauseMidSentenceBanksTheWordsInsteadOfReplacingThem() {
+    var accumulator = UtteranceAccumulator()
+
+    XCTAssertEqual(accumulator.receivePartial("I went"), "I went")
+    XCTAssertEqual(accumulator.receivePartial("I went to the market"), "I went to the market")
+
+    // The pause. The recognizer says the utterance is over; the held button says otherwise.
+    XCTAssertEqual(accumulator.commitSegment("I went to the market"), "I went to the market")
+
+    // Post-pause speech is added to what came before it, never swapped in for it.
+    XCTAssertEqual(accumulator.receivePartial("and then"), "I went to the market and then")
+    XCTAssertEqual(accumulator.receivePartial("and then I came home"),
+                   "I went to the market and then I came home")
+    XCTAssertEqual(accumulator.concluded(with: "and then I came home."),
+                   "I went to the market and then I came home.")
+  }
+
+  /// Three things about the joining, all of which a naive `joined(separator:)` gets wrong on real
+  /// recognizer output: segments are single-space joined however much whitespace they arrive
+  /// with, an empty segment contributes nothing rather than a double space, and the whole thing
+  /// is trimmed.
+  func testSegmentsJoinWithOneSpaceAndEmptyOnesContributeNothing() {
+    var accumulator = UtteranceAccumulator()
+
+    accumulator.commitSegment("  Hello there  ")
+    accumulator.commitSegment("   ")
+    accumulator.commitSegment("")
+    accumulator.commitSegment("\n how are you \n")
+
+    XCTAssertEqual(accumulator.committedSegments, ["Hello there", "how are you"])
+    XCTAssertEqual(accumulator.text, "Hello there how are you")
+    XCTAssertEqual(accumulator.concluded(), "Hello there how are you")
+  }
+
+  /// An empty answer never displaces one that had words in it, on either path: a segment that
+  /// finalizes with nothing keeps its last partial, and so does the conclusion. A recognizer that
+  /// said something and then said nothing has already said what was said.
+  func testAnEmptyAnswerLeavesTheLastPartialStanding() {
+    var accumulator = UtteranceAccumulator()
+    accumulator.receivePartial("Good morning")
+
+    XCTAssertEqual(accumulator.commitSegment(""), "Good morning")
+    XCTAssertEqual(accumulator.committedSegments, ["Good morning"])
+
+    accumulator.receivePartial("everyone")
+    XCTAssertEqual(accumulator.concluded(with: "   "), "Good morning everyone")
+    XCTAssertEqual(accumulator.concluded(with: nil), "Good morning everyone")
+
+    // And a turn that recognized nothing at all still concludes empty, which is the answer the
+    // view model turns into its `No speech was recognized.` note.
+    var silent = UtteranceAccumulator()
+    XCTAssertTrue(silent.isEmpty)
+    XCTAssertEqual(silent.concluded(), "")
+    XCTAssertEqual(silent.commitSegment(""), "")
+    XCTAssertEqual(silent.concluded(), "")
+  }
+
+  /// An empty partial is not the recognizer saying the words are gone, and applying it as one
+  /// would blank the bubble for exactly the reason this type exists.
+  func testAnEmptyPartialIsIgnoredRatherThanWipingTheSegment() {
+    var accumulator = UtteranceAccumulator()
+    accumulator.receivePartial("Still here")
+
+    XCTAssertEqual(accumulator.receivePartial(""), "Still here")
+    XCTAssertEqual(accumulator.receivePartial("   "), "Still here")
+    XCTAssertEqual(accumulator.liveSegment, "Still here")
+  }
+
+  /// The secondary guard, for a recognizer that resets its hypothesis without ever declaring a
+  /// final. It is deliberately hard to satisfy: a false positive banks a partial the next
+  /// hypothesis is about to restate, and duplicated words read worse than the rare missed reset.
+  func testTheHypothesisResetGuardFiresOnlyOnARealReset() {
+    let resets = [
+      ("I went to the market", "Tomorrow"),
+      ("one two three", "nine"),
+      ("I went to the market yesterday morning", "afterwards we left")
+    ]
+    for (previous, next) in resets {
+      XCTAssertTrue(UtteranceAccumulator.isHypothesisReset(previous: previous, next: next),
+                    "\(previous) -> \(next)")
+    }
+
+    let refinements = [
+      // Fewer than three words to lose: too little to bank on a guess.
+      ("Hello there", "Goodbye"),
+      // The ordinary case: the hypothesis grew.
+      ("I went to the market", "I went to the market today"),
+      // A rewrite of the same audio, same length, same opening word.
+      ("I went to the market", "I want to the market"),
+      // Same opening word, so not a fresh hypothesis however much shorter it got.
+      ("I went to the market", "I"),
+      // A tail of what was there: the recognizer narrowing its own hypothesis, not restarting.
+      ("I went to the market", "the market"),
+      // Nothing to reset to.
+      ("I went to the market", ""),
+      ("", "Tomorrow")
+    ]
+    for (previous, next) in refinements {
+      XCTAssertFalse(UtteranceAccumulator.isHypothesisReset(previous: previous, next: next),
+                     "\(previous) -> \(next)")
+    }
+  }
+
+  /// The guard in use: a reset banks the words it was about to lose, and a refinement replaces
+  /// the live segment in place the way every partial does.
+  func testAResetBanksThePreviousPartialAndARefinementReplacesIt() {
+    var reset = UtteranceAccumulator()
+    reset.receivePartial("I went to the market")
+    XCTAssertEqual(reset.receivePartial("Tomorrow"), "I went to the market Tomorrow")
+    XCTAssertEqual(reset.committedSegments, ["I went to the market"])
+    XCTAssertEqual(reset.concluded(with: "Tomorrow we leave"), "I went to the market Tomorrow we leave")
+
+    var refined = UtteranceAccumulator()
+    refined.receivePartial("I went to the market")
+    XCTAssertEqual(refined.receivePartial("I want to the market"), "I want to the market")
+    XCTAssertTrue(refined.committedSegments.isEmpty)
+  }
+
+  /// The whole shape of a held button that outlives three of the recognizer's own utterances,
+  /// which is what a long thought with two pauses in it produces. One transcript comes out.
+  func testAnUtteranceSurvivesEveryPauseUntilTheRelease() {
+    var accumulator = UtteranceAccumulator()
+
+    accumulator.receivePartial("First")
+    accumulator.commitSegment("First thought.")
+    accumulator.receivePartial("Second")
+    accumulator.commitSegment("Second thought.")
+    accumulator.receivePartial("And a third")
+
+    XCTAssertEqual(accumulator.text, "First thought. Second thought. And a third")
+    XCTAssertEqual(accumulator.concluded(with: "And a third thought."),
+                   "First thought. Second thought. And a third thought.")
+  }
+
   // MARK: - Ending a session
 
   /// Cancelling the task that was watching a load is not the same as stopping the load, and a
