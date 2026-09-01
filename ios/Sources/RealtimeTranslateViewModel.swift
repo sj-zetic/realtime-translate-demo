@@ -17,10 +17,15 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// Whether the microphone and speech-recognition prompts have already been answered with a yes.
   /// Drives the first-run priming step only; the session flow still keys off `state`.
   @Published private(set) var permissionGranted: Bool
+  /// Whether spoken output is silenced. Seeded from the same preference key the toolbar toggle
+  /// writes, so a launch that starts muted never speaks a first translation before the view
+  /// appears.
+  @Published private(set) var isMuted: Bool
 
   private let speechRecognizer: any SpeechRecognizing
   private let translationRuntime: any TranslationRuntime
   private let haptics: any HapticSink
+  private let speechOutput: any SpeechOutput
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
   private var sessionTask: Task<Void, Never>?
@@ -33,7 +38,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
        targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
        speechRecognizer: (any SpeechRecognizing)? = nil,
        translationRuntime: (any TranslationRuntime)? = nil,
-       haptics: (any HapticSink)? = nil) {
+       haptics: (any HapticSink)? = nil,
+       speechOutput: (any SpeechOutput)? = nil,
+       isMuted: Bool = UserDefaults.standard.bool(forKey: SpeechOutputDefaults.mutedKey)) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     self.state = state
@@ -52,6 +59,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.speechRecognizer = recognizer
     self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
     self.haptics = haptics ?? SystemHaptics()
+    self.speechOutput = speechOutput ?? SystemSpeechOutput()
+    self.isMuted = isMuted
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
   }
@@ -123,6 +132,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   func beginTurn(_ speaker: Speaker) {
     guard state == .ready else { return }
+    // Nothing is ever spoken while the microphone is open. Stopping here is synchronous, so the
+    // audio session is handed back before the recognizer claims it one line further down.
+    speechOutput.stop()
     let language = sourceLanguage(for: speaker)
     let item = ConversationItem(
       id: UUID(), speaker: speaker, transcript: "", targetLanguage: targetLanguage(for: speaker.counterpart),
@@ -171,6 +183,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   func beginNewSession() {
     speechRecognizer.stop()
+    speechOutput.stop()
     activeItemID = nil
     pendingFinalTranscript = nil
     mostRecentTranslationRequest = nil
@@ -198,6 +211,30 @@ final class RealtimeTranslateViewModel: ObservableObject {
     case .setup, .ended, .modelLoadFailed: true
     default: false
     }
+  }
+
+  // MARK: - Spoken output
+
+  /// Adopts the toolbar toggle's stored preference. Muting also cuts whatever is being spoken
+  /// right now, because the toggle is what someone reaches for to make the phone stop talking.
+  func setMuted(_ muted: Bool) {
+    guard muted != isMuted else { return }
+    isMuted = muted
+    if muted { speechOutput.stop() }
+  }
+
+  /// Replays one bubble's translation, from its speaker glyph. Same decision as the automatic
+  /// announcement, so a muted app stays silent here too.
+  func replay(_ item: ConversationItem) { speak(item) }
+
+  private func speak(_ item: ConversationItem) {
+    guard case let .speak(text, languageCode) = SpokenTranslation.decision(for: item, isMuted: isMuted)
+    else { return }
+    // Never over an open microphone: while a turn is being recorded or finalized the recognizer
+    // owns the audio session.
+    guard !state.isRecognizerLive else { return }
+    speechOutput.stop()
+    speechOutput.speak(text: text, languageCode: languageCode)
   }
 
   private func sourceLanguage(for speaker: Speaker) -> SpeechSourceLanguage {
@@ -287,6 +324,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
                            targetLanguage: item.targetLanguage, translation: translation, state: .translated)
         }
         haptics.play(.translationDelivered)
+        // A finished translation is read aloud as it lands, which is also the moment the previous
+        // one stops mattering: a conversation must not build a backlog of sentences to play.
+        if let delivered = items.first(where: { $0.id == itemID }) { speak(delivered) }
       } catch {
         guard state == .translating(speaker), let itemID else { return }
         updateItem(id: itemID) { item in

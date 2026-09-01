@@ -71,6 +71,9 @@ struct RealtimeTranslateRootView: View {
   @StateObject private var conversationCopy = ConversationCopyModel()
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
+  /// The mute toggle's stored state. The view model seeds itself from the same key, so this is
+  /// the one place the preference is written and there is no second copy to drift.
+  @AppStorage(SpeechOutputDefaults.mutedKey) private var speechMuted = false
   @Environment(\.scenePhase) private var scenePhase
   /// Holds the display awake while a session is live. A reference, not observed state: nothing on
   /// screen depends on it, so it must never invalidate the body it is driven from.
@@ -88,11 +91,13 @@ struct RealtimeTranslateRootView: View {
       .overlay { firstRunOverlay }
       .onAppear {
         viewModel.adoptExistingPermission()
+        viewModel.setMuted(speechMuted)
         updateScreenAwake()
       }
       .onDisappear { screenAwake.release() }
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
       .onChange(of: scenePhase) { _ in updateScreenAwake() }
+      .onChange(of: speechMuted) { viewModel.setMuted($0) }
   }
 
   /// The one place the idle timer is decided: a live session in the foreground keeps the screen
@@ -140,13 +145,18 @@ struct RealtimeTranslateRootView: View {
   private var mainScreen: some View {
     NavigationStack {
       VStack(spacing: 0) {
-        StatusStrip(title: viewModel.state.title)
+        // The mute toggle rides the status strip: that row is one short line of text with the
+        // whole trailing half empty, so the app's only always-present control lands there without
+        // crowding the wordmark or adding a row of chrome.
+        StatusStrip(title: viewModel.state.title, isMuted: speechMuted,
+                    toggleMute: { speechMuted.toggle() })
         ThinDivider()
         LanguageBar(viewModel: viewModel)
         SessionBanner(viewModel: viewModel, startSession: startSession)
         // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
         // screen, so it never lands on top of the push-to-talk row or the session action.
-        ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy)
+        ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy,
+                         isMuted: viewModel.isMuted, replay: viewModel.replay)
           .overlay(alignment: .bottom) {
             ToastLayer(center: conversationCopy.toasts, identifier: "copy-toast")
           }
@@ -220,15 +230,42 @@ struct ToastLayer: View {
 
 private struct StatusStrip: View {
   let title: String
+  let isMuted: Bool
+  let toggleMute: () -> Void
 
   var body: some View {
-    Text(title)
-      .font(.caption)
-      .foregroundStyle(DesignToken.textSecondary)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-      .accessibilityLabel("Session status: \(title)")
+    HStack(spacing: 8) {
+      Text(title)
+        .font(.caption)
+        .foregroundStyle(DesignToken.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("Session status: \(title)")
+      SpeechMuteToggle(isMuted: isMuted, toggle: toggleMute)
+    }
+    .padding(.leading, 16)
+    .padding(.trailing, 8)
+    .padding(.vertical, 8)
+  }
+}
+
+/// The one sound control: speaker on, speaker crossed out off. The glyph is the whole face, so
+/// the label carries the state in words for anything that cannot see it.
+private struct SpeechMuteToggle: View {
+  let isMuted: Bool
+  let toggle: () -> Void
+
+  var body: some View {
+    Button(action: toggle) {
+      Image(systemName: isMuted ? "speaker.slash" : "speaker.wave.2")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(isMuted ? DesignToken.textSecondary : DesignToken.textPrimary)
+        .frame(width: 36, height: 28)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("speech-mute")
+    .accessibilityLabel(isMuted ? SpeechOutputCopy.soundOffLabel : SpeechOutputCopy.soundOnLabel)
+    .accessibilityHint(isMuted ? SpeechOutputCopy.soundOffHint : SpeechOutputCopy.soundOnHint)
   }
 }
 
@@ -378,6 +415,8 @@ private struct ConversationList: View {
   let items: [ConversationItem]
   let emptyHint: String
   let copy: (ConversationItem) -> Void
+  let isMuted: Bool
+  let replay: (ConversationItem) -> Void
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -390,7 +429,9 @@ private struct ConversationList: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           ForEach(items) { item in
-            ConversationBubble(item: item, copy: { copy(item) }).id(item.id)
+            ConversationBubble(item: item, copy: { copy(item) }, isMuted: isMuted,
+                               replay: { replay(item) })
+              .id(item.id)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -407,8 +448,13 @@ private struct ConversationList: View {
 private struct ConversationBubble: View {
   let item: ConversationItem
   let copy: () -> Void
+  let isMuted: Bool
+  let replay: () -> Void
 
   private var isA: Bool { item.speaker == .a }
+  /// Only a finished translation can be replayed, so the glyph is absent, not disabled, on a
+  /// bubble that is still recognizing, still translating, or whose translation failed.
+  private var canReplay: Bool { item.speakableTranslation != nil }
 
   var body: some View {
     HStack(spacing: 0) {
@@ -440,6 +486,13 @@ private struct ConversationBubble: View {
       // target are the bubble itself and not the empty half of the screen beside it.
       .accessibilityElement(children: .combine)
       .accessibilityIdentifier("conversation-bubble")
+      // Applied after the grouping, which is what keeps the replay control its own element rather
+      // than a glyph folded into the bubble's combined label.
+      .overlay(alignment: .bottomTrailing) {
+        if canReplay {
+          ReplayButton(isMuted: isMuted, replay: replay).padding([.trailing, .bottom], 8)
+        }
+      }
       if isA { Spacer(minLength: 32) }
     }
   }
@@ -453,9 +506,33 @@ private struct ConversationBubble: View {
     case .translated:
       Text(item.translation ?? "")
         .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
+        // Keeps the last line of a long translation clear of the replay glyph in the corner.
+        .padding(.trailing, canReplay ? 30 : 0)
     case let .translationFailed(reason):
       Text(reason).font(.caption).foregroundStyle(DesignToken.error)
     }
+  }
+}
+
+/// The per-bubble replay control. Muted, it stays visible but inert: the bubble still has a
+/// translation to speak, the app is simply not speaking anything right now.
+private struct ReplayButton: View {
+  let isMuted: Bool
+  let replay: () -> Void
+
+  var body: some View {
+    Button(action: replay) {
+      Image(systemName: "speaker.wave.2")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(isMuted ? DesignToken.textSecondary : DesignToken.textPrimary)
+        .frame(width: 28, height: 24)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(isMuted)
+    .accessibilityIdentifier("replay-translation")
+    .accessibilityLabel(SpeechOutputCopy.replayAction)
+    .accessibilityHint(SpeechOutputCopy.replayHint)
   }
 }
 

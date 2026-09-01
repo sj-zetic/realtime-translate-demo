@@ -10,10 +10,11 @@ Turn Translate is a single screen. Setup, model loading, conversation, and error
 
 1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A small chevron in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. Implemented on iOS; Android parity is pending.
 2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`. Choosing a reading language also re-aligns that speaker's spoken (recognition) language to the matching recognizer when one exists, so the chip is the single source of truth: a speaker shown as Korean is listened to in Korean. The spoken-language picker stays available as an explicit override until the reading language changes again.
-3. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
-4. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
-5. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
-6. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
+3. **Sound toggle**: The trailing end of the status-strip row carries the one spoken-output control, a speaker glyph that crosses out when muted. See [spoken translation](#spoken-translation).
+4. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
+5. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
+6. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
+7. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
 
 ### Launch
 
@@ -25,7 +26,7 @@ The app icon is the ZETIC Z monogram, teal `color.accent` on a near-black field,
 
 ```text
 Turn Translate                            ZETIC v
-Conversation ready
+Conversation ready                              ((*
 ------------------------------------
  [ A · English ]              [ B · Korean ]
 ------------------------------------
@@ -35,12 +36,12 @@ Conversation ready
  Hello
  --------------
  To B - English
- Hello
+ Hello                                       ((*
                             Speaker B
                             Bonjour
                             --------------
                             To A - Korean
-                            Bonjour
+                            Bonjour       ((*
 ------------------------------------
  [ A - hold to talk  ]        [ B - hold to talk  ]
  Hold a button to talk, or tap once to start and again to stop.
@@ -207,6 +208,41 @@ Long-pressing a chat bubble offers one action, `Copy`, which puts that bubble's 
 - The gesture is a platform context menu with a single `Copy` item, not a bare long press that copies silently. The transcript scrolls, so a bare gesture fires on a slow drag; the menu also names the action before it happens and exposes it to the accessibility rotor.
 - The confirmation is the same toast the settings drawer uses, reading exactly `Copied`: `color.textPrimary` fill, `color.surface` text, `radius.control`, non-interactive, fading out after about two seconds, and posted as an accessibility announcement as well as shown. It is anchored to the bottom of the transcript rather than the bottom of the screen, so it never covers the push-to-talk row or the session action.
 
+## Spoken translation
+
+A translation that arrives is read aloud, so the person it is for can listen instead of leaning over the phone. The voice is the platform's own speech synthesizer (`AVSpeechSynthesizer` on iOS); no model is downloaded and nothing is sent anywhere. Implemented on iOS; Android parity is pending.
+
+### Speaking a translation
+
+- A translation is spoken exactly once, at the moment its bubble reaches the translated state. Nothing else speaks: not a partial transcript, not the source text, not a failed translation, and not a bubble that arrives with no translated text.
+- The voice language is that bubble's reading language, so an A turn is read in B's language and a B turn in A's.
+- **Newest wins.** A translation that finishes while an earlier one is still being spoken cuts it off mid-sentence rather than queueing behind it. Two people talking must never build a backlog of sentences the phone still owes them.
+- The voice is resolved from the reading language in three steps: an exact match for the code, then the variant that code implies (`zh-Hant` picks a `zh-TW` voice over a `zh-CN` one, `en` picks `en-US`), then any installed voice for the same language. A language with no installed voice on the device stays silent; it is never read out in another language's voice.
+
+### Replaying a bubble
+
+Every bubble with a finished translation carries a small speaker glyph in the bottom trailing corner of its translation region. Tapping it speaks that translation again, under the same rules as the automatic announcement, cutting off anything already being spoken.
+
+- The control is absent, not disabled, on a bubble that is still recognizing, still translating, or whose translation failed: there is nothing there to play.
+- It carries the accessibility label `Play translation` and is a separate element from the bubble, so the bubble's combined label and its `Copy` long press are unchanged.
+
+### The sound toggle
+
+One toggle at the trailing end of the status strip: a speaker glyph when sound is on, a crossed-out speaker when it is off. The status strip is one short line of text with its whole trailing half empty, so the app's only always-present control lands there without crowding the header wordmark or adding a row of chrome.
+
+- Default is sound **on**. The choice is remembered in platform preferences (`@AppStorage` key `speech.muted` on iOS), and the view model seeds itself from the same key, so a launch that starts muted never speaks before the screen appears.
+- Muting suppresses the automatic announcement, disables every replay control, and stops whatever is being spoken at that moment: the toggle is what someone reaches for to make the phone stop talking.
+- The toggle announces its state in words, `Spoken translation on` or `Spoken translation off`, because the glyph is its whole face.
+
+### Recognition and playback handoff
+
+Recognition runs the audio session as `.record` with `.measurement` mode, which cannot play anything, so speaking has to take the session over and hand it straight back.
+
+- Speaking claims the session as `.playback` with `.spokenAudio` mode, ducking other audio, and releases it with `notifyOthersOnDeactivation` when speech ends, so whatever was playing before resumes and the next push-to-talk finds the session free.
+- **Nothing is ever spoken while the microphone is open.** Beginning a turn stops speech synchronously before the recognizer starts, so a user who interrupts a sentence by pressing a control gets a recording, not a fight over the route. Ending a session stops speech too.
+- The session is claimed and released once each, never per sentence: replacing one translation with a newer one is a cut, not a route change, and the delegate callback that reports the cancelled utterance cannot deactivate a session the recognizer has since claimed. A session that refuses to activate speaks nothing and is retried on the next translation.
+- A session state machine (`SpeechAudioCoordinator` on iOS) owns that handoff over an injected session seam, so the ordering is unit tested even though the audio route itself is only verifiable on a device.
+
 ## Language selection on the main screen
 
 - Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
@@ -244,7 +280,7 @@ If platform STT reports a final result before the user stops an utterance, the a
 - A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while speaker A is active`. A control disabled because no model is loaded explains that instead.
 - Every language chip announces both selections for its speaker, such as `Speaker A languages: reads English, speaks Automatic`.
 - The main screen uses no icons. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
-- The header wordmark and the settings drawer are the one exception, and only for chrome: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, and the copy glyph on `Contact us`. Each sits next to a text label that already says what the control does, so removing every glyph leaves the drawer fully usable.
+- The header wordmark, the settings drawer, and the two spoken-output controls are the exceptions, and only for chrome and for sound: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, the copy glyph on `Contact us`, the status strip's speaker toggle, and a bubble's replay glyph. The drawer's glyphs each sit next to a text label that already says what the control does. The two speaker glyphs are the one place a glyph stands alone, because a speaker is the one icon that means sound in every app on the phone; both announce their meaning and, for the toggle, their state in words.
 - The wordmark control announces `ZETIC, opens settings`; the drawer's rows announce their action and, for `Contact us`, the address being copied; the copy confirmation is posted as an accessibility announcement as well as shown.
 
 ## On-device STT prerequisites
@@ -324,6 +360,10 @@ The accent cap applies to the product chrome only, where the accent means "this 
 | Background the app mid-session | iOS only for now: the screen hold is released immediately and taken again on return. Android parity is pending |
 | Hold and release a push-to-talk control | iOS only for now: a medium tap on press and a lighter one on release, with a soft tick when that turn's translation arrives. Android parity is pending |
 | Long-press a chat bubble | iOS only for now: one `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast. Android parity is pending |
+| Translation succeeds with sound on | iOS only for now: the translation is spoken once in the recipient's reading language, cutting off any translation still being spoken. Android parity is pending |
+| Translation succeeds with sound off | iOS only for now: nothing is spoken and every replay control is disabled; the bubble is unchanged. Android parity is pending |
+| Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation. Android parity is pending |
+| Start a turn while a translation is being spoken | iOS only for now: speech stops immediately and the microphone opens; the audio session is never held by both. Android parity is pending |
 
 ## Verification
 
@@ -339,4 +379,6 @@ The accent cap applies to the product chrome only, where the accent means "this 
 - No user-facing string in the first-run flow or the session-comfort behaviors contains an em dash.
 - The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event, even though the idle timer and the Taptic Engine themselves are only verifiable on a device.
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
+- A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
+- No user-facing string in the spoken-output controls contains an em dash.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.
