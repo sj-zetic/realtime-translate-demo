@@ -15,6 +15,7 @@ sealed interface SessionAction {
     data class ReadingLanguageChanged(val speaker: Speaker, val language: TranslationLanguage) : SessionAction
     data class StartConversation(val context: Context) : SessionAction
     data object EndSession : SessionAction
+    data object ClearConversation : SessionAction
     data class PttPress(val context: Context, val speaker: Speaker) : SessionAction
     data class PttRelease(val speaker: Speaker) : SessionAction
     data class TogglePtt(val context: Context, val speaker: Speaker) : SessionAction
@@ -45,6 +46,7 @@ class SessionViewModel(
         }
         is SessionAction.StartConversation -> loadModel(action.context)
         SessionAction.EndSession -> endSession()
+        SessionAction.ClearConversation -> clearConversation()
         is SessionAction.PttPress -> start(action.context, action.speaker)
         is SessionAction.PttRelease -> stop(action.speaker)
         is SessionAction.TogglePtt -> toggle(action.context, action.speaker)
@@ -200,6 +202,18 @@ class SessionViewModel(
         activeTranscriber?.destroy()
         mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
     }
+    /**
+     * Empties the transcript without ending the session: the model stays resident, both language
+     * chips stay as they are, the session phase is untouched, and the next turn starts straight
+     * away. Guarded by the same rule the drawer row is disabled under, so a late tap on a row that
+     * has just become unavailable cannot strand an in-flight bubble.
+     */
+    private fun clearConversation() {
+        val current = mutableState.value
+        if (!current.canClearConversation) return
+        mutableState.value = current.copy(conversations = emptyList())
+    }
+
     private fun retry() {
         val current = mutableState.value
         when {

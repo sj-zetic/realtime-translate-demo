@@ -8,7 +8,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
-1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A small chevron in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. Implemented on iOS; Android parity is pending.
+1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A small chevron in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. Implemented on both platforms. Android renders the lockup and a `KeyboardArrowDown` chevron as one clickable row whose descendants are merged behind that label.
 2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`. Choosing a reading language also re-aligns that speaker's spoken (recognition) language to the matching recognizer when one exists, so the chip is the single source of truth: a speaker shown as Korean is listened to in Korean. The spoken-language picker stays available as an explicit override until the reading language changes again.
 3. **Sound toggle**: The trailing end of the status-strip row carries the one spoken-output control, a speaker glyph that crosses out when muted. See [spoken translation](#spoken-translation).
 4. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
@@ -59,9 +59,9 @@ Conversation ready                              ((*
 
 ## First run
 
-Three steps stand between a brand-new install and a first translated turn, each shown at most once and each skipped silently when it has nothing to say. They are overlays above the single main screen, not separate destinations: the main screen is never rebuilt on the way in and there is no back stack to unwind. Implemented on iOS; Android parity is pending.
+Three steps stand between a brand-new install and a first translated turn, each shown at most once and each skipped silently when it has nothing to say. They are overlays above the single main screen, not separate destinations: the main screen is never rebuilt on the way in and there is no back stack to unwind. Implemented on both platforms. On Android the three surfaces are composed over the main screen in the same `Box`, so the screen and the Melange session behind them are untouched.
 
-The first two steps are remembered in platform preferences (`@AppStorage` keys `firstRun.welcomeSeen` and `firstRun.permissionPrimingSeen` on iOS). The third is not remembered at all, because the model on disk already answers the question it asks.
+The first two steps are remembered in platform preferences (`@AppStorage` keys `firstRun.welcomeSeen` and `firstRun.permissionPrimingSeen` on iOS, the same two key names in the `turn-translate` `SharedPreferences` file on Android). The third is not remembered at all, because the model on disk already answers the question it asks.
 
 ### 1. Welcome
 
@@ -100,7 +100,8 @@ After the welcome, and before either system prompt fires, a full-surface priming
  [ Not now  ]
 ```
 
-- `Continue` triggers the real system prompts. `Not now` dismisses the step and leaves the main screen's existing permission banner as the way back in.
+- `Continue` triggers the real system prompts. `Not now` dismisses the step and leaves the main screen's existing permission banner as the way back in. Both settle the step, so it is shown at most once either way.
+- **Android parity note.** Android has one prompt to prime, not two: `RECORD_AUDIO` covers the on-device recognizer, so the last line reads `Android asks for the microphone next.` and the two explanatory lines above it are unchanged. The step is selected from the same `permissionNeeded` input, which on Android is the session being in `permissionRequired`.
 - Skipped silently when the prompts have already been answered with a yes, so a returning user never sees it. The permission already held is adopted on appear, which also means a returning launch lands on the idle main screen rather than the permission banner.
 
 ### 3. Model download consent
@@ -123,6 +124,11 @@ Tapping `Start conversation` (or `Retry model load`) asks before it starts the o
 - The Wi-Fi line appears only when the current network path is expensive or constrained (`NWPathMonitor` `isExpensive` / `isConstrained` on iOS). On an unrestricted path the card carries the size and the once-only line and nothing else.
 - `Download now` proceeds into `modelLoading`. `Not now` and a tap on the scrim both dismiss the card and leave the screen idle; nothing is downloaded and the declined start is dropped rather than queued.
 - Declining does not remember anything: the next `Start conversation` asks again, which is also how the Wi-Fi warning gets a second chance to appear.
+
+**Android parity note.** Two inputs to the decision read differently on Android, and the decision itself is the same function.
+
+- **"No model cached" is approximated, honestly.** The Melange Android SDK offers no read-only way to ask whether `SJ_zetic/Hy-MT2-1.8B` is already in its cache, and guessing at cache paths would be worse than admitting the gap. Android therefore gates on a `model.hasEverLoaded` preference written the first time a load succeeds. The one case it gets wrong is a user who clears app storage without uninstalling: they are asked to consent to a download that is genuinely about to happen, which is the safe direction to be wrong in. It becomes an exact answer when the SDK grows a cache query, which is also what the [`Storage` row](#model-storage) is waiting on.
+- **One network reading, not two.** `ConnectivityManager.isActiveNetworkMetered` already folds cellular, metered Wi-Fi, and a metered hotspot into the single answer the card acts on, so Android has no equivalent of the `isExpensive` / `isConstrained` pair and needs none: the sentence shown is the same either way.
 
 A build with no Melange personal key cannot download anything at all. The consent card is not shown there: offering `Download now` would promise a transfer that ends a frame later in the missing-key failure. The start runs instead, and that failure is reported where every other model failure is, in the session banner with its retry.
 
@@ -151,7 +157,7 @@ The first-run states are forced through launch arguments so they can be exercise
 
 ## Settings drawer
 
-The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Opening it never changes session state, so it can be opened at any state; the one row that changes anything, `Clear conversation`, empties the transcript and leaves the session, the model, and both language chips exactly as they were. Implemented on iOS; Android parity is pending.
+The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Opening it never changes session state, so it can be opened at any state; the one row that changes anything, `Clear conversation`, empties the transcript and leaves the session, the model, and both language chips exactly as they were. Implemented on both platforms.
 
 - **Opening**: tap the `ZETIC` wordmark in the header. **Closing**: the header's close control, a tap anywhere on the scrim outside the panel, or a swipe toward the trailing edge. There is no back stack entry and no navigation transition; the main screen never unloads.
 - **Panel**: full height, 280 dp/pt wide at most, `color.surface` fill with a hairline `color.divider` on its leading edge, and hairline dividers between regions. Row labels are terse and left-aligned; each row's trailing icon is a quiet `color.textSecondary` glyph that repeats what the label already says.
@@ -183,11 +189,12 @@ The only secondary surface. It slides in from the trailing edge over the main sc
 2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `App language` chooses the language the interface itself is in, see [localization](#localization). `Storage` reports what the downloaded model occupies and is the way to give that space back, see [model storage](#model-storage). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows.
 3. **About**: the app display name, version, and build read from the platform bundle, plus one privacy line: `Speech, translation, everything stays on this phone.`
 
+- **Android parity note.** Android renders the panel with `ModalNavigationDrawer`, which opens from the leading edge, so the layout direction is flipped for the drawer scaffold alone and restored inside both the sheet and the main screen: only the side and the swipe direction change. Drag-to-open is off and drag-to-close is on, because the wordmark is the only way in. The rows shipped are `Clear conversation`, `Visit zetic.ai`, `Contact us`, and the About block; `App language` waits on the localization pass and `Storage` waits on the same Melange cache query the [download consent](#3-model-download-consent) note describes, since a row that reports a footprint it cannot measure and deletes files it cannot enumerate would be worse than no row. Both are additions to the same row list, which is why the list is the extension point. About reads its version pair from `PackageInfo` rather than `BuildConfig`, so it reports what is actually installed.
 - **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
 
 ## Session comfort
 
-Three behaviors that only matter once two people are actually using one phone together. None of them adds a control or a setting, and none of them changes a state transition. Implemented on iOS; Android parity is pending.
+Three behaviors that only matter once two people are actually using one phone together. None of them adds a control or a setting, and none of them changes a state transition. Implemented on both platforms.
 
 ### Keeping the screen awake
 
@@ -197,6 +204,7 @@ While a session is live, the display does not dim or lock. A turn can be seconds
 - Every other state, `permissionRequired`, `setup`, `modelLoading`, `modelLoadFailed`, `modelUnloading`, and `ended`, uses the platform's normal idle behavior. A long model download does not hold the screen awake.
 - Backgrounding the app releases the hold immediately, whatever the session state is, and so does leaving the screen. Returning to the foreground during a live session takes it again.
 - iOS applies this through `UIApplication.isIdleTimerDisabled`, driven from the view layer by scene phase plus session state.
+- Android applies it through `View.keepScreenOn` on the Compose root, driven by the lifecycle state plus session state, and hands it back on dispose. The Android form of "the model is loaded and the conversation screen is in use" is `conversationStarted` plus one of the eight live phases: the idle main screen is `Ready` with that flag false, so it is not a live session, and neither is a model download.
 
 ### Haptics
 
@@ -212,13 +220,14 @@ Push-to-talk is operated by feel, often without looking, so the two ends of a tu
 - A failed translation is silent. The bubble already carries the failure, the session continues, and a buzz per failed turn would be noise.
 - Nothing else vibrates: not model loading, not language changes, not opening the drawer, not copying.
 - The mapping from event to sensation is a single table, so the vocabulary can be read in one place rather than inferred from call sites.
+- **Android parity note.** The same four events map to `View.performHapticFeedback` constants rather than to the vibrator directly, so the phone's own haptic strength and the user's system-wide haptics setting are respected: `LONG_PRESS`, `KEYBOARD_TAP`, `CLOCK_TICK`, and `REJECT`. `REJECT` only exists from API 30 and the app runs from API 26, so the error buzz falls back to `LONG_PRESS` rather than silently doing nothing. Press and release are played at the control, which is enabled only when a turn can actually start, rather than waiting for the recognizer's callback.
 
 ### Copy a bubble
 
 Long-pressing a chat bubble offers one action, `Copy`, which puts that bubble's text on the system clipboard.
 
 - A translated bubble copies its translation, falling back to the source transcript if there is somehow no translated text. Every other bubble copies its source transcript. A bubble still showing `Listening...` has nothing to copy and offers no action.
-- The gesture is a platform context menu with a single `Copy` item, not a bare long press that copies silently. The transcript scrolls, so a bare gesture fires on a slow drag; the menu also names the action before it happens and exposes it to the accessibility rotor.
+- The gesture is a platform context menu with a single `Copy` item, not a bare long press that copies silently. Android uses `combinedClickable` with an `onLongClickLabel` of `Copy`, anchoring a one-item `DropdownMenu` on the bubble; the long-press gesture is disabled outright on a bubble with nothing to copy, so the menu can never open empty. The transcript scrolls, so a bare gesture fires on a slow drag; the menu also names the action before it happens and exposes it to the accessibility rotor.
 - The confirmation is the same toast the settings drawer uses, reading exactly `Copied`: `color.textPrimary` fill, `color.surface` text, `radius.control`, non-interactive, fading out after about two seconds, and posted as an accessibility announcement as well as shown. It is anchored to the bottom of the transcript rather than the bottom of the screen, so it never covers the push-to-talk row or the session action.
 
 ## Spoken translation
@@ -288,12 +297,13 @@ Tapping it opens a half-height sheet, which is the surface a screen reader alrea
 
 ## Clear the conversation
 
-One action, in the settings drawer's row list, that empties the transcript without ending the session: the model stays resident, both language chips stay as they are, and the next turn starts straight away. Implemented on iOS; Android parity is pending.
+One action, in the settings drawer's row list, that empties the transcript without ending the session: the model stays resident, both language chips stay as they are, and the next turn starts straight away. Implemented on both platforms. Android also stops nothing extra today, because spoken translation is not on Android yet; when it lands, the clear stops it the same way iOS does.
 
 - The row reads `Clear conversation` with the subtitle `Keeps the session and the languages` and a quiet trash glyph. It is the first row, because it is the one row someone opens the drawer in order to use.
 - No confirmation. Nothing was ever stored, so there is nothing to lose that a next turn does not replace.
 - Disabled, not hidden, when the transcript is empty or an utterance is recording, finalizing, or translating, so the row never moves and never strands a bubble a translation is about to land in. Its accessibility label says which of the two it is.
 - Clearing stops whatever is being spoken, because that sentence belongs to a bubble that is going away, and clears the session note with it: a `Tap to talk again.` line left standing over an empty transcript belongs to a conversation that is no longer there.
+- The row is guarded twice on both platforms: the row is disabled, and the action itself refuses when the same rule says no, so a tap that lands as the rule changes cannot strand an in-flight bubble.
 - The confirmation is the shared toast, reading exactly `Conversation cleared`, posted as an accessibility announcement as well as shown. The drawer closes first, so the emptied transcript is what the toast lands over.
 - One obvious place only: the drawer row. There is no duplicate on the transcript, on the bottom bar, or in a bubble's context menu.
 
@@ -488,9 +498,9 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 
 | Scenario | Same result on both platforms |
 | --- | --- |
-| Very first launch ever | iOS only for now: the welcome appears before anything else, `Get started` leads into the permission priming, and neither is ever shown again. Android parity is pending |
+| Very first launch ever | The welcome appears before anything else, `Get started` leads into the permission priming, and neither is ever shown again |
 | Cold start with permissions granted | No first-run surface appears; the top language bar shows one chip per speaker, A left and B right, plus a single `Start conversation` / `Start Session` action |
-| Start session with no local model | iOS only for now: the download consent card names `about 1.9 GB`, warns about Wi-Fi on an expensive path, and starts nothing until `Download now`. Android parity is pending |
+| Start session with no local model | The download consent card names `about 1.9 GB`, warns about Wi-Fi on a costly path, and starts nothing until `Download now`. Android reads "no local model" from `model.hasEverLoaded` and the path cost from `isActiveNetworkMetered` |
 | Start session with the model already on disk | No consent step; the session loads locally and the banner shows `Preparing translation model` with an indeterminate spinner |
 | Start session | The banner reports model progress on the same screen; a real download names its percent and approximate transferred amount; PTT and chips stay locked until the model is ready |
 | Start A | A partial bubble on the left and active-A state; B control disabled with explanatory text |
@@ -504,11 +514,11 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
 | End session | Stop recognition, stop the work the session started, and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start conversation` / `Start Session` reaches `ready` without loading again |
 | End session while the model is downloading | The transfer stops, not just the screen watching it. Ending a session someone declined halfway through must not leave a 1.9 GB download running on their cellular connection with nothing on screen to say so. Any translation still in flight stops with it |
-| Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
-| Leave a live session idle on screen | iOS only for now: the display stays lit for as long as the A/B controls are on screen, and dims normally in every other state. Android parity is pending |
-| Background the app mid-session | iOS only for now: the screen hold is released immediately and taken again on return. Android parity is pending |
-| Hold and release a push-to-talk control | iOS only for now: a medium tap on press and a lighter one on release, with a soft tick when that turn's translation arrives. Android parity is pending |
-| Long-press a chat bubble | iOS only for now: one `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast. Android parity is pending |
+| Open the settings drawer from the wordmark | The drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state |
+| Leave a live session idle on screen | The display stays lit for as long as the A/B controls are on screen, and dims normally in every other state |
+| Background the app mid-session | The screen hold is released immediately and taken again on return |
+| Hold and release a push-to-talk control | A firm tap on press and a lighter one on release, with a soft tick when that turn's translation arrives |
+| Long-press a chat bubble | One `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast |
 | Translation succeeds with sound on | iOS only for now: the translation is spoken once in the recipient's reading language, cutting off any translation still being spoken. Android parity is pending |
 | Translation succeeds with sound off | iOS only for now: nothing is spoken and every replay control is disabled; the bubble is unchanged. Android parity is pending |
 | Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation. Android parity is pending |
@@ -517,9 +527,9 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Relaunch after overriding a spoken language | iOS only for now: the override comes back; a stored recognizer the device no longer has re-derives from the reading chip instead. Android parity is pending |
 | Type a message and send it | iOS only for now: the same bubble, target language, request, and spoken translation a released push-to-talk control would have produced. Android parity is pending |
 | Open typed input while an utterance is in flight | iOS only for now: the keyboard control is disabled under exactly the push-to-talk rule, with the same explanatory text. Android parity is pending |
-| Clear the conversation from the drawer | iOS only for now: the transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears. Android parity is pending |
+| Clear the conversation from the drawer | The transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears |
 | A call arrives mid-utterance | iOS only for now: the in-flight bubble is discarded, the session returns to idle with the `Interrupted. Tap to talk again.` note, and the next push-to-talk records normally. Android parity is pending |
-| Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start conversation` shows the download consent again. Android parity is pending |
+| Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start conversation` shows the download consent again. Android has no `Storage` row until the Melange Android SDK can be asked what is cached |
 | Open the drawer and read the `App language` row | iOS only for now: the row names the language in force, defaulting to `System`. Android parity is pending |
 | Choose an app language | iOS only for now: the choice is remembered, the toast says it applies fully after reopening the app, and the session, model, transcript, and both chips are untouched. Android parity is pending |
 | Run the app on a phone set to French or Spanish | iOS only for now: the interface falls back to English string by string, because those languages are declared but not yet populated. Android parity is pending |
@@ -536,7 +546,7 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - The welcome appears on a first-ever launch and never again after `Get started`, across a relaunch.
 - With no local model, the first `Start conversation` shows the consent card and downloads nothing until `Download now`; with a local model present no consent card appears at all.
 - No user-facing string in the first-run flow or the session-comfort behaviors contains an em dash.
-- The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event, even though the idle timer and the Taptic Engine themselves are only verifiable on a device.
+- The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event on both platforms, even though the idle timer, the Taptic Engine, and Android's `performHapticFeedback` are only verifiable on a device. Android also unit tests the first-run step selection, the consent decision including its metered path, and the copyable-text rule; its Compose UI tests need an emulator and are not part of the JVM verification bar.
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
 - A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
 - No user-facing string in the spoken-output controls contains an em dash.

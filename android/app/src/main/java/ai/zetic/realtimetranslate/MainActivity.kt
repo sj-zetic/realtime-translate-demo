@@ -34,8 +34,10 @@ class MainActivity : ComponentActivity() {
                 if (it) viewModel.dispatch(SessionAction.RefreshSpeechLanguages(this))
             }
             val context = remember(this) { this }
+            val preferences = remember(this) { FirstRunPreferences(this) }
+            val appInfo = remember(this) { AppInfo.from(this) }
             RealtimeTranslateTheme {
-                RealtimeTranslateApp(
+                TurnTranslateRoot(
                     state = state,
                     onAction = { action ->
                         if (action == UiAction.RequestPermission) {
@@ -45,8 +47,20 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onOpenAppSettings = ::openAppSettings,
+                    onVisitWebsite = ::openWebsite,
+                    preferences = preferences,
+                    appInfo = appInfo,
+                    isMetered = { NetworkCost.isMetered(context) },
+                    hasPersonalKey = BuildConfig.MELANGE_PERSONAL_KEY.isNotEmpty(),
                 )
             }
+        }
+    }
+
+    /** The drawer's `Visit zetic.ai` row hands the URL to whatever browser the phone uses. */
+    private fun openWebsite() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SettingsDrawerCopy.WEBSITE)))
         }
     }
 
