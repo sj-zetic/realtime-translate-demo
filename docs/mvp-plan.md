@@ -8,14 +8,14 @@ Build native Android and iOS apps for one device, where two people explicitly as
 
 Everything happens on one screen. There is no separate speaker-setup destination.
 
-1. The main screen opens with a chat transcript area, a compact `Speaks` and `Reads` chip per speaker, and the A and B push-to-talk buttons. An inline banner asks for microphone and speech-recognition permission when it is missing.
-2. Language chips open their picker in one tap and default to `Automatic` recognition with English for A and Korean for B, so a first session needs one tap on `Start conversation`.
+1. The main screen opens with a top language bar holding one chip per speaker, a chat transcript area, and the A and B push-to-talk buttons at the bottom. An inline banner asks for microphone and speech-recognition permission when it is missing.
+2. A chip shows `<speaker> · <reading language>` and opens in one tap onto a `Reading language` section plus a secondary `Spoken language` section. Defaults are `Automatic` recognition with English for A and Korean for B, so a first session needs one tap on `Start conversation`.
 3. Starting the session loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. The same screen reports loading progress or a retryable error in the banner. PTT stays disabled until the model is ready.
 4. A or B holds their own button. A tap starts recording and a second tap stops it as an accessibility alternative.
 5. Only the active person's partial source text updates. The other button is disabled so exactly one on-device STT session is active.
 6. Releasing the button or tapping to stop finalizes the STT source text.
 7. A source text is translated serially into B's reading language; B source text is translated serially into A's reading language with Hy-MT2. The translation appears inside the same chat bubble, below a hairline divider.
-8. Language chips can be changed mid-session without reloading the model. A reading-language change affects future translation prompts only; a recognition-language change applies at the next utterance start. Both speakers' chips lock while an utterance is recording, finalizing, or translating.
+8. Both languages can be changed mid-session from the same chip without reloading the model. A reading-language change affects future translation prompts only; a recognition-language change applies at the next utterance start. Both speakers' chips lock while an utterance is recording, finalizing, or translating.
 9. Ending the session waits for model cleanup and close, clears the prior conversation, and returns the same screen to its idle state with the chips still available.
 10. When loading or translation fails, the source text remains visible and the translation area shows an error and retry action instead of a fabricated result.
 

@@ -9,16 +9,19 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
 1. **Title and status strip**: The app name and the current session state as text.
-2. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
-3. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
-4. **Speaker bar**: One column per speaker at the bottom, A on the left and B on the right. Each column holds the speaker letter, a `Speaks` chip (`Automatic` or an OS-derived on-device recognition language), a `Reads` chip (the 38 Hy-MT2 entries), and that speaker's push-to-talk control.
-5. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
+2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`.
+3. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
+4. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
+5. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
+6. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
 
 ### Screen layout
 
 ```text
 Turn Translate
 Conversation ready
+------------------------------------
+ [ A · English ]              [ B · Korean ]
 ------------------------------------
 [ inline banner: permission / model progress / failure + retry / error ]
 ------------------------------------
@@ -33,25 +36,24 @@ Conversation ready
                             To A - Korean
                             Bonjour
 ------------------------------------
- A                            B
- [ Speaks  Automatic ]        [ Speaks  Automatic ]
- [ Reads   English   ]        [ Reads   Korean    ]
  [ A - hold to talk  ]        [ B - hold to talk  ]
  Hold a button to talk, or tap once to start and again to stop.
  [ End session ]
 ```
 
-- A bubbles and the A column create only A utterances; B bubbles and the B column create only B utterances.
+- A bubbles and the A chip and control create only A utterances; B bubbles and the B chip and control create only B utterances.
 - Alignment plus the `Speaker A` / `Speaker B` label carries the A/B distinction; the fill difference (A filled, B outlined) is redundant, never the only signal.
 - An A bubble identifies `To B - <B reading language>`; a B bubble identifies `To A - <A reading language>`.
 - The active utterance's partial source text updates only its existing active bubble. Partial text is never translated.
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
-- Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and speaker bar avoid system bars and gesture areas.
+- Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and push-to-talk row avoid system bars and gesture areas.
 
 ## Language selection on the main screen
 
-- Each speaker's `Speaks` and `Reads` chips open their picker in one tap and can be changed before, between, and during a session without reloading the model.
-- A reading-language change affects future translation prompts only. A recognition-language change applies at the next utterance start.
+- Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
+- The chip face shows only the reading language, because that is the setting people actually change. The recognition language stays reachable in the same menu and is announced in the chip's accessibility label.
+- Chips render `Automatic` in short form; the menu entries keep the platform's full display name (Android shows `Automatic (device recognizer)` there).
+- Languages can be changed before, between, and during a session without reloading the model. A reading-language change affects future translation prompts only. A recognition-language change applies at the next utterance start.
 - Both speakers' chips are locked while any utterance is recording, finalizing, or translating, and while the model is loading or unloading. Locking both, rather than only the active speaker's, keeps an in-flight utterance's target language stable.
 - Defaults are `Automatic` recognition for both speakers, with English and Korean reading languages, so the first session needs no language taps.
 
@@ -81,7 +83,7 @@ If platform STT reports a final result before the user stops an utterance, the a
 - The same control supports tap-to-start and tap-to-stop as an accessibility alternative. The current interaction is shown as text.
 - Accessibility labels include the current action and speaker, such as `Start speaker A` / `Start A Turn`, `Stop speaker A` / `End A Turn`, and the B equivalents.
 - A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while speaker A is active`. A control disabled because no model is loaded explains that instead.
-- Every language chip exposes its speaker, its role, and the current selection, such as `Speaker A recognition language selector: Automatic`.
+- Every language chip announces both selections for its speaker, such as `Speaker A languages: reads English, speaks Automatic`.
 - No decorative icons are used. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
 
 ## On-device STT prerequisites
@@ -93,7 +95,7 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 ## Translation execution
 
-- A and B reading-language chips show all 38 options from the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
+- The `Reading language` section of each speaker's chip menu shows all 38 options from the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
 - Starting a session asynchronously downloads and loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. Loading failure reports a retryable error and never enables PTT.
 - Translation runs only for finalized source text: A translates to B's reading language and B translates to A's reading language.
 - The translation request uses the documented flat one-user-message Hy-MT2 prompt, including its blank line and Hy control tokens. Melange accepts that rendered request as a `String`; the app manually renders the required flat template rather than passing a chat-message object. If inference fails, the app preserves the source bubble and shows an error and recovery action instead of an invented translation or an empty translation bubble.
@@ -127,14 +129,14 @@ Accent use is capped at the three emphasis roles in the table; no other element 
 
 | Scenario | Same result on both platforms |
 | --- | --- |
-| Cold start with permissions granted | The main screen shows both speakers' language chips and a single `Start conversation` / `Start Session` action |
+| Cold start with permissions granted | The top language bar shows one chip per speaker, A left and B right, plus a single `Start conversation` / `Start Session` action |
 | Start session | The banner reports model progress on the same screen; PTT and chips stay locked until the model is ready |
 | Start A | A partial bubble on the left and active-A state; B control disabled with explanatory text |
 | Start B | B partial bubble on the right and active-B state; A control disabled with explanatory text |
 | Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language |
 | Translation succeeds | Source text, target language, and translated text appear in one bubble |
 | Change a reading language mid-session | The chip updates, the model is not reloaded, and only later utterances use the new target |
-| Change a recognition language mid-session | The chip updates and the new language is used from the next utterance start |
+| Change a recognition language mid-session | The `Spoken language` section updates and the new language is used from the next utterance start |
 | Change a language during an utterance | Both speakers' chips are disabled until the utterance finishes translating |
 | STT unsupported or permission denied | Do not start; show cause and recovery action inline; do not switch to network recognition |
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
@@ -143,6 +145,6 @@ Accent use is capped at the three emphasis roles in the table; no other element 
 ## Verification
 
 - Every control has an equivalent accessibility label.
-- Body text and state text do not clip or overlap at larger text sizes and Dynamic Type sizes; chips wrap to two lines rather than truncating the language name.
+- Body text and state text do not clip or overlap at larger text sizes and Dynamic Type sizes; the language bar keeps both chips reachable rather than overlapping them.
 - A/B active state, processing, and errors are distinguished with text, alignment, and layout in addition to color.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.

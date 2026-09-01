@@ -11,10 +11,8 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testListeningLocksBothLanguageChips() {
     let app = launch(state: "listeningA")
-    XCTAssertFalse(app.buttons["source-language-A"].isEnabled)
-    XCTAssertFalse(app.buttons["target-language-A"].isEnabled)
-    XCTAssertFalse(app.buttons["source-language-B"].isEnabled)
-    XCTAssertFalse(app.buttons["target-language-B"].isEnabled)
+    XCTAssertFalse(app.buttons["languages-A"].isEnabled)
+    XCTAssertFalse(app.buttons["languages-B"].isEnabled)
   }
 
   func testFinalizingShowsActiveSourceBubble() {
@@ -35,24 +33,33 @@ final class RealtimeTranslateUITests: XCTestCase {
     let app = launch(state: "ended")
     XCTAssertTrue(app.buttons["Start Session"].exists)
     XCTAssertTrue(app.buttons["Start Session"].isEnabled)
-    XCTAssertTrue(app.buttons["source-language-A"].label.contains("Automatic"))
-    XCTAssertTrue(app.buttons["source-language-B"].label.contains("Automatic"))
+    XCTAssertTrue(app.buttons["languages-A"].label.contains("reads English"))
+    XCTAssertTrue(app.buttons["languages-A"].label.contains("speaks Automatic"))
+    XCTAssertTrue(app.buttons["languages-B"].label.contains("reads Korean"))
+    XCTAssertTrue(app.buttons["languages-B"].label.contains("speaks Automatic"))
     XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
+  }
+
+  func testLanguageBarSitsAboveTheConversationAndPushToTalk() {
+    let app = launch(state: "ready")
+    let chipA = app.buttons["languages-A"]
+    let chipB = app.buttons["languages-B"]
+
+    XCTAssertLessThan(chipA.frame.minX, chipB.frame.minX)
+    XCTAssertLessThan(chipA.frame.maxY, app.buttons["Start A Turn"].frame.minY)
   }
 
   func testModelLoadingDisablesLanguagePickersAndPushToTalk() {
     let app = launch(state: "loadingModel")
-    XCTAssertFalse(app.buttons["source-language-A"].isEnabled)
-    XCTAssertFalse(app.buttons["target-language-A"].isEnabled)
-    XCTAssertFalse(app.buttons["source-language-B"].isEnabled)
-    XCTAssertFalse(app.buttons["target-language-B"].isEnabled)
+    XCTAssertFalse(app.buttons["languages-A"].isEnabled)
+    XCTAssertFalse(app.buttons["languages-B"].isEnabled)
     XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
   }
 
   func testModelLoadFailureEnablesLanguagePickersAndInlineRetry() {
     let app = launch(state: "modelLoadFailed")
-    XCTAssertTrue(app.buttons["source-language-A"].isEnabled)
-    XCTAssertTrue(app.buttons["target-language-B"].isEnabled)
+    XCTAssertTrue(app.buttons["languages-A"].isEnabled)
+    XCTAssertTrue(app.buttons["languages-B"].isEnabled)
     XCTAssertTrue(app.buttons["retry-model-load"].exists)
     XCTAssertTrue(app.buttons["Start Session"].isEnabled)
   }

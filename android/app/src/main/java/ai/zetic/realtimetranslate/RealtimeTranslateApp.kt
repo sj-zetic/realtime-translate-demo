@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -93,8 +94,8 @@ fun statusLabel(state: SessionUiState): String = when (state.phase) {
 }
 
 /**
- * One screen holds everything: title and status, an inline session banner, the chat transcript,
- * per-speaker language chips, and the A/B push-to-talk controls.
+ * One screen holds everything: title and status, a per-speaker language bar, an inline session
+ * banner, the chat transcript, and the A/B push-to-talk controls.
  */
 @Composable
 fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit = {}) {
@@ -102,6 +103,7 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
         Header(state)
+        LanguageBar(state, onAction)
         SessionBanner(state, onAction, onOpenAppSettings)
         ConversationList(state, Modifier.weight(1f))
         BottomBar(state, onAction)
@@ -127,6 +129,92 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         state.speechLanguageCatalogMessage?.let { Text(it, color = TextSecondary, fontSize = 12.sp) }
     }
     HorizontalDivider(color = DividerLine)
+}
+
+/** Language chips can be changed at any time except while an utterance is in flight. */
+private fun canEditLanguages(state: SessionUiState): Boolean =
+    state.activeSpeaker() == null &&
+        state.phase != SessionPhase.LoadingModel &&
+        state.phase != SessionPhase.EndingSession
+
+/** Chips render the short form; the menu entries keep the full display name. */
+private fun shortLanguageName(language: SpeechLanguage): String = when (language) {
+    SpeechLanguage.Automatic -> "Automatic"
+    is SpeechLanguage.Installed -> language.displayName
+}
+
+/** One chip per speaker, mirroring the side their chat bubbles appear on. */
+@Composable private fun LanguageBar(state: SessionUiState, onAction: (UiAction) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SpeakerLanguageChip(Speaker.A, state, onAction, Modifier.weight(1f, fill = false))
+        SpeakerLanguageChip(Speaker.B, state, onAction, Modifier.weight(1f, fill = false))
+    }
+    HorizontalDivider(color = DividerLine)
+}
+
+@Composable private fun SpeakerLanguageChip(
+    speaker: Speaker,
+    state: SessionUiState,
+    onAction: (UiAction) -> Unit,
+    modifier: Modifier,
+) {
+    val settings = state.settingsFor(speaker)
+    val enabled = canEditLanguages(state)
+    val reading = settings.readingLanguage.displayName
+    val speaking = shortLanguageName(settings.inputLanguage)
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = enabled,
+            shape = ControlShape,
+            border = BorderStroke(1.dp, DividerLine),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.semantics {
+                contentDescription = "Speaker ${speaker.label} languages: reads $reading, speaks $speaking"
+            },
+        ) {
+            Text(
+                "${speaker.label} · $reading",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+            MenuSectionHeader("Reading language")
+            HyMt2Languages.all.forEach { language ->
+                DropdownMenuItem(
+                    text = { Text(language.displayName) },
+                    onClick = { expanded = false; onAction(UiAction.SelectReading(speaker, language)) },
+                )
+            }
+            HorizontalDivider(color = DividerLine)
+            MenuSectionHeader("Spoken language")
+            state.speechLanguages.forEach { language ->
+                DropdownMenuItem(
+                    text = { Text(language.displayName) },
+                    onClick = { expanded = false; onAction(UiAction.SelectInput(speaker, language)) },
+                )
+            }
+        }
+    }
+}
+
+@Composable private fun MenuSectionHeader(label: String) {
+    Text(
+        label,
+        color = TextSecondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
 
 @Composable private fun SessionBanner(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit) {
@@ -199,7 +287,7 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
                 val hint = if (state.conversationStarted) {
                     "Speaker A or B can begin speaking."
                 } else {
-                    "Choose the languages below, then start the session."
+                    "Choose the languages above, then start the session."
                 }
                 Text(hint, color = TextSecondary, fontSize = 14.sp)
             }
@@ -253,8 +341,8 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SpeakerColumn(Speaker.A, state, onAction, Modifier.weight(1f))
-            SpeakerColumn(Speaker.B, state, onAction, Modifier.weight(1f))
+            PttControl(Speaker.A, state, onAction, Modifier.weight(1f))
+            PttControl(Speaker.B, state, onAction, Modifier.weight(1f))
         }
         Text(bottomHint(state), color = TextSecondary, fontSize = 12.sp)
         SessionButton(state, onAction)
@@ -272,75 +360,6 @@ private fun bottomHint(state: SessionUiState): String {
         !state.conversationStarted -> "Tap Start conversation to load the translation model."
         active != null -> "Speaker ${active.other().label} cannot begin while speaker ${active.label} is active."
         else -> "Hold a button to talk, or tap once to start and again to stop."
-    }
-}
-
-/** Language chips can be changed at any time except while an utterance is in flight. */
-private fun canEditLanguages(state: SessionUiState): Boolean =
-    state.activeSpeaker() == null &&
-        state.phase != SessionPhase.LoadingModel &&
-        state.phase != SessionPhase.EndingSession
-
-@Composable private fun SpeakerColumn(speaker: Speaker, state: SessionUiState, onAction: (UiAction) -> Unit, modifier: Modifier) {
-    val settings = state.settingsFor(speaker)
-    val enabled = canEditLanguages(state)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            speaker.label,
-            color = TextSecondary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.semantics { contentDescription = "Speaker ${speaker.label} controls" },
-        )
-        LanguageChip(
-            label = "Speaker ${speaker.label} recognition language",
-            caption = "Speaks",
-            selected = settings.inputLanguage.displayName,
-            options = state.speechLanguages.map { it.displayName to UiAction.SelectInput(speaker, it) },
-            enabled = enabled,
-            onAction = onAction,
-        )
-        LanguageChip(
-            label = "Speaker ${speaker.label} translation language",
-            caption = "Reads",
-            selected = settings.readingLanguage.displayName,
-            options = HyMt2Languages.all.map { it.displayName to UiAction.SelectReading(speaker, it) },
-            enabled = enabled,
-            onAction = onAction,
-        )
-        PttControl(speaker, state, onAction, Modifier.fillMaxWidth())
-    }
-}
-
-@Composable private fun LanguageChip(
-    label: String,
-    caption: String,
-    selected: String,
-    options: List<Pair<String, UiAction>>,
-    enabled: Boolean,
-    onAction: (UiAction) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(
-            onClick = { expanded = true },
-            enabled = enabled,
-            shape = ControlShape,
-            border = BorderStroke(1.dp, DividerLine),
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = Surface, contentColor = TextPrimary),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "$label selector: $selected" },
-        ) {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(caption, color = TextSecondary, fontSize = 12.sp)
-                Text(selected, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 320.dp)) {
-            options.forEach { (name, action) ->
-                DropdownMenuItem(text = { Text(name) }, onClick = { expanded = false; onAction(action) })
-            }
-        }
     }
 }
 

@@ -109,12 +109,38 @@ class RealtimeTranslateAppTest {
         composeRule.onNodeWithText("Newest appended card:", substring = true).assertIsDisplayed()
     }
 
-    @Test fun mainScreenProvidesSeparateLanguageChipsForBothSpeakers() {
+    @Test fun topLanguageBarShowsOneChipPerSpeakerMirroringBubbleSides() {
         setApp(SessionUiState(SessionPhase.Ready))
-        composeRule.onNodeWithContentDescription("Speaker A recognition language selector: Automatic (device recognizer)").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("Speaker A translation language selector: English").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("Speaker B recognition language selector: Automatic (device recognizer)").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("Speaker B translation language selector: Korean").assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsEnabled()
+        composeRule.onNodeWithText("A · English").assertIsDisplayed()
+        composeRule.onNodeWithText("B · Korean").assertIsDisplayed()
+
+        val a = composeRule.onNodeWithContentDescription(CHIP_A).fetchSemanticsNode().boundsInRoot
+        val b = composeRule.onNodeWithContentDescription(CHIP_B).fetchSemanticsNode().boundsInRoot
+        assertTrue(a.left < b.left)
+    }
+
+    @Test fun speakerChipMenuOffersReadingAndSpokenSections() {
+        var action: UiAction? = null
+        setApp(SessionUiState(SessionPhase.Ready), onAction = { action = it })
+
+        composeRule.onNodeWithContentDescription(CHIP_A).performClick()
+        composeRule.onNodeWithText("Reading language").assertExists()
+        composeRule.onNodeWithText("Spoken language").assertExists()
+        composeRule.onNodeWithText("Automatic (device recognizer)").assertExists()
+        composeRule.onNodeWithText("French").performClick()
+
+        assertEquals(UiAction.SelectReading(Speaker.A, HyMt2Languages.all.first { it.code == "fr" }), action)
+    }
+
+    @Test fun bottomBarHoldsOnlyThePushToTalkControlsAndSessionAction() {
+        setApp(readyConversationState())
+        composeRule.onNodeWithContentDescription("Start speaker A").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Start speaker B").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("End session").assertIsEnabled()
+        composeRule.onNodeWithText("Speaks").assertDoesNotExist()
+        composeRule.onNodeWithText("Reads").assertDoesNotExist()
     }
 
     @Test fun idleMainScreenStartsInOneTapAndKeepsPushToTalkLocked() {
@@ -135,7 +161,8 @@ class RealtimeTranslateAppTest {
     @Test fun modelLoadingRendersInlineAndLocksLanguageChips() {
         setApp(SessionUiState(SessionPhase.LoadingModel, modelLoadProgress = 0.5f))
         composeRule.onNodeWithText("Loading translation model 50%").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Speaker A recognition language selector: Automatic (device recognizer)").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
     }
 
@@ -149,14 +176,14 @@ class RealtimeTranslateAppTest {
 
     @Test fun languageChipsAreLockedWhileAnUtteranceIsActive() {
         setApp(readyConversationState().copy(phase = SessionPhase.TranslatingA))
-        composeRule.onNodeWithContentDescription("Speaker A translation language selector: English").assertIsNotEnabled()
-        composeRule.onNodeWithContentDescription("Speaker B translation language selector: Korean").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsNotEnabled()
     }
 
     @Test fun liveSessionKeepsLanguageChipsEditable() {
         setApp(readyConversationState())
-        composeRule.onNodeWithContentDescription("Speaker A translation language selector: English").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("Speaker B recognition language selector: Automatic (device recognizer)").assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_A).assertIsEnabled()
+        composeRule.onNodeWithContentDescription(CHIP_B).assertIsEnabled()
     }
 
     @Test fun recognitionIntentUsesOfflineSettingsAndExplicitLanguage() {
@@ -207,6 +234,11 @@ class RealtimeTranslateAppTest {
 
     private fun setApp(state: SessionUiState, onAction: (UiAction) -> Unit = {}, onOpenAppSettings: () -> Unit = {}) {
         composeRule.setContent { RealtimeTranslateTheme { RealtimeTranslateApp(state, onAction, onOpenAppSettings) } }
+    }
+
+    private companion object {
+        const val CHIP_A = "Speaker A languages: reads English, speaks Automatic"
+        const val CHIP_B = "Speaker B languages: reads Korean, speaks Automatic"
     }
 
     private fun readyConversationState() = SessionUiState(SessionPhase.Ready, conversationStarted = true)

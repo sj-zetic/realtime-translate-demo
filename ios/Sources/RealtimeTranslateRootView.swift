@@ -16,8 +16,8 @@ private enum Layout {
   static let control: CGFloat = 20
 }
 
-/// One screen holds everything: status, an inline session banner, the chat transcript,
-/// per-speaker language chips, and the A/B push-to-talk controls.
+/// One screen holds everything: status, a per-speaker language bar, an inline session banner,
+/// the chat transcript, and the A/B push-to-talk controls.
 struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
 
@@ -26,6 +26,7 @@ struct RealtimeTranslateRootView: View {
       VStack(spacing: 0) {
         StatusStrip(title: viewModel.state.title)
         ThinDivider()
+        LanguageBar(viewModel: viewModel)
         SessionBanner(viewModel: viewModel)
         ConversationList(items: viewModel.items, emptyHint: emptyHint)
       }
@@ -40,7 +41,7 @@ struct RealtimeTranslateRootView: View {
   private var emptyHint: String {
     viewModel.isSessionLive
       ? "Speaker A or B can begin speaking."
-      : "Choose the languages below, then start the session."
+      : "Choose the languages above, then start the session."
   }
 }
 
@@ -59,6 +60,52 @@ private struct StatusStrip: View {
       .padding(.horizontal, 16)
       .padding(.vertical, 12)
       .accessibilityLabel("Session status: \(title)")
+  }
+}
+
+/// One chip per speaker, mirroring the side their chat bubbles appear on.
+private struct LanguageBar: View {
+  @ObservedObject var viewModel: RealtimeTranslateViewModel
+
+  var body: some View {
+    HStack(spacing: 12) {
+      speakerMenu(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA)
+      Spacer(minLength: 12)
+      speakerMenu(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB)
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 8)
+    ThinDivider()
+  }
+
+  @ViewBuilder private func speakerMenu(
+    _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>
+  ) -> some View {
+    Menu {
+      Picker("Reading language", selection: target) {
+        ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
+      }
+      .pickerStyle(.inline)
+      Picker("Spoken language", selection: source) {
+        ForEach(viewModel.availableSourceLanguages) { Text($0.name).tag($0) }
+      }
+      .pickerStyle(.inline)
+    } label: {
+      Text("\(speaker.rawValue) · \(target.wrappedValue.name)")
+        .font(.caption).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
+        .lineLimit(1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(DesignToken.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+        .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
+    }
+    .disabled(!viewModel.canEditLanguages)
+    .accessibilityIdentifier("languages-\(speaker.rawValue)")
+    .accessibilityLabel(
+      "Speaker \(speaker.rawValue) languages: reads \(target.wrappedValue.name), "
+        + "speaks \(source.wrappedValue.name)"
+    )
   }
 }
 
@@ -215,8 +262,8 @@ private struct BottomBar: View {
     VStack(spacing: 12) {
       ThinDivider()
       HStack(alignment: .top, spacing: 12) {
-        speakerColumn(.a, source: $viewModel.sourceLanguageA, target: $viewModel.targetLanguageA)
-        speakerColumn(.b, source: $viewModel.sourceLanguageB, target: $viewModel.targetLanguageB)
+        PTTButton(speaker: .a, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
+        PTTButton(speaker: .b, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
       }
       .padding(.horizontal, 16)
       Text(hint)
@@ -282,62 +329,6 @@ private struct BottomBar: View {
       .accessibilityIdentifier("start-session")
       .accessibilityLabel("Start Session")
     }
-  }
-
-  @ViewBuilder private func speakerColumn(
-    _ speaker: Speaker, source: Binding<SpeechSourceLanguage>, target: Binding<TargetLanguage>
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(speaker.rawValue)
-        .font(.subheadline).fontWeight(.bold).foregroundStyle(DesignToken.textSecondary)
-        .accessibilityLabel("Speaker \(speaker.rawValue) controls")
-      Menu {
-        Picker("Speaker \(speaker.rawValue) recognition language", selection: source) {
-          ForEach(viewModel.availableSourceLanguages) { Text($0.name).tag($0) }
-        }
-      } label: {
-        LanguageChip(caption: "Speaks", value: source.wrappedValue.name)
-      }
-      .disabled(!viewModel.canEditLanguages)
-      .accessibilityIdentifier("source-language-\(speaker.rawValue)")
-      .accessibilityLabel(
-        "Speaker \(speaker.rawValue) recognition language selector: \(source.wrappedValue.name)"
-      )
-      Menu {
-        Picker("Speaker \(speaker.rawValue) translation language", selection: target) {
-          ForEach(TargetLanguage.hyMT2Candidates) { Text($0.name).tag($0) }
-        }
-      } label: {
-        LanguageChip(caption: "Reads", value: target.wrappedValue.name)
-      }
-      .disabled(!viewModel.canEditLanguages)
-      .accessibilityIdentifier("target-language-\(speaker.rawValue)")
-      .accessibilityLabel(
-        "Speaker \(speaker.rawValue) translation language selector: \(target.wrappedValue.name)"
-      )
-      PTTButton(speaker: speaker, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-}
-
-private struct LanguageChip: View {
-  let caption: String
-  let value: String
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(caption).font(.caption2).foregroundStyle(DesignToken.textSecondary)
-      Text(value)
-        .font(.caption).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
-        .lineLimit(2).multilineTextAlignment(.leading)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 12)
-    .padding(.vertical, 8)
-    .background(DesignToken.surface)
-    .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-    .overlay(RoundedRectangle(cornerRadius: Layout.control).stroke(DesignToken.divider, lineWidth: 1))
   }
 }
 
