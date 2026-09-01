@@ -48,7 +48,7 @@ class RealtimeTranslateAppTest {
     }
 
     @Test fun finalBubbleDisplaysSpeakerTargetAndTranslationError() {
-        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = "Hy-MT2 runtime verification is incomplete.")))
+        val state = readyConversationState().copy(conversations = listOf(item(Speaker.B, "hello", true).copy(translationError = UiText.raw("Hy-MT2 runtime verification is incomplete."))))
         setApp(state)
         composeRule.onNodeWithText("Speaker B").assertIsDisplayed()
         composeRule.onNodeWithText("To A - English").assertIsDisplayed()
@@ -162,7 +162,7 @@ class RealtimeTranslateAppTest {
     }
 
     @Test fun errorStateDefersTheBottomHintToTheBanner() {
-        setApp(readyConversationState().copy(phase = SessionPhase.Error, errorMessage = "Speech recognition failed."))
+        setApp(readyConversationState().copy(phase = SessionPhase.Error, errorMessage = UiText.raw("Speech recognition failed.")))
         composeRule.onNodeWithText("Speech recognition failed.").assertIsDisplayed()
         composeRule.onNodeWithText("Resolve the error above to continue.").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Try again").assertIsEnabled()
@@ -178,7 +178,7 @@ class RealtimeTranslateAppTest {
 
     @Test fun modelLoadFailureOffersInlineRetryOnTheMainScreen() {
         var action: UiAction? = null
-        setApp(SessionUiState(SessionPhase.ModelLoadFailed, errorMessage = "offline"), onAction = { action = it })
+        setApp(SessionUiState(SessionPhase.ModelLoadFailed, errorMessage = UiText.raw("offline")), onAction = { action = it })
         composeRule.onNodeWithText("offline").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Retry model load").performClick()
         assertEquals(UiAction.Retry, action)

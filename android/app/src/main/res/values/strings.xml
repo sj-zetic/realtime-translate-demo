@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every user-facing string in Turn Translate. The product name Turn
+     Translate, the brand ZETIC, the domain zetic.ai, the model name Hy-MT2, the
+     speaker labels A and B, the three app-language names and the 38 Hy-MT2
+     reading-language names are constants in code, so nothing can translate them
+     by accident. No value in any language contains an em dash or an en dash. -->
+<resources>
+
+    <!-- The product name, the brand and the address are constants in code, not here. -->
+    <string name="app_name">Turn Translate</string>
+
+    <!-- Status strip -->
+    <string name="status_permission_required">Microphone permission required</string>
+    <string name="status_preparing_model">Preparing translation model</string>
+    <string name="status_model_unavailable">Translation model unavailable</string>
+    <string name="status_conversation_ready">Conversation ready</string>
+    <string name="status_ready_to_start">Ready to start</string>
+    <string name="status_listening">Speaker %1$s is speaking</string>
+    <string name="status_finalizing">Finalizing speaker %1$s transcript</string>
+    <string name="status_translating">Translating for speaker %1$s</string>
+    <string name="status_error">An error occurred</string>
+    <string name="status_accessibility">Session status: %1$s</string>
+    <string name="speech_catalog_loading">Checking installed on-device languages</string>
+
+    <!-- Header and language bar -->
+    <string name="zetic_opens_settings">ZETIC, opens settings</string>
+    <string name="speech_language_automatic">Automatic (device recognizer)</string>
+    <string name="language_chip_accessibility">Speaker %1$s languages: reads %2$s, speaks %3$s</string>
+    <string name="menu_reading_language">Reading language</string>
+    <string name="menu_spoken_language">Spoken language</string>
+
+    <!-- Session banner -->
+    <string name="banner_permission_body">Turn Translate needs microphone access to recognize speech on this device.</string>
+    <string name="banner_open_app_settings">Open app settings</string>
+    <string name="banner_allow_microphone">Allow microphone</string>
+    <string name="banner_request_permission_accessibility">Request microphone permission</string>
+    <string name="banner_loading_model">Loading translation model %1$d%%</string>
+    <string name="banner_controls_unlock">Speaker controls unlock when the model is ready.</string>
+    <string name="banner_retry_model_load">Retry model load</string>
+    <string name="banner_try_again">Try again</string>
+
+    <!-- Transcript -->
+    <string name="transcript_empty_live">Speaker A or B can begin speaking.</string>
+    <string name="transcript_empty_idle">Choose the languages above, then start the session.</string>
+    <string name="bubble_speaker_heading">Speaker %1$s</string>
+    <string name="bubble_accessibility">Speaker %1$s utterance</string>
+    <string name="bubble_destination">To %1$s - %2$s</string>
+    <string name="bubble_translation_pending">Translation pending</string>
+    <string name="bubble_recognizing">Recognizing speech</string>
+    <string name="bubble_copy_action">Copy</string>
+    <string name="toast_copied">Copied</string>
+
+    <!-- Bottom bar -->
+    <string name="hint_grant_microphone">Grant microphone access to enable push-to-talk.</string>
+    <string name="hint_model_not_ready">Push-to-talk unlocks once the translation model is ready.</string>
+    <string name="hint_resolve_error">Resolve the error above to continue.</string>
+    <string name="hint_start_conversation">Tap Start conversation to load the translation model.</string>
+    <string name="hint_other_speaker_active">Speaker %1$s cannot begin while speaker %2$s is active.</string>
+    <string name="hint_push_to_talk">Hold a button to talk, or tap once to start and again to stop.</string>
+    <string name="ptt_start">Start speaker %1$s</string>
+    <string name="ptt_stop">Stop speaker %1$s</string>
+    <string name="ptt_blocked_by_other">Speaker %1$s cannot start while speaker %2$s is active</string>
+    <string name="ptt_blocked_model_not_ready">Speaker %1$s push-to-talk unlocks when the translation model is ready</string>
+    <string name="ptt_caption_idle">" - hold to talk"</string>
+    <string name="ptt_caption_recording">" recording - release to stop"</string>
+    <string name="session_start">Start conversation</string>
+    <string name="session_end">End session</string>
+
+    <!-- Spoken translation -->
+    <string name="sound_on_label">Spoken translation on</string>
+    <string name="sound_off_label">Spoken translation off</string>
+    <string name="sound_on_hint">Turns spoken translation off.</string>
+    <string name="sound_off_hint">Turns spoken translation on.</string>
+    <string name="replay_label">Play translation</string>
+    <string name="replay_hint">Speaks this translation again.</string>
+
+    <!-- Settings drawer -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_close">Close settings</string>
+    <string name="settings_clear_title">Clear conversation</string>
+    <string name="settings_clear_subtitle">Keeps the session and the languages</string>
+    <string name="settings_clear_accessibility_available">%1$s, keeps the session and the languages</string>
+    <string name="settings_clear_accessibility_unavailable">%1$s, unavailable, there is nothing to clear</string>
+    <string name="toast_conversation_cleared">Conversation cleared</string>
+    <string name="settings_app_language_title">App language</string>
+    <string name="settings_app_language_accessibility">App language, %1$s</string>
+    <string name="app_language_system">System</string>
+    <string name="toast_language_applied">Language applies fully after reopening the app</string>
+    <string name="settings_website_title">Visit zetic.ai</string>
+    <string name="settings_website_accessibility">Visit zetic.ai, opens in the browser</string>
+    <string name="settings_contact_title">Contact us</string>
+    <string name="settings_contact_accessibility">Contact us, copies %1$s to the clipboard</string>
+    <string name="toast_email_copied">Email address copied</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_privacy_line">Speech, translation, everything stays on this phone.</string>
+    <string name="about_version_line">Version %1$s (%2$s)</string>
+
+    <!-- First run -->
+    <string name="first_run_welcome_tagline">Two people, two languages, one phone.</string>
+    <string name="first_run_welcome_privacy">Speech and translation run on this phone. Nothing is sent to a server.</string>
+    <string name="first_run_welcome_action">Get started</string>
+    <string name="first_run_priming_title">Microphone and speech</string>
+    <string name="first_run_priming_microphone">Microphone: to hear whoever is holding a button.</string>
+    <string name="first_run_priming_speech">Speech recognition: to turn that audio into text.</string>
+    <string name="first_run_priming_privacy">Both run on this phone. No audio and no text leave the device.</string>
+    <string name="first_run_priming_next">Android asks for the microphone next.</string>
+    <string name="first_run_priming_action">Continue</string>
+    <string name="first_run_decline">Not now</string>
+    <string name="first_run_consent_title">Download the translation model</string>
+    <string name="first_run_consent_size">The translation model is %1$s.</string>
+    <string name="model_size_approximate">about %1$s</string>
+    <string name="first_run_consent_once">It downloads once, then it stays on this phone.</string>
+    <string name="first_run_consent_cellular">You are not on Wi-Fi. A download this large is better on Wi-Fi.</string>
+    <string name="first_run_consent_action">Download now</string>
+
+    <!-- Speech recognition failures -->
+    <string name="speech_error_main_thread">On-device speech recognition must start on the Android main thread.</string>
+    <string name="speech_error_recognition_failed">On-device speech recognition failed (error %1$d).</string>
+    <string name="speech_error_android_version">This device requires Android 12 (API 31) or later for on-device speech recognition.</string>
+    <string name="speech_error_permission">Microphone permission is required.</string>
+    <string name="speech_error_no_recognizer">This device has no on-device speech recognizer. The app will not fall back to online recognition.</string>
+    <string name="speech_catalog_no_recognizer">This device has no on-device speech recognizer.</string>
+    <string name="speech_catalog_unavailable">Installed on-device language list is unavailable (error %1$d).</string>
+
+    <!-- Translation failures -->
+    <string name="error_model_load_failed">The translation model could not be loaded.</string>
+    <string name="error_model_not_loaded">The translation model is not loaded.</string>
+    <string name="error_model_start_failed">The translation model could not start.</string>
+    <string name="error_model_stopped">The translation model stopped unexpectedly.</string>
+    <string name="error_model_empty_result">The translation model returned an empty result.</string>
+    <string name="error_translation_failed">Translation failed.</string>
+</resources>

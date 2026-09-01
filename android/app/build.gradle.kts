@@ -38,6 +38,11 @@ android {
 
 dependencies {
     implementation("com.zeticai.mlange:mlange:1.10.0")
+    // Per-app locales, for the drawer's `App language` row: the framework API from
+    // Android 13, the androidx backport below it.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    // The launch window, as one theme rather than a first-frame composable.
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

@@ -46,11 +46,24 @@ class FirstRunPreferences(context: Context) {
         get() = preferences.getBoolean(MODEL_LOADED_KEY, false)
         set(value) = preferences.edit().putBoolean(MODEL_LOADED_KEY, value).apply()
 
+    /**
+     * Whether spoken translation is off. Default is sound on, and the key is spelled exactly as the
+     * iOS `@AppStorage` key. Read on the first frame rather than after it, so a launch that starts
+     * muted never speaks before the screen appears.
+     *
+     * The app language is deliberately not here: that one is written to the platform's own per-app
+     * locale, which the phone's Settings app shows and edits too.
+     */
+    var speechMuted: Boolean
+        get() = preferences.getBoolean(SPEECH_MUTED_KEY, false)
+        set(value) = preferences.edit().putBoolean(SPEECH_MUTED_KEY, value).apply()
+
     companion object {
         const val FILE_NAME = "turn-translate"
         const val WELCOME_SEEN_KEY = "firstRun.welcomeSeen"
         const val PRIMING_SEEN_KEY = "firstRun.permissionPrimingSeen"
         const val MODEL_LOADED_KEY = "model.hasEverLoaded"
+        const val SPEECH_MUTED_KEY = "speech.muted"
     }
 }
 
@@ -93,7 +106,6 @@ object NetworkCost {
 object ModelDownloadSize {
     /** A byte size, not a sentence. User-facing copy always hedges it as "about 1.9 GB". */
     const val TOTAL = "1.9 GB"
-    const val APPROXIMATE = "about $TOTAL"
 }
 
 /**
@@ -121,30 +133,19 @@ object ModelDownloadConsent {
 // region Copy
 
 /**
- * Every first-run string in one place, in the app's terse voice and with no em dash anywhere.
- * English only at this stage; the French and Spanish passes land with the localization work.
+ * The words the app never translates, held as constants so nothing can localize them by accident.
+ * Every other string the first run shows now lives in `res/values/strings.xml` and reaches the
+ * surfaces as a resource, so the French and Spanish passes cover them without touching this file.
  */
 object FirstRunCopy {
     const val PRODUCT_NAME = "Turn Translate"
-
-    const val WELCOME_TAGLINE = "Two people, two languages, one phone."
-    const val WELCOME_PRIVACY = "Speech and translation run on this phone. Nothing is sent to a server."
-    const val WELCOME_ACTION = "Get started"
-
-    const val PRIMING_TITLE = "Microphone and speech"
-    const val PRIMING_MICROPHONE = "Microphone: to hear whoever is holding a button."
-    const val PRIMING_SPEECH = "Speech recognition: to turn that audio into text."
-    const val PRIMING_PRIVACY = "Both run on this phone. No audio and no text leave the device."
-    const val PRIMING_NEXT = "Android asks for the microphone next."
-    const val PRIMING_ACTION = "Continue"
-    const val PRIMING_DECLINE = "Not now"
-
-    const val CONSENT_TITLE = "Download the translation model"
-    const val CONSENT_SIZE = "The translation model is ${ModelDownloadSize.APPROXIMATE}."
-    const val CONSENT_ONCE = "It downloads once, then it stays on this phone."
-    const val CONSENT_CELLULAR = "You are not on Wi-Fi. A download this large is better on Wi-Fi."
-    const val CONSENT_ACTION = "Download now"
-    const val CONSENT_DECLINE = "Not now"
 }
+
+/** The consent card's one composed sentence: a translated frame around a hedged, formatted size. */
+val ConsentSizeLine: UiText
+    get() = UiText.res(
+        R.string.first_run_consent_size,
+        UiText.res(R.string.model_size_approximate, ModelDownloadSize.TOTAL),
+    )
 
 // endregion
