@@ -126,10 +126,84 @@ final class RealtimeTranslateUITests: XCTestCase {
     app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists
   }
 
-  private func launch(state: String) -> XCUIApplication {
+  // MARK: - First run
+
+  func testWelcomeAppearsOnTheVeryFirstLaunchAndNeverAgainAfterGetStarted() {
     let app = XCUIApplication()
-    app.launchArguments = ["-uiState", state]
+    app.launchArguments = ["-firstRun", "fresh", "-uiState", "ready"]
+    app.launch()
+
+    let getStarted = app.buttons["welcome-get-started"]
+    XCTAssertTrue(getStarted.waitForExistence(timeout: 10))
+    XCTAssertTrue(contains(app, "Two people, two languages, one phone."))
+    XCTAssertTrue(contains(app, "Nothing is sent to a server."))
+    getStarted.tap()
+    XCTAssertTrue(waitForDisappearance(getStarted))
+
+    // Straight into the permission priming, because the simulator has answered nothing yet.
+    XCTAssertTrue(app.buttons["priming-continue"].waitForExistence(timeout: 5))
+    XCTAssertTrue(contains(app, "No audio and no text leave the device."))
+
+    // Relaunching without any first-run argument must find the welcome already remembered.
+    // The pause gives `UserDefaults` time to flush the flag before the app goes away.
+    Thread.sleep(forTimeInterval: 1)
+    app.terminate()
+    app.launchArguments = ["-uiState", "ready"]
+    app.launch()
+    XCTAssertTrue(app.buttons["priming-continue"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["welcome-get-started"].exists)
+  }
+
+  func testFirstStartConversationAsksBeforeDownloadingTheModel() {
+    let app = launch(state: "ended", firstRun: "consentNeeded")
+    let start = app.buttons["start-session"]
+    XCTAssertTrue(start.waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["consent-download"].exists)
+
+    start.tap()
+
+    let download = app.buttons["consent-download"]
+    XCTAssertTrue(download.waitForExistence(timeout: 5))
+    XCTAssertTrue(contains(app, "about 1.9 GB"))
+    XCTAssertTrue(contains(app, "It downloads once"))
+    XCTAssertTrue(app.buttons["consent-not-now"].exists)
+
+    app.buttons["consent-not-now"].tap()
+    XCTAssertTrue(waitForDisappearance(download))
+    XCTAssertTrue(app.buttons["start-session"].isEnabled)
+  }
+
+  func testConsentWarnsAboutWiFiOnlyWhenThePathIsExpensive() {
+    let cellular = launch(state: "ended", firstRun: "consentNeeded", extra: ["-firstRunCellular"])
+    XCTAssertTrue(cellular.buttons["start-session"].waitForExistence(timeout: 10))
+    cellular.buttons["start-session"].tap()
+    XCTAssertTrue(cellular.buttons["consent-download"].waitForExistence(timeout: 5))
+    XCTAssertTrue(cellular.staticTexts["consent-cellular-warning"].exists)
+    cellular.terminate()
+
+    let wifi = launch(state: "ended", firstRun: "consentNeeded")
+    XCTAssertTrue(wifi.buttons["start-session"].waitForExistence(timeout: 10))
+    wifi.buttons["start-session"].tap()
+    XCTAssertTrue(wifi.buttons["consent-download"].waitForExistence(timeout: 5))
+    XCTAssertFalse(wifi.staticTexts["consent-cellular-warning"].exists)
+  }
+
+  func testReturningUserSeesNoFirstRunSurfaceAtAll() {
+    let app = launch(state: "ready")
+    XCTAssertFalse(app.buttons["welcome-get-started"].exists)
+    XCTAssertFalse(app.buttons["priming-continue"].exists)
+    XCTAssertFalse(app.buttons["consent-download"].exists)
+    XCTAssertTrue(app.buttons["ZETIC, opens settings"].exists)
+  }
+
+  /// Every existing scenario is a returning user: the first-run flags are forced closed so the
+  /// welcome never stands between the test and the screen it is checking.
+  private func launch(state: String, firstRun: String = "returning",
+                      extra: [String] = []) -> XCUIApplication {
+    let app = XCUIApplication()
+    app.launchArguments = ["-uiState", state, "-firstRun", firstRun] + extra
     app.launch()
     return app
   }
 }
+

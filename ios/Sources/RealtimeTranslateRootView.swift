@@ -61,17 +61,72 @@ enum Layout {
 
 /// One screen holds everything: status, a per-speaker language bar, an inline session banner,
 /// the chat transcript, and the A/B push-to-talk controls.
+///
+/// The first-run surfaces sit above it as overlays rather than as separate destinations, so the
+/// main screen is never rebuilt on the way in and there is no navigation to unwind.
 struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
   @StateObject private var settings = SettingsDrawerModel()
+  @StateObject private var firstRun: FirstRunModel
+  @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
+  @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
+
+  @MainActor init(viewModel: RealtimeTranslateViewModel,
+                  firstRun: FirstRunModel = .fromLaunchArguments()) {
+    _viewModel = StateObject(wrappedValue: viewModel)
+    _firstRun = StateObject(wrappedValue: firstRun)
+  }
 
   var body: some View {
+    mainScreen
+      .overlay { SettingsDrawerOverlay(model: settings) }
+      .overlay { firstRunOverlay }
+      .onAppear { viewModel.adoptExistingPermission() }
+  }
+
+  private var firstRunStep: FirstRunStep {
+    FirstRunStep.step(welcomeSeen: welcomeSeen, primingSeen: primingSeen,
+                      permissionNeeded: viewModel.needsPermissionPriming)
+  }
+
+  @ViewBuilder private var firstRunOverlay: some View {
+    switch firstRunStep {
+    case .welcome:
+      WelcomeView(start: completeWelcome)
+    case .permissionPriming:
+      PermissionPrimingView(allow: allowPermissions, skip: { primingSeen = true })
+    case .none:
+      ModelConsentOverlay(prompt: firstRun.consent, download: firstRun.acceptConsent,
+                          dismiss: firstRun.declineConsent)
+    }
+  }
+
+  /// The welcome is shown once. Leaving it also settles the priming step: a returning user whose
+  /// permissions are already granted skips it without ever seeing it.
+  private func completeWelcome() {
+    welcomeSeen = true
+    viewModel.adoptExistingPermission()
+    if !viewModel.needsPermissionPriming { primingSeen = true }
+  }
+
+  private func allowPermissions() {
+    primingSeen = true
+    viewModel.requestMicrophonePermission()
+  }
+
+  /// Every path that would load the model routes through the consent gate, including the retry
+  /// after a failed load: that is exactly when a large transfer may be about to start again.
+  private func startSession() {
+    firstRun.requestSessionStart { [viewModel] in viewModel.startSession() }
+  }
+
+  private var mainScreen: some View {
     NavigationStack {
       VStack(spacing: 0) {
         StatusStrip(title: viewModel.state.title)
         ThinDivider()
         LanguageBar(viewModel: viewModel)
-        SessionBanner(viewModel: viewModel)
+        SessionBanner(viewModel: viewModel, startSession: startSession)
         ConversationList(items: viewModel.items, emptyHint: emptyHint)
       }
       .background(DesignToken.surface)
@@ -90,10 +145,11 @@ struct RealtimeTranslateRootView: View {
           }
         }
       }
-      .safeAreaInset(edge: .bottom, spacing: 0) { BottomBar(viewModel: viewModel) }
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        BottomBar(viewModel: viewModel, startSession: startSession)
+      }
     }
     .tint(DesignToken.accent)
-    .overlay { SettingsDrawerOverlay(model: settings) }
   }
 
   private var emptyHint: String {
@@ -175,6 +231,7 @@ private struct LanguageBar: View {
 
 private struct SessionBanner: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
+  let startSession: () -> Void
 
   var body: some View {
     switch viewModel.state {
@@ -186,17 +243,33 @@ private struct SessionBanner: View {
         BannerButton(title: "Open App Settings", action: viewModel.openAppSettings)
       }
     case let .loadingModel(progress):
+      // A genuine download reports progress and can name a size; a local load reports nothing at
+      // all, so it stays an indeterminate spinner rather than promising bytes that never move.
+      let status = ModelPreparationStatus.status(for: progress)
       banner {
-        Text(progress.map { "Loading translation model \(Int($0 * 100))%" } ?? "Loading translation model...")
-          .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
-        ProgressView(value: progress).tint(DesignToken.accent)
+        HStack(spacing: 8) {
+          if !status.isDownloading {
+            ProgressView().progressViewStyle(.circular).tint(DesignToken.accent)
+          }
+          Text(status.headline)
+            .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+            .accessibilityIdentifier("model-preparation-headline")
+        }
+        if let detail = status.detail {
+          Text(detail)
+            .font(.caption).foregroundStyle(DesignToken.textSecondary)
+            .accessibilityIdentifier("model-preparation-detail")
+        }
+        if let value = status.progress {
+          ProgressView(value: value).tint(DesignToken.accent)
+        }
         Text("Speaker controls unlock when the model is ready.")
           .font(.caption).foregroundStyle(DesignToken.textSecondary)
       }
     case let .modelLoadFailed(reason):
       banner {
         Text(reason).font(.subheadline).foregroundStyle(DesignToken.error)
-        BannerButton(title: "Retry Model Load", action: viewModel.startSession)
+        BannerButton(title: "Retry Model Load", action: startSession)
           .accessibilityIdentifier("retry-model-load")
       }
     case .endingSession:
@@ -317,6 +390,7 @@ private struct ConversationBubble: View {
 
 private struct BottomBar: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
+  let startSession: () -> Void
 
   var body: some View {
     VStack(spacing: 12) {
@@ -375,7 +449,7 @@ private struct BottomBar: View {
       .accessibilityIdentifier("end-session")
       .accessibilityLabel("End Session")
     } else {
-      Button(action: viewModel.startSession) {
+      Button(action: startSession) {
         Text("Start Session")
           .font(.footnote).fontWeight(.semibold)
           .frame(maxWidth: .infinity)

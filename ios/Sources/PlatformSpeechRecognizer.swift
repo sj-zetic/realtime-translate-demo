@@ -25,6 +25,8 @@ enum PlatformSpeechError: LocalizedError {
 @MainActor
 protocol SpeechRecognizing: AnyObject {
   func requestPermissions() async -> SpeechPermission
+  /// The permission the system already holds, read without prompting for anything.
+  func currentPermission() -> SpeechPermission
   func availableSourceLanguages() -> [SpeechSourceLanguage]
   func start(
     source: SpeechSourceLanguage,
@@ -44,6 +46,19 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
   func requestPermissions() async -> SpeechPermission {
     let microphoneGranted = await requestMicrophonePermission()
     let speechGranted = await requestSpeechPermission()
+    return microphoneGranted && speechGranted ? .granted : .required
+  }
+
+  /// Reads both authorization stores without asking for anything, so the first-run flow can tell a
+  /// returning user (already granted) from someone the system prompts have never reached.
+  func currentPermission() -> SpeechPermission {
+    let microphoneGranted: Bool
+    if #available(iOS 17.0, *) {
+      microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+    } else {
+      microphoneGranted = AVAudioSession.sharedInstance().recordPermission == .granted
+    }
+    let speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
     return microphoneGranted && speechGranted ? .granted : .required
   }
 

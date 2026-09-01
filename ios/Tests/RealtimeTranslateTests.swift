@@ -471,6 +471,179 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Turn Translate")
   }
 
+  // MARK: - First run
+
+  func testWelcomeComesFirstAndThePrimingOnlyWhilePermissionIsUnanswered() {
+    XCTAssertEqual(
+      FirstRunStep.step(welcomeSeen: false, primingSeen: false, permissionNeeded: true), .welcome)
+    XCTAssertEqual(
+      FirstRunStep.step(welcomeSeen: false, primingSeen: true, permissionNeeded: false), .welcome)
+    XCTAssertEqual(
+      FirstRunStep.step(welcomeSeen: true, primingSeen: false, permissionNeeded: true),
+      .permissionPriming)
+    // A returning user whose permissions are already granted skips the priming silently.
+    XCTAssertEqual(
+      FirstRunStep.step(welcomeSeen: true, primingSeen: false, permissionNeeded: false), .none)
+    XCTAssertEqual(
+      FirstRunStep.step(welcomeSeen: true, primingSeen: true, permissionNeeded: true), .none)
+  }
+
+  func testConsentIsSkippedWhenTheModelIsAlreadyOnDiskAndAskedWhenItIsNot() {
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: true, cost: .unrestricted), .startImmediately)
+    // A local model means no transfer at all, so an expensive path is beside the point.
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: true, cost: .expensive), .startImmediately)
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .unrestricted),
+      .ask(cellularWarning: false))
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive),
+      .ask(cellularWarning: true))
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .constrained),
+      .ask(cellularWarning: true))
+  }
+
+  func testSessionStartRunsStraightThroughWhenTheModelIsLocal() {
+    var starts = 0
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { true })
+
+    firstRun.requestSessionStart { starts += 1 }
+
+    XCTAssertEqual(starts, 1)
+    XCTAssertNil(firstRun.consent)
+  }
+
+  func testSessionStartHoldsForConsentAndRunsOnlyWhenAccepted() {
+    var starts = 0
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false })
+
+    firstRun.requestSessionStart { starts += 1 }
+    XCTAssertEqual(starts, 0)
+    XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: true))
+
+    firstRun.acceptConsent()
+    XCTAssertEqual(starts, 1)
+    XCTAssertNil(firstRun.consent)
+  }
+
+  func testDecliningConsentDismissesTheStepWithoutStartingTheDownload() {
+    var starts = 0
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { false })
+
+    firstRun.requestSessionStart { starts += 1 }
+    XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
+    firstRun.declineConsent()
+
+    XCTAssertEqual(starts, 0)
+    XCTAssertNil(firstRun.consent)
+    // The declined start is dropped, not queued behind the next one.
+    firstRun.acceptConsent()
+    XCTAssertEqual(starts, 0)
+  }
+
+  func testDownloadProgressIsNamedOnlyWhileBytesAreActuallyMoving() {
+    XCTAssertEqual(ModelPreparationStatus.status(for: nil).headline, "Preparing translation model")
+    XCTAssertNil(ModelPreparationStatus.status(for: nil).progress)
+    XCTAssertNil(ModelPreparationStatus.status(for: nil).detail)
+    // 0 and 1 are the local-load bookends, not a download in flight.
+    XCTAssertFalse(ModelPreparationStatus.status(for: 0).isDownloading)
+    XCTAssertFalse(ModelPreparationStatus.status(for: 1).isDownloading)
+
+    let downloading = ModelPreparationStatus.status(for: 0.32)
+    XCTAssertTrue(downloading.isDownloading)
+    XCTAssertEqual(downloading.headline, "Downloading translation model 32%")
+    XCTAssertEqual(downloading.detail, "0.6 of 1.9 GB")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "1.0 of 1.9 GB")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.95).headline,
+                   "Downloading translation model 95%")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.95).detail, "1.8 of 1.9 GB")
+  }
+
+  func testLaunchArgumentsForceEachFirstRunStateAndResetTheFlags() throws {
+    let suite = "first-run-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+
+    FirstRunDefaults.applyLaunchArguments(["-firstRun", "returning"], to: defaults)
+    XCTAssertTrue(defaults.bool(forKey: FirstRunDefaults.welcomeSeenKey))
+    XCTAssertTrue(defaults.bool(forKey: FirstRunDefaults.permissionPrimingSeenKey))
+
+    FirstRunDefaults.applyLaunchArguments(["-resetFirstRun"], to: defaults)
+    XCTAssertFalse(defaults.bool(forKey: FirstRunDefaults.welcomeSeenKey))
+    XCTAssertFalse(defaults.bool(forKey: FirstRunDefaults.permissionPrimingSeenKey))
+
+    FirstRunDefaults.applyLaunchArguments(["-firstRun", "consentNeeded"], to: defaults)
+    XCTAssertTrue(defaults.bool(forKey: FirstRunDefaults.welcomeSeenKey))
+    FirstRunDefaults.applyLaunchArguments(["-firstRun", "fresh"], to: defaults)
+    XCTAssertFalse(defaults.bool(forKey: FirstRunDefaults.welcomeSeenKey))
+
+    XCTAssertEqual(FirstRunDefaults.value(named: "-uiState", in: ["-uiState", "ready"]), "ready")
+    XCTAssertNil(FirstRunDefaults.value(named: "-uiState", in: ["-uiState"]))
+  }
+
+  func testConsentNeededLaunchArgumentForcesAMissingModelAndACellularPath() {
+    let consentNeeded = FirstRunModel.fromLaunchArguments(["-firstRun", "consentNeeded", "-firstRunCellular"])
+    consentNeeded.requestSessionStart {}
+    XCTAssertEqual(consentNeeded.consent, FirstRunModel.ConsentPrompt(cellularWarning: true))
+
+    var starts = 0
+    let returning = FirstRunModel.fromLaunchArguments(["-firstRun", "returning"])
+    returning.requestSessionStart { starts += 1 }
+    XCTAssertNil(returning.consent)
+    XCTAssertEqual(starts, 1)
+  }
+
+  func testAlreadyGrantedPermissionSkipsThePrimingAndOpensTheIdleScreen() {
+    let recognizer = FakeSpeechRecognizer()
+    recognizer.permission = .required
+    let viewModel = RealtimeTranslateViewModel(
+      state: .permissionRequired, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime()
+    )
+
+    XCTAssertTrue(viewModel.needsPermissionPriming)
+    viewModel.adoptExistingPermission()
+    XCTAssertEqual(viewModel.state, .permissionRequired)
+
+    recognizer.permission = .granted
+    viewModel.adoptExistingPermission()
+
+    XCTAssertFalse(viewModel.needsPermissionPriming)
+    XCTAssertEqual(viewModel.state, .setup)
+  }
+
+  func testAdoptingPermissionNeverDisturbsAStateTheAppHasMovedPast() {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: FakeTranslationRuntime()
+    )
+
+    viewModel.adoptExistingPermission()
+
+    XCTAssertEqual(viewModel.state, .ready)
+  }
+
+  func testFirstRunCopyUsesNoEmDash() {
+    let copy = [
+      FirstRunCopy.welcomeTitle, FirstRunCopy.welcomeTagline, FirstRunCopy.welcomePrivacy,
+      FirstRunCopy.welcomeAction, FirstRunCopy.primingTitle, FirstRunCopy.primingMicrophone,
+      FirstRunCopy.primingSpeech, FirstRunCopy.primingPrivacy, FirstRunCopy.primingNext,
+      FirstRunCopy.primingAction, FirstRunCopy.primingDecline, FirstRunCopy.consentTitle,
+      FirstRunCopy.consentSize, FirstRunCopy.consentOnce, FirstRunCopy.consentCellular,
+      FirstRunCopy.consentAction, FirstRunCopy.consentDecline, FirstRunCopy.preparingModel,
+      FirstRunCopy.downloadingModel
+    ]
+
+    for line in copy {
+      XCTAssertFalse(line.contains("\u{2014}"), line)
+      XCTAssertFalse(line.contains("\u{2013}"), line)
+      XCTAssertFalse(line.isEmpty)
+    }
+    XCTAssertEqual(FirstRunCopy.consentSize, "The translation model is about 1.9 GB.")
+  }
+
   /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
   private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
     let manager = FileManager.default
@@ -532,7 +705,10 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   private(set) var finishCount = 0
   private(set) var stopCount = 0
 
-  func requestPermissions() async -> SpeechPermission { .granted }
+  var permission: SpeechPermission = .granted
+
+  func requestPermissions() async -> SpeechPermission { permission }
+  func currentPermission() -> SpeechPermission { permission }
   func availableSourceLanguages() -> [SpeechSourceLanguage] { sourceLanguages }
   func start(source: SpeechSourceLanguage, onPartial: @escaping (String) -> Void,
              onFinal: @escaping (String) -> Void) throws {
