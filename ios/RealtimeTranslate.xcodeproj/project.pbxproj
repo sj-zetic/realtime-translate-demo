@@ -16,6 +16,8 @@
 		98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */; };
 		994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */; };
 		9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */; };
+		9D1A55F0C4E38B7710244A61 /* SettingsDrawerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A77E3C5B10D49F6C8035EE2 /* SettingsDrawerModel.swift */; };
+		9D1A55F1C4E38B7710244A62 /* SettingsDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A77E3C6B10D49F6C8035EE3 /* SettingsDrawerView.swift */; };
 		9E4A1B7C2D5F30861AF7B203 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D8B24E1963C70A54BE01F72 /* Assets.xcassets */; };
 		A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = 98E43219EA9601F248FA4521 /* ZeticMLange */; };
 		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
@@ -48,6 +50,8 @@
 		5D8B24E1963C70A54BE01F72 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateTests.swift; sourceTree = "<group>"; };
 		6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateRootView.swift; sourceTree = "<group>"; };
+		2A77E3C5B10D49F6C8035EE2 /* SettingsDrawerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDrawerModel.swift; sourceTree = "<group>"; };
+		2A77E3C6B10D49F6C8035EE3 /* SettingsDrawerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDrawerView.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -115,6 +119,8 @@
 				0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */,
 				6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */,
 				7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */,
+				2A77E3C5B10D49F6C8035EE2 /* SettingsDrawerModel.swift */,
+				2A77E3C6B10D49F6C8035EE3 /* SettingsDrawerView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -266,6 +272,8 @@
 				8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */,
 				98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */,
 				994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */,
+				9D1A55F0C4E38B7710244A61 /* SettingsDrawerModel.swift in Sources */,
+				9D1A55F1C4E38B7710244A62 /* SettingsDrawerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

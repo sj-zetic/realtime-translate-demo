@@ -30,18 +30,31 @@ extension Speaker {
   var borderColor: Color { self == .a ? DesignToken.borderA : DesignToken.borderB }
 }
 
-/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`.
-private struct ZeticWordmark: View {
+/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`, as the button that opens
+/// the settings drawer. The chevron is the only affordance that says the lockup is tappable.
+private struct ZeticWordmarkButton: View {
+  let action: () -> Void
+
   var body: some View {
-    Image("ZeticLogo")
-      .resizable()
-      .scaledToFit()
-      .frame(height: 16)
-      .accessibilityLabel("ZETIC")
+    Button(action: action) {
+      HStack(spacing: 4) {
+        Image("ZeticLogo")
+          .resizable()
+          .scaledToFit()
+          .frame(height: 16)
+        Image(systemName: "chevron.down")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(DesignToken.textSecondary)
+      }
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("zetic-settings")
+    .accessibilityLabel("ZETIC, opens settings")
   }
 }
 
-private enum Layout {
+enum Layout {
   static let message: CGFloat = 16
   static let control: CGFloat = 20
 }
@@ -50,6 +63,7 @@ private enum Layout {
 /// the chat transcript, and the A/B push-to-talk controls.
 struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
+  @StateObject private var settings = SettingsDrawerModel()
 
   var body: some View {
     NavigationStack {
@@ -64,11 +78,22 @@ struct RealtimeTranslateRootView: View {
       .navigationTitle("Turn Translate")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .navigationBarTrailing) { ZeticWordmark() }
+        // iOS 26 wraps toolbar buttons in a glass capsule; the minimal chrome stays flat.
+        if #available(iOS 26.0, *) {
+          ToolbarItem(placement: .navigationBarTrailing) {
+            ZeticWordmarkButton(action: settings.open)
+          }
+          .sharedBackgroundVisibility(.hidden)
+        } else {
+          ToolbarItem(placement: .navigationBarTrailing) {
+            ZeticWordmarkButton(action: settings.open)
+          }
+        }
       }
       .safeAreaInset(edge: .bottom, spacing: 0) { BottomBar(viewModel: viewModel) }
     }
     .tint(DesignToken.accent)
+    .overlay { SettingsDrawerOverlay(model: settings) }
   }
 
   private var emptyHint: String {
@@ -78,7 +103,7 @@ struct RealtimeTranslateRootView: View {
   }
 }
 
-private struct ThinDivider: View {
+struct ThinDivider: View {
   var body: some View { Rectangle().fill(DesignToken.divider).frame(height: 1) }
 }
 

@@ -420,6 +420,57 @@ final class RealtimeTranslateTests: XCTestCase {
     for directory in kept { XCTAssertTrue(manager.fileExists(atPath: directory.path), directory.lastPathComponent) }
   }
 
+  func testSettingsDrawerOpensFromTheWordmarkAndCloses() {
+    let model = SettingsDrawerModel(appInfo: .main, pasteboard: FakePasteboard())
+
+    XCTAssertFalse(model.isOpen)
+    model.open()
+    XCTAssertTrue(model.isOpen)
+    model.close()
+    XCTAssertFalse(model.isOpen)
+  }
+
+  func testContactRowCopiesTheAddressAndAnnouncesTheToast() async {
+    let pasteboard = FakePasteboard()
+    var announcements: [String] = []
+    let model = SettingsDrawerModel(
+      appInfo: .main, pasteboard: pasteboard, toastDuration: 0.02, openURL: { _ in },
+      announce: { announcements.append($0) }
+    )
+
+    model.copyContactEmail()
+
+    XCTAssertEqual(SettingsDrawerModel.contactEmail, "contact@zetic.ai")
+    XCTAssertEqual(pasteboard.written, ["contact@zetic.ai"])
+    XCTAssertEqual(model.toast, "Email address copied")
+    XCTAssertEqual(announcements, ["Email address copied"])
+
+    await waitUntil { model.toast == nil }
+  }
+
+  func testVisitRowOpensTheZeticSite() {
+    var opened: [URL] = []
+    let model = SettingsDrawerModel(
+      appInfo: .main, pasteboard: FakePasteboard(), openURL: { opened.append($0) }
+    )
+
+    model.openWebsite()
+
+    XCTAssertEqual(opened.map(\.absoluteString), ["https://zetic.ai"])
+  }
+
+  func testAboutSectionReadsTheBundleNameAndVersion() {
+    let info = AppInfo(info: [
+      "CFBundleDisplayName": "Turn Translate", "CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"
+    ])
+
+    XCTAssertEqual(info.displayName, "Turn Translate")
+    XCTAssertEqual(info.versionLine, "Version 1.2 (7)")
+    XCTAssertEqual(AppInfo(info: ["CFBundleName": "RealtimeTranslate"]).displayName, "RealtimeTranslate")
+    XCTAssertEqual(AppInfo(info: nil).displayName, "Turn Translate")
+    XCTAssertEqual(AppInfo(info: Bundle.main.infoDictionary).displayName, "Turn Translate")
+  }
+
   /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
   private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
     let manager = FileManager.default
@@ -466,6 +517,11 @@ final class RealtimeTranslateTests: XCTestCase {
 }
 
 private enum TestError: Error { case failed }
+
+private final class FakePasteboard: SettingsPasteboard {
+  private(set) var written: [String] = []
+  func write(_ text: String) { written.append(text) }
+}
 
 @MainActor
 private final class FakeSpeechRecognizer: SpeechRecognizing {
