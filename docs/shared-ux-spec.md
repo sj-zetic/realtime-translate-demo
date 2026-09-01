@@ -308,7 +308,12 @@ A phone call, Siri, an alarm, or an unplugged headset takes the audio session aw
 
 ## Localization
 
-The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS, English only so far; the French and Spanish passes and Android parity are pending.
+The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, all 124 keys translated in each. Android parity is pending.
+
+### Shipped languages and their register
+
+- **French (`fr`), shipped.** Vouvoiement throughout, no tutoiement anywhere: the phone is handed to a stranger, so the second person on screen is not the person who installed the app, and French iOS system UI next to it is uniformly vouvoyée. Buttons stay infinitive (`Continuer`, `Réessayer`), which is address-neutral and the French Apple convention. French typography is carried in the catalog as real code points: no-break space (U+00A0) before `:` and `%`, narrow no-break space (U+202F) before `?`, U+2019 for every apostrophe, and guillemets where a control name is quoted.
+- **Spanish (`es`), shipped.** Tú throughout, which is what Apple's Spanish localizations use and what a two-people-one-phone consumer app calls for; controls stay infinitive (`Cancelar`, `Enviar`) per the same convention. Neutral international Spanish, so `mantén pulsado`, `Ajustes`, and `toca` rather than their regional alternatives. `Start Session` is `Empezar sesión`, never `Iniciar sesión`, which in Spanish means *log in*.
 
 ### Where the strings live
 
@@ -339,7 +344,7 @@ That split is the whole reason the language row promises what it promises. It is
 
 ### Fallback rules
 
-- **A language with no translations falls back to the development language, string by string.** `fr` and `es` are declared but unpopulated today, so a French phone gets an English interface, not a broken one, and will get French strings as the language passes land without any code change.
+- **A language with no translations falls back to the development language, string by string.** `fr` and `es` are populated, so this now covers only a language added to the project ahead of its pass: it gets an English interface, not a broken one, and gains its own strings when the pass lands, without any code change.
 - **A key missing from a language falls back to English**, so a partly finished pass never shows a blank or a raw key.
 - **A stored language this build no longer offers falls back to `System`**, the same tolerance the reading chips apply to a code that is no longer in the catalogue.
 - **Formatting follows the chosen language**: sizes, numbers, and dates come from the platform's formatters rather than from hand-built strings, so they are already right in a language whose strings are not translated yet.
