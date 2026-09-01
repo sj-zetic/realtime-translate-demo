@@ -87,10 +87,15 @@ struct RealtimeTranslateRootView: View {
   /// screen depends on it, so it must never invalidate the body it is driven from.
   @State private var screenAwake = ScreenAwakeController()
 
-  @MainActor init(viewModel: RealtimeTranslateViewModel,
-                  firstRun: FirstRunModel = .fromLaunchArguments()) {
-    _viewModel = StateObject(wrappedValue: viewModel)
-    _firstRun = StateObject(wrappedValue: firstRun)
+  /// Both collaborators arrive as autoclosures, like the four `@StateObject` properties above.
+  /// SwiftUI rebuilds a root view struct freely and keeps only the first `StateObject` it is
+  /// given, so an eagerly built pair is a recognizer enumeration, a translation runtime, a set of
+  /// `NotificationCenter` registrations, and an `NWPathMonitor` constructed and thrown away on
+  /// every one of those rebuilds.
+  @MainActor init(viewModel: @autoclosure @escaping () -> RealtimeTranslateViewModel,
+                  firstRun: @autoclosure @escaping () -> FirstRunModel = .fromLaunchArguments()) {
+    _viewModel = StateObject(wrappedValue: viewModel())
+    _firstRun = StateObject(wrappedValue: firstRun())
   }
 
   /// The chosen app language, or nil while the phone's own order applies.
@@ -103,7 +108,7 @@ struct RealtimeTranslateRootView: View {
       .overlay {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
                               clearConversation: viewModel.clearConversation,
-                              isSessionLive: viewModel.isSessionLive,
+                              modelHold: viewModel.modelHold,
                               appLanguage: AppLanguage.named(appLanguageRaw),
                               selectAppLanguage: selectAppLanguage)
       }
@@ -187,7 +192,7 @@ struct RealtimeTranslateRootView: View {
         // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
         // screen, so it never lands on top of the push-to-talk row or the session action.
         ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy,
-                         isMuted: viewModel.isMuted, replay: viewModel.replay)
+                         canReplay: viewModel.canReplay, replay: viewModel.replay)
           .overlay(alignment: .bottom) {
             ToastLayer(center: conversationCopy.toasts, identifier: "copy-toast")
           }
@@ -520,7 +525,8 @@ private struct ConversationList: View {
   let items: [ConversationItem]
   let emptyHint: String
   let copy: (ConversationItem) -> Void
-  let isMuted: Bool
+  /// Whether tapping a replay glyph would actually play anything right now.
+  let canReplay: Bool
   let replay: (ConversationItem) -> Void
 
   var body: some View {
@@ -535,7 +541,7 @@ private struct ConversationList: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           ForEach(items) { item in
-            ConversationBubble(item: item, copy: { copy(item) }, isMuted: isMuted,
+            ConversationBubble(item: item, copy: { copy(item) }, canReplay: canReplay,
                                replay: { replay(item) })
               .id(item.id)
           }
@@ -554,13 +560,14 @@ private struct ConversationList: View {
 private struct ConversationBubble: View {
   let item: ConversationItem
   let copy: () -> Void
-  let isMuted: Bool
+  /// Whether the session can play anything at all right now: muted, or the microphone is open.
+  let canReplay: Bool
   let replay: () -> Void
 
   private var isA: Bool { item.speaker == .a }
   /// Only a finished translation can be replayed, so the glyph is absent, not disabled, on a
   /// bubble that is still recognizing, still translating, or whose translation failed.
-  private var canReplay: Bool { item.speakableTranslation != nil }
+  private var hasReplayableTranslation: Bool { item.speakableTranslation != nil }
 
   var body: some View {
     HStack(spacing: 0) {
@@ -605,8 +612,8 @@ private struct ConversationBubble: View {
       // Applied after the grouping, which is what keeps the replay control its own element rather
       // than a glyph folded into the bubble's combined label.
       .overlay(alignment: .bottomTrailing) {
-        if canReplay {
-          ReplayButton(isMuted: isMuted, replay: replay).padding([.trailing, .bottom], 8)
+        if hasReplayableTranslation {
+          ReplayButton(isEnabled: canReplay, replay: replay).padding([.trailing, .bottom], 8)
         }
       }
       if isA { Spacer(minLength: 32) }
@@ -625,7 +632,7 @@ private struct ConversationBubble: View {
       Text(verbatim: item.translation ?? "")
         .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
         // Keeps the last line of a long translation clear of the replay glyph in the corner.
-        .padding(.trailing, canReplay ? 30 : 0)
+        .padding(.trailing, hasReplayableTranslation ? 30 : 0)
     case let .translationFailed(reason):
       // Already localized where it was built, by `TranslationFailureCopy` at the display site.
       Text(verbatim: reason).font(.caption).foregroundStyle(DesignToken.error)
@@ -633,22 +640,24 @@ private struct ConversationBubble: View {
   }
 }
 
-/// The per-bubble replay control. Muted, it stays visible but inert: the bubble still has a
-/// translation to speak, the app is simply not speaking anything right now.
+/// The per-bubble replay control. Muted, or while the recognizer holds the microphone, it stays
+/// visible but inert: the bubble still has a translation to speak, the app is simply not speaking
+/// anything right now. Disabled rather than merely silent, because a control that answers a tap
+/// with nothing is a control that reads as broken.
 private struct ReplayButton: View {
-  let isMuted: Bool
+  let isEnabled: Bool
   let replay: () -> Void
 
   var body: some View {
     Button(action: replay) {
       Image(systemName: "speaker.wave.2")
         .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(isMuted ? DesignToken.textSecondary : DesignToken.textPrimary)
+        .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
         .frame(width: 28, height: 24)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .disabled(isMuted)
+    .disabled(!isEnabled)
     .accessibilityIdentifier("replay-translation")
     .accessibilityLabel(SpeechOutputCopy.replayAction)
     .accessibilityHint(SpeechOutputCopy.replayHint)

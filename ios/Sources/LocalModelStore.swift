@@ -79,19 +79,19 @@ enum LocalModelStore {
   /// directories the SDK creates before a download it never finishes.
   ///
   /// Safety rules, in order: only paths physically inside the root being swept (symlinks resolved),
-  /// only `llmTargetModel-<16 hex>` directory names, only ids absent from the index, only genuinely
-  /// empty directories. Anything unreadable, unparseable, or ambiguous is skipped. Nothing under
-  /// `staging-locks` or `backend-selection-*` is ever touched, and any indexed artifact is off
-  /// limits. Downloads in flight in this process cannot be affected: partials from a previous
-  /// process are the only ones on disk when this runs, before any load begins.
-  static func sweepOrphans(cacheRoot root: URL? = LocalModelStore.cacheRoot,
-                           temporaryDirectory temporary: URL = FileManager.default.temporaryDirectory) {
+  /// only `llmTargetModel-<16 hex>` directory names, only ids absent from either index, only
+  /// genuinely empty directories. Anything unreadable, unparseable, or ambiguous is skipped.
+  /// Nothing under `staging-locks` or `backend-selection-*` is ever touched, and any indexed
+  /// artifact is off limits.
+  ///
+  /// Partials are swept only from the cache root's own `tmp`, never from the app's shared
+  /// temporary directory. That directory is `URLSession`'s too: a `CFNetworkDownload_*.tmp` there
+  /// is as likely to be this launch's resumable 1.9 GB transfer as it is to be an abandoned one,
+  /// and deleting it turns a download that could have resumed into one that starts again at zero.
+  static func sweepOrphans(cacheRoot root: URL? = LocalModelStore.cacheRoot) {
     let manager = FileManager.default
-    // Partials land in the app's temporary directory, and in the cache root's own `tmp` when the
-    // SDK stages there; sweep both, each contained in its own root.
-    var partialRoots = [temporary]
-    if let root { partialRoots.append(root.appendingPathComponent("tmp", isDirectory: true)) }
-    for partialRoot in partialRoots {
+    if let root {
+      let partialRoot = root.appendingPathComponent("tmp", isDirectory: true)
       let files = (try? manager.contentsOfDirectory(at: partialRoot, includingPropertiesForKeys: nil)) ?? []
       for file in files where file.lastPathComponent.hasPrefix("CFNetworkDownload_")
         && file.pathExtension == "tmp" && isContained(file, in: partialRoot) {
@@ -101,7 +101,11 @@ enum LocalModelStore {
 
     // Without a parseable index there is no way to tell an aborted mint from the live artifact.
     guard let root, let index = readIndex(root) else { return }
+    // Both indexes, because they are two readings of the same file: an artifact whose only stored
+    // file is the extracted `.gguf` is absent from the `.ztc` reading and would otherwise look
+    // like an id nobody claims.
     let known = Set(index.entries.map(\.id))
+      .union(readIndex(root, fileExtension: "gguf")?.entries.map(\.id) ?? [])
     let artifacts = root.appendingPathComponent("artifacts", isDirectory: true)
     let modelDirectories = (try? manager.contentsOfDirectory(at: artifacts,
                                                              includingPropertiesForKeys: nil)) ?? []
@@ -171,26 +175,35 @@ enum LocalModelStore {
   /// key and every record belonging to anything else byte for byte as it was.
   ///
   /// Safety rules, in the order they are applied: the index must parse (without it there is no way
-  /// to tell this app's model from anything else in the cache), the model key must resolve and
-  /// must be a single path component, the directory must resolve strictly inside `artifacts/`, and
-  /// the rewritten index must serialize before anything is removed, so a failure anywhere leaves
-  /// the cache as it was. Nothing under `backend-selection-*` or `staging-locks` is ever touched:
-  /// those records are the SDK's, they are tiny, and a redownload rewrites them anyway.
+  /// to tell this app's model from anything else in the cache), the index must name this model
+  /// (the sole-key guess that is good enough for loading is not good enough for removing), the
+  /// model key must be a single path component, the directory must resolve strictly inside
+  /// `artifacts/`, and the rewritten index must both serialize and reach the disk before anything
+  /// is removed, so a failure anywhere leaves the cache as it was. Nothing under
+  /// `backend-selection-*` or `staging-locks` is ever touched: those records are the SDK's, they
+  /// are tiny, and a redownload rewrites them anyway.
   @discardableResult
   static func deleteModel(forModelName name: String,
                           cacheRoot root: URL? = LocalModelStore.cacheRoot) -> Deletion {
     guard let root else { return .refused }
     let indexURL = root.appendingPathComponent("cache-index.json")
     guard let object = readObject(indexURL),
-          let modelKey = resolveModelKey(name, cacheRoot: root),
+          let modelKey = resolveModelKey(name, cacheRoot: root, allowSoleKeyFallback: false),
           let directory = modelDirectory(modelKey, in: root),
           let data = try? JSONSerialization.data(withJSONObject: pruning(object, modelKey: modelKey))
     else { return .refused }
 
     let manager = FileManager.default
     let existed = manager.fileExists(atPath: directory.path)
+    // The index goes first, and its write is checked. A full disk that swallows this write after
+    // the directory was already removed leaves an index promising a model that is not there and a
+    // drawer saying "Model deleted" about a delete that half happened.
+    do {
+      try data.write(to: indexURL, options: .atomic)
+    } catch {
+      return .refused
+    }
     if existed { try? manager.removeItem(at: directory) }
-    try? data.write(to: indexURL, options: .atomic)
     return existed ? .deleted : .nothingToDelete
   }
 
@@ -297,18 +310,28 @@ enum LocalModelStore {
   /// The model key for `name`, whichever kind of stored file the cache happens to hold. An index
   /// that will not parse yields nil, which is what makes both the footprint and the delete refuse
   /// a cache they cannot read.
-  private static func resolveModelKey(_ name: String, cacheRoot root: URL) -> String? {
+  private static func resolveModelKey(_ name: String, cacheRoot root: URL,
+                                      allowSoleKeyFallback: Bool = true) -> String? {
     for fileExtension in ["ztc", "gguf"] {
       guard let index = readIndex(root, fileExtension: fileExtension) else { return nil }
-      if let key = resolveModelKey(name, in: index) { return key }
+      if let key = resolveModelKey(name, in: index, allowSoleKeyFallback: allowSoleKeyFallback) {
+        return key
+      }
     }
     return nil
   }
 
   /// The index's own name mapping, or the sole model key on disk when there is exactly one. More
   /// than one and no mapping means we cannot tell which archive belongs to this app's model.
-  private static func resolveModelKey(_ name: String, in index: Index) -> String? {
+  ///
+  /// The fallback is a guess, and it is only ever the right kind of guess for loading: the worst a
+  /// wrong one costs there is an init that fails and a remote load that runs instead. A caller
+  /// that is about to remove files by name passes `allowSoleKeyFallback: false`, because the same
+  /// guess there deletes somebody else's model out of a shared cache.
+  private static func resolveModelKey(_ name: String, in index: Index,
+                                      allowSoleKeyFallback: Bool = true) -> String? {
     if let key = index.modelKeysByName[name] { return key }
+    guard allowSoleKeyFallback else { return nil }
     let keys = Set(index.entries.map(\.modelKey))
     return keys.count == 1 ? keys.first : nil
   }
