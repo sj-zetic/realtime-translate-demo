@@ -66,7 +66,7 @@ enum Layout {
 /// main screen is never rebuilt on the way in and there is no navigation to unwind.
 struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
-  @StateObject private var settings = SettingsDrawerModel()
+  @StateObject private var settings = SettingsDrawerModel.fromLaunchArguments()
   @StateObject private var firstRun: FirstRunModel
   @StateObject private var conversationCopy = ConversationCopyModel()
   @StateObject private var typedInput = TypedInputModel()
@@ -90,7 +90,8 @@ struct RealtimeTranslateRootView: View {
     mainScreen
       .overlay {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
-                              clearConversation: viewModel.clearConversation)
+                              clearConversation: viewModel.clearConversation,
+                              isSessionLive: viewModel.isSessionLive)
       }
       .overlay { firstRunOverlay }
       .onAppear {
@@ -220,10 +221,14 @@ struct Toast: View {
         Text(message)
           .font(.caption)
           .foregroundStyle(DesignToken.surface)
+          // Wraps rather than running past the phone at the accessibility sizes.
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
           .padding(.horizontal, 16)
           .padding(.vertical, 10)
           .background(DesignToken.textPrimary)
           .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+          .padding(.horizontal, 24)
           .padding(.bottom, 24)
           .accessibilityIdentifier(identifier)
       }
@@ -251,6 +256,9 @@ private struct StatusStrip: View {
       Text(title)
         .font(.caption)
         .foregroundStyle(DesignToken.textSecondary)
+        // Wraps at the accessibility sizes: "Translation Model Unavailable" truncated to
+        // "Translation Model" is a status line that says the opposite of what it means.
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel("Session status: \(title)")
       SpeechMuteToggle(isMuted: isMuted, toggle: toggleMute)
@@ -316,7 +324,11 @@ private struct LanguageBar: View {
             .foregroundColor(DesignToken.textPrimary)
       )
       .font(.caption)
-      .lineLimit(1)
+      // Two chips share one row, so the reading language is the first thing to lose at the
+      // accessibility sizes. A second line and a little shrink keep the whole name readable
+      // without letting a name like "Traditional Chinese" turn the language bar into four rows.
+      .lineLimit(2)
+      .minimumScaleFactor(0.7)
       .padding(.horizontal, 12)
       .padding(.vertical, 6)
       .background(DesignToken.surface)
@@ -344,6 +356,7 @@ private struct SessionBanner: View {
       banner {
         Text("Turn Translate needs microphone and speech recognition access on this device.")
           .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
         BannerButton(title: "Allow Microphone Access", action: viewModel.requestMicrophonePermission)
         BannerButton(title: "Open App Settings", action: viewModel.openAppSettings)
       }
@@ -358,6 +371,7 @@ private struct SessionBanner: View {
           }
           Text(status.headline)
             .font(.subheadline).foregroundStyle(DesignToken.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("model-preparation-headline")
         }
         if let detail = status.detail {
@@ -370,10 +384,12 @@ private struct SessionBanner: View {
         }
         Text("Speaker controls unlock when the model is ready.")
           .font(.caption).foregroundStyle(DesignToken.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     case let .modelLoadFailed(reason):
       banner {
         Text(reason).font(.subheadline).foregroundStyle(DesignToken.error)
+          .fixedSize(horizontal: false, vertical: true)
         BannerButton(title: "Retry Model Load", action: startSession)
           .accessibilityIdentifier("retry-model-load")
       }
@@ -386,10 +402,22 @@ private struct SessionBanner: View {
     case let .error(reason):
       banner {
         Text(reason).font(.subheadline).foregroundStyle(DesignToken.error)
+          .fixedSize(horizontal: false, vertical: true)
         BannerButton(title: "Try Again", action: viewModel.requestMicrophonePermission)
       }
     default:
-      EmptyView()
+      // An interruption is not a failure, so the note borrows the banner's shape but none of its
+      // urgency: secondary text, no error color, no button. The next push-to-talk clears it.
+      if let notice = viewModel.notice {
+        banner {
+          Text(notice)
+            .font(.subheadline).foregroundStyle(DesignToken.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("session-notice")
+        }
+      } else {
+        EmptyView()
+      }
     }
   }
 
@@ -439,6 +467,7 @@ private struct ConversationList: View {
             Text(emptyHint)
               .font(.subheadline)
               .foregroundStyle(DesignToken.textSecondary)
+              .fixedSize(horizontal: false, vertical: true)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           ForEach(items) { item in

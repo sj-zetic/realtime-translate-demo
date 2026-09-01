@@ -31,12 +31,17 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// writes, so a launch that starts muted never speaks a first translation before the view
   /// appears.
   @Published private(set) var isMuted: Bool
+  /// One quiet line about something that happened to the session rather than to a bubble. Today
+  /// that is only an audio interruption. It is not an error state: the session is live, the model
+  /// is loaded, and the next push-to-talk clears it.
+  @Published private(set) var notice: String?
 
   private let speechRecognizer: any SpeechRecognizing
   private let translationRuntime: any TranslationRuntime
   private let haptics: any HapticSink
   private let speechOutput: any SpeechOutput
   private let preferences: any LanguagePreferenceStoring
+  private var audioInterruptions: any AudioInterruptionObserving
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
   private var sessionTask: Task<Void, Never>?
@@ -52,7 +57,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
        haptics: (any HapticSink)? = nil,
        speechOutput: (any SpeechOutput)? = nil,
        isMuted: Bool = UserDefaults.standard.bool(forKey: SpeechOutputDefaults.mutedKey),
-       preferences: (any LanguagePreferenceStoring)? = nil) {
+       preferences: (any LanguagePreferenceStoring)? = nil,
+       audioInterruptions: (any AudioInterruptionObserving)? = nil) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     let store = preferences ?? EphemeralLanguagePreferences()
@@ -82,6 +88,10 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.preferences = store
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
+    // Registered last, so the handler can never reach a half-built view model, and weakly, so the
+    // notification center does not become the thing keeping a closed session alive.
+    self.audioInterruptions = audioInterruptions ?? SystemAudioInterruptions()
+    self.audioInterruptions.observe { [weak self] event in self?.handleAudioInterruption(event) }
   }
 
   /// The app's composition root, and the one place the persisting store is injected: everywhere
@@ -161,6 +171,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   func beginTurn(_ speaker: Speaker) {
     guard state == .ready else { return }
+    // The notice says "tap to talk again", so this is the tap that answers it.
+    notice = nil
     // Nothing is ever spoken while the microphone is open. Stopping here is synchronous, so the
     // audio session is handed back before the recognizer claims it one line further down.
     speechOutput.stop()
@@ -215,6 +227,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   func submitTypedTranscript(_ text: String, speaker: Speaker) {
     let transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard canSubmitTypedTranscript, !transcript.isEmpty else { return }
+    notice = nil
     let item = ConversationItem(
       id: UUID(), speaker: speaker, transcript: transcript,
       targetLanguage: targetLanguage(for: speaker.counterpart), translation: nil, state: .finalizing
@@ -257,8 +270,44 @@ final class RealtimeTranslateViewModel: ObservableObject {
     activeItemID = nil
     pendingFinalTranscript = nil
     mostRecentTranslationRequest = nil
+    notice = nil
     items = []
     state = .setup
+  }
+
+  // MARK: - Audio interruptions
+
+  /// The one place an interruption changes anything. A phone call, Siri, or an alarm takes the
+  /// audio session away, and the only question is what this app was using it for at that instant.
+  /// The answer is a pure function, so the whole table is a unit test rather than a phone call.
+  func handleAudioInterruption(_ event: AudioInterruptionEvent) {
+    switch AudioInterruptionPolicy.response(to: event, state: state,
+                                            isSpeaking: speechOutput.isSpeaking) {
+    case .ignore:
+      break
+    case .stopSpeech:
+      speechOutput.stop()
+    case .abandonUtterance:
+      abandonUtterance(AudioInterruptionCopy.notice)
+    }
+  }
+
+  /// Discards the in-flight utterance exactly the way `beginTurn`'s failure path does: the
+  /// recognizer is released, the bubble that was going to hold the utterance is removed rather
+  /// than left half written, and the session returns to idle so the very next push-to-talk works.
+  /// The recognizer reactivates its own audio session on every start, so nothing has to be
+  /// rebuilt here for that next press to find a working microphone.
+  ///
+  /// Only the utterance dies. The model stays loaded, the languages stay chosen, and every earlier
+  /// bubble stays where it is.
+  private func abandonUtterance(_ note: String) {
+    speechRecognizer.stop()
+    speechOutput.stop()
+    if let id = activeItemID { items.removeAll { $0.id == id } }
+    activeItemID = nil
+    pendingFinalTranscript = nil
+    state = .ready
+    notice = note
   }
 
   /// Language chips stay editable mid-session; only an in-flight utterance or a busy

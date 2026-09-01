@@ -44,6 +44,12 @@ final class SettingsDrawerModel: ObservableObject {
   static let clearConversationConfirmation = "Conversation cleared"
 
   @Published private(set) var isOpen = false
+  /// What the model occupies right now. Re-read every time the drawer opens and again after a
+  /// delete, so the row is never quoting a size from three sessions ago.
+  @Published private(set) var storage: LocalModelStore.Footprint = .none
+  /// Drives the app's one `confirmationDialog`. A `var` because the dialog binds to it and closes
+  /// itself by writing false.
+  @Published var isConfirmingDelete = false
 
   let appInfo: AppInfo
   /// The drawer shares the app's one toast behaviour rather than owning a second one.
@@ -53,6 +59,7 @@ final class SettingsDrawerModel: ObservableObject {
 
   private let pasteboard: SettingsPasteboard
   private let openURL: (URL) -> Void
+  private let modelStorage: any ModelStorageManaging
 
   init(
     appInfo: AppInfo = .main,
@@ -61,17 +68,55 @@ final class SettingsDrawerModel: ObservableObject {
     openURL: @escaping (URL) -> Void = { UIApplication.shared.open($0) },
     announce: @escaping (String) -> Void = {
       UIAccessibility.post(notification: .announcement, argument: $0)
-    }
+    },
+    modelStorage: (any ModelStorageManaging)? = nil
   ) {
     self.appInfo = appInfo
     self.pasteboard = pasteboard
     self.openURL = openURL
+    self.modelStorage = modelStorage ?? LocalModelStorage()
     toasts = ToastCenter(duration: toastDuration, announce: announce)
   }
 
-  func open() { isOpen = true }
+  /// The app's composition root for the drawer. Only the storage seam is forced from the command
+  /// line, so a UI test can drive the row and its confirmation without a 1.9 GB model.
+  static func fromLaunchArguments(
+    _ arguments: [String] = ProcessInfo.processInfo.arguments
+  ) -> SettingsDrawerModel {
+    SettingsDrawerModel(modelStorage: FixedModelStorage.fromLaunchArguments(arguments))
+  }
+
+  /// Opening re-reads the disk, because the drawer is the only place that number is shown and a
+  /// download may have finished since the last look.
+  func open() {
+    refreshStorage()
+    isOpen = true
+  }
 
   func close() { isOpen = false }
+
+  // MARK: - Model storage
+
+  func refreshStorage() { storage = modelStorage.footprint() }
+
+  func storageRow(isSessionLive: Bool) -> ModelStorageRow {
+    ModelStorageRow.row(footprint: storage, isSessionLive: isSessionLive)
+  }
+
+  /// The row does not delete. It asks, and the dialog deletes: this is the only destructive action
+  /// in the app and the only one that cannot be undone from inside it.
+  func confirmDeleteModel() { isConfirmingDelete = true }
+
+  /// Deletes and re-reads, so the row itself becomes the confirmation. The drawer stays open on
+  /// purpose, unlike the clear row: the thing worth seeing afterwards is this row saying the model
+  /// is gone, not the screen behind it.
+  func deleteModel() {
+    isConfirmingDelete = false
+    let outcome = modelStorage.deleteModel()
+    refreshStorage()
+    guard outcome == .deleted else { return }
+    toasts.show(ModelStorageCopy.deleted)
+  }
 
   func openWebsite() { openURL(Self.website) }
 

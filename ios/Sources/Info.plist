@@ -28,6 +28,8 @@
     <string>Microphone access is required to listen and translate conversations in real time.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Speech recognition is required to transcribe conversations on this device.</string>
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

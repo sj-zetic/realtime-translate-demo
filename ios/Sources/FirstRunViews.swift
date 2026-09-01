@@ -26,6 +26,7 @@ struct WelcomeView: View {
           .font(.largeTitle)
           .fontWeight(.semibold)
           .foregroundStyle(DesignToken.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
         Text(FirstRunCopy.welcomeTagline)
           .font(.title3)
           .foregroundStyle(DesignToken.textPrimary)
@@ -61,6 +62,7 @@ struct PermissionPrimingView: View {
           .font(.title2)
           .fontWeight(.semibold)
           .foregroundStyle(DesignToken.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
         VStack(alignment: .leading, spacing: 12) {
           Text(FirstRunCopy.primingMicrophone)
           ThinDivider()
@@ -77,6 +79,7 @@ struct PermissionPrimingView: View {
         Text(FirstRunCopy.primingNext)
           .font(.caption)
           .foregroundStyle(DesignToken.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     } actions: {
       VStack(spacing: 8) {
@@ -124,24 +127,11 @@ struct ModelConsentOverlay: View {
 
   private func card(cellularWarning: Bool) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text(FirstRunCopy.consentTitle)
-        .font(.headline)
-        .foregroundStyle(DesignToken.textPrimary)
-      Text(FirstRunCopy.consentSize)
-        .font(.subheadline)
-        .foregroundStyle(DesignToken.textPrimary)
-        .fixedSize(horizontal: false, vertical: true)
-      Text(FirstRunCopy.consentOnce)
-        .font(.subheadline)
-        .foregroundStyle(DesignToken.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-      if cellularWarning {
-        ThinDivider()
-        Text(FirstRunCopy.consentCellular)
-          .font(.subheadline)
-          .foregroundStyle(DesignToken.textPrimary)
-          .fixedSize(horizontal: false, vertical: true)
-          .accessibilityIdentifier("consent-cellular-warning")
+      // Same rule as the full-surface steps: the copy scrolls inside the card once it outgrows the
+      // phone, so "Download now" and "Not now" are never pushed off the bottom edge.
+      ViewThatFits(in: .vertical) {
+        copy(cellularWarning: cellularWarning)
+        ScrollView { copy(cellularWarning: cellularWarning) }
       }
       VStack(spacing: 8) {
         FirstRunPrimaryButton(
@@ -167,6 +157,32 @@ struct ModelConsentOverlay: View {
     .padding(20)
     .accessibilityAddTraits(.isModal)
   }
+
+  private func copy(cellularWarning: Bool) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(FirstRunCopy.consentTitle)
+        .font(.headline)
+        .foregroundStyle(DesignToken.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
+      Text(FirstRunCopy.consentSize)
+        .font(.subheadline)
+        .foregroundStyle(DesignToken.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
+      Text(FirstRunCopy.consentOnce)
+        .font(.subheadline)
+        .foregroundStyle(DesignToken.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+      if cellularWarning {
+        ThinDivider()
+        Text(FirstRunCopy.consentCellular)
+          .font(.subheadline)
+          .foregroundStyle(DesignToken.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityIdentifier("consent-cellular-warning")
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
 }
 
 // MARK: - Shared chrome
@@ -182,16 +198,29 @@ private struct FirstRunSurface<Content: View, Actions: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
-      Spacer(minLength: 0)
-      content()
-        .frame(maxWidth: .infinity, alignment: .leading)
-      Spacer(minLength: 0)
+      // Centered while the copy fits, scrolling once it does not. At the accessibility text sizes
+      // this copy is taller than the phone, and without the second layout the column overflows in
+      // both directions at once: the title rides up over the status bar and the last action falls
+      // off the bottom edge.
+      ViewThatFits(in: .vertical) {
+        centered
+        ScrollView { content().frame(maxWidth: .infinity, alignment: .leading) }
+      }
       actions()
     }
     .padding(24)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     .background(DesignToken.surface.ignoresSafeArea())
     .accessibilityAddTraits(.isModal)
+  }
+
+  private var centered: some View {
+    VStack(alignment: .leading, spacing: 24) {
+      Spacer(minLength: 0)
+      content()
+        .frame(maxWidth: .infinity, alignment: .leading)
+      Spacer(minLength: 0)
+    }
   }
 }
 

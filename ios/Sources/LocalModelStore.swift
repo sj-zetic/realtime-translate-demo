@@ -120,6 +120,122 @@ enum LocalModelStore {
     }
   }
 
+  // MARK: - Storage footprint
+
+  /// What this app's model occupies on disk, from what this store can actually discover.
+  struct Footprint: Equatable {
+    /// The stored `.ztc` archive, or 0 when there is none.
+    let archiveBytes: Int64
+    /// The extracted `.gguf` module, or 0 when there is none.
+    let moduleBytes: Int64
+    /// Every byte a delete would reclaim: the whole `artifacts/<modelKey>` directory, which is
+    /// exactly what `deleteModel` removes. It is at least the two above and can be a little more,
+    /// because the SDK keeps its own bookkeeping files in there alongside them.
+    let totalBytes: Int64
+
+    static let none = Footprint(archiveBytes: 0, moduleBytes: 0, totalBytes: 0)
+
+    var isEmpty: Bool { totalBytes == 0 }
+  }
+
+  /// Read only, and best effort like everything else here: an unreadable directory contributes
+  /// nothing rather than failing the whole reading, and a cache with no model for this name
+  /// reports `.none` instead of a guess.
+  static func footprint(forModelName name: String,
+                        cacheRoot root: URL? = LocalModelStore.cacheRoot) -> Footprint {
+    guard let root else { return .none }
+    let archive = discoverArchive(forModelName: name, cacheRoot: root)
+    let module = discoverExtractedModule(forModelName: name, cacheRoot: root)
+    guard let modelKey = archive?.modelKey ?? module?.modelKey,
+          let directory = modelDirectory(modelKey, in: root) else { return .none }
+    return Footprint(
+      archiveBytes: archive.flatMap { fileSize($0.url) } ?? 0,
+      moduleBytes: module.flatMap { fileSize($0.url) } ?? 0,
+      totalBytes: directorySize(directory)
+    )
+  }
+
+  // MARK: - Deletion
+
+  /// What a delete did. `refused` is the answer to anything ambiguous, because a cache this app
+  /// only half understands is a cache it must not remove things from.
+  enum Deletion: Equatable {
+    case deleted
+    case nothingToDelete
+    case refused
+  }
+
+  /// Removes exactly this model's artifacts: the `artifacts/<modelKey>` directory holding the
+  /// archive and the extracted module, and the `cache-index.json` records that name them. The
+  /// index is rewritten the way `sweepOrphans` reads it, tolerantly and in place, keeping every
+  /// key and every record belonging to anything else byte for byte as it was.
+  ///
+  /// Safety rules, in the order they are applied: the index must parse (without it there is no way
+  /// to tell this app's model from anything else in the cache), the model key must resolve and
+  /// must be a single path component, the directory must resolve strictly inside `artifacts/`, and
+  /// the rewritten index must serialize before anything is removed, so a failure anywhere leaves
+  /// the cache as it was. Nothing under `backend-selection-*` or `staging-locks` is ever touched:
+  /// those records are the SDK's, they are tiny, and a redownload rewrites them anyway.
+  @discardableResult
+  static func deleteModel(forModelName name: String,
+                          cacheRoot root: URL? = LocalModelStore.cacheRoot) -> Deletion {
+    guard let root else { return .refused }
+    let indexURL = root.appendingPathComponent("cache-index.json")
+    guard let object = readObject(indexURL),
+          let modelKey = resolveModelKey(name, cacheRoot: root),
+          let directory = modelDirectory(modelKey, in: root),
+          let data = try? JSONSerialization.data(withJSONObject: pruning(object, modelKey: modelKey))
+    else { return .refused }
+
+    let manager = FileManager.default
+    let existed = manager.fileExists(atPath: directory.path)
+    if existed { try? manager.removeItem(at: directory) }
+    try? data.write(to: indexURL, options: .atomic)
+    return existed ? .deleted : .nothingToDelete
+  }
+
+  /// The one path both the footprint and the delete are allowed to name, or nil when the model key
+  /// is not a plain directory name or would resolve outside `artifacts/`.
+  private static func modelDirectory(_ modelKey: String, in root: URL) -> URL? {
+    guard !modelKey.isEmpty, modelKey != ".", modelKey != "..",
+          !modelKey.contains("/"), !modelKey.contains("\\"), !modelKey.contains("\0") else {
+      return nil
+    }
+    let artifacts = root.appendingPathComponent("artifacts", isDirectory: true)
+    let directory = artifacts.appendingPathComponent(modelKey, isDirectory: true)
+    return isContained(directory, in: artifacts) ? directory : nil
+  }
+
+  /// Removes every record naming `modelKey`, in whichever of the two shapes the index uses, and
+  /// leaves everything else exactly as it was found, unknown keys included.
+  private static func pruning(_ object: [String: Any], modelKey: String) -> [String: Any] {
+    var object = object
+    if let list = object["artifacts"] as? [[String: Any]] {
+      object["artifacts"] = list.filter { ($0["modelKey"] as? String) != modelKey }
+    } else if var grouped = object["artifacts"] as? [String: [[String: Any]]] {
+      grouped.removeValue(forKey: modelKey)
+      object["artifacts"] = grouped
+    }
+    if let list = object["resolvedModels"] as? [[String: Any]] {
+      object["resolvedModels"] = list.filter { ($0["modelKey"] as? String) != modelKey }
+    } else if var mapping = object["resolvedModels"] as? [String: String] {
+      for (name, key) in mapping where key == modelKey { mapping.removeValue(forKey: name) }
+      object["resolvedModels"] = mapping
+    }
+    return object
+  }
+
+  /// Every regular file below `url`, summed. A directory that cannot be enumerated reports 0
+  /// rather than throwing, which keeps a storage reading from ever being the thing that fails.
+  private static func directorySize(_ url: URL) -> Int64 {
+    let keys: [URLResourceKey] = [.fileSizeKey, .isRegularFileKey]
+    guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys)
+    else { return fileSize(url) ?? 0 }
+    var total: Int64 = 0
+    for case let file as URL in enumerator { total += fileSize(file) ?? 0 }
+    return total
+  }
+
   // MARK: - Index
 
   private struct Entry {
@@ -176,6 +292,17 @@ enum LocalModelStore {
       names = resolved
     }
     return Index(entries: entries, modelKeysByName: names)
+  }
+
+  /// The model key for `name`, whichever kind of stored file the cache happens to hold. An index
+  /// that will not parse yields nil, which is what makes both the footprint and the delete refuse
+  /// a cache they cannot read.
+  private static func resolveModelKey(_ name: String, cacheRoot root: URL) -> String? {
+    for fileExtension in ["ztc", "gguf"] {
+      guard let index = readIndex(root, fileExtension: fileExtension) else { return nil }
+      if let key = resolveModelKey(name, in: index) { return key }
+    }
+    return nil
   }
 
   /// The index's own name mapping, or the sole model key on disk when there is exactly one. More
