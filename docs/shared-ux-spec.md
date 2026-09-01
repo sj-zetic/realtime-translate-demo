@@ -8,7 +8,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
-1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is currently a typographic placeholder (`ZETIC`, extra bold, `0.08em` tracking) with a drop-in slot for the official brand vector.
+1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall.
 2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`.
 3. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
 4. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
@@ -122,7 +122,7 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 | `radius.control` | `20 dp/pt` | A/B PTT controls, language chips, session actions |
 | `type.body` | `16 sp/pt` | Source and translated text |
 | `type.meta` | `12 sp/pt` | Speaker, status, chip, and target-language text |
-| `type.wordmark` | `13 sp/pt`, extra bold, `0.08em` tracking | The `ZETIC` wordmark in the header |
+| `logo.wordmark` | official ZETIC logo lockup, `16 dp/pt` tall | The ZETIC logo in the header |
 
 ### Per-speaker identity families
 

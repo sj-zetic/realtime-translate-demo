@@ -42,7 +42,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testHeaderCarriesTheZeticWordmark() {
     let app = launch(state: "ready")
-    XCTAssertTrue(app.staticTexts["ZETIC"].exists)
+    XCTAssertTrue(app.images["ZETIC"].exists)
   }
 
   func testLanguageBarSitsAboveTheConversationAndPushToTalk() {

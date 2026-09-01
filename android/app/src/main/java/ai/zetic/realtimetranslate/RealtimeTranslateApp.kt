@@ -2,6 +2,7 @@ package ai.zetic.realtimetranslate
 
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
@@ -41,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
@@ -52,7 +56,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 sealed interface UiAction {
@@ -120,15 +123,15 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Turn Translate",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
-                modifier = Modifier.weight(1f).alignByBaseline(),
+                modifier = Modifier.weight(1f),
             )
-            ZeticWordmark(Modifier.alignByBaseline())
+            ZeticWordmark()
         }
         Text(
             status,
@@ -144,19 +147,13 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     HorizontalDivider(color = DividerLine)
 }
 
-/**
- * Typographic placeholder for the ZETIC wordmark. Replace with the official ZETIC wordmark
- * vector (a `res/drawable` VectorDrawable rendered through `Icon`/`Image`) when the brand asset
- * is added to the repository; keep the size, placement, and `ZETIC` accessibility label.
- */
+/** The official ZETIC logo lockup, from `res/drawable-nodpi/zetic_logo.png`. */
 @Composable private fun ZeticWordmark(modifier: Modifier = Modifier) {
-    Text(
-        "ZETIC",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.ExtraBold,
-        letterSpacing = 0.08.em,
-        color = TextPrimary,
-        modifier = modifier.semantics { contentDescription = "ZETIC" },
+    Image(
+        painterResource(R.drawable.zetic_logo),
+        contentDescription = "ZETIC",
+        contentScale = ContentScale.Fit,
+        modifier = modifier.height(16.dp),
     )
 }
 

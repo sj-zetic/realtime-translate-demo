@@ -15,6 +15,7 @@
 		98105F84915DD21FAB22C1DB /* RealtimeTranslateRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */; };
 		994306CEACC687E8024CE2E3 /* RealtimeTranslateViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */; };
 		9C384C4D7017B05129807112 /* RealtimeTranslateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */; };
+		9E4A1B7C2D5F30861AF7B203 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D8B24E1963C70A54BE01F72 /* Assets.xcassets */; };
 		A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = 98E43219EA9601F248FA4521 /* ZeticMLange */; };
 		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
 /* End PBXBuildFile section */
@@ -42,6 +43,7 @@
 		28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSpeechRecognizer.swift; sourceTree = "<group>"; };
 		3C61319FFF47136929BAF199 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4EE8BBE5E61A035A50C6BED0 /* RealtimeTranslateUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateUITests.swift; sourceTree = "<group>"; };
+		5D8B24E1963C70A54BE01F72 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BCCF618C7034D007AF6DF74 /* RealtimeTranslateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateTests.swift; sourceTree = "<group>"; };
 		6FE74AAC68344D838BC04FE0 /* RealtimeTranslateRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateRootView.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
@@ -102,6 +104,7 @@
 		7D55C0280B8AF6E173A1A60E /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				5D8B24E1963C70A54BE01F72 /* Assets.xcassets */,
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
 				F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
@@ -151,6 +154,7 @@
 			buildPhases = (
 				E97A7EDC030338B016F4D528 /* Sources */,
 				E1BC590D3E89F5722969905E /* Frameworks */,
+				B27F0C93481EA5D06CE39B14 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -219,6 +223,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B27F0C93481EA5D06CE39B14 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9E4A1B7C2D5F30861AF7B203 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1164E1744F3221D25911EA25 /* Sources */ = {

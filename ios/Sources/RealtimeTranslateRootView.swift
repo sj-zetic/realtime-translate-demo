@@ -30,15 +30,13 @@ extension Speaker {
   var borderColor: Color { self == .a ? DesignToken.borderA : DesignToken.borderB }
 }
 
-/// Typographic placeholder for the ZETIC wordmark. Replace with the official ZETIC wordmark
-/// vector (an image asset in the app bundle rendered through `Image`) when the brand asset is
-/// added to the repository; keep the size, placement, and `ZETIC` accessibility label.
+/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`.
 private struct ZeticWordmark: View {
   var body: some View {
-    Text("ZETIC")
-      .font(.system(size: 13, weight: .heavy))
-      .kerning(13 * 0.08)
-      .foregroundStyle(DesignToken.textPrimary)
+    Image("ZeticLogo")
+      .resizable()
+      .scaledToFit()
+      .frame(height: 16)
       .accessibilityLabel("ZETIC")
   }
 }
