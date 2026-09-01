@@ -5,9 +5,13 @@ import UIKit
 final class RealtimeTranslateViewModel: ObservableObject {
   @Published private(set) var state: SessionState
   @Published var sourceLanguageA: SpeechSourceLanguage
-  @Published var targetLanguageA: TargetLanguage
+  @Published var targetLanguageA: TargetLanguage {
+    didSet { alignSpokenLanguage(with: targetLanguageA, for: .a) }
+  }
   @Published var sourceLanguageB: SpeechSourceLanguage
-  @Published var targetLanguageB: TargetLanguage
+  @Published var targetLanguageB: TargetLanguage {
+    didSet { alignSpokenLanguage(with: targetLanguageB, for: .b) }
+  }
   @Published private(set) var items: [ConversationItem]
   @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
 
@@ -28,9 +32,16 @@ final class RealtimeTranslateViewModel: ObservableObject {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     self.state = state
-    self.sourceLanguageA = supported.contains(sourceLanguageA) ? sourceLanguageA : .automatic
+    // A speaker's chip language drives what the recognizer listens for: an unset (automatic)
+    // spoken language follows the reading language whenever a matching recognizer exists, so
+    // "B: Korean" never transcribes in the device locale.
+    let resolvedA = supported.contains(sourceLanguageA) ? sourceLanguageA : .automatic
+    self.sourceLanguageA = resolvedA == .automatic
+      ? Self.matchedSourceLanguage(for: targetLanguageA, in: supported) ?? .automatic : resolvedA
     self.targetLanguageA = targetLanguageA
-    self.sourceLanguageB = supported.contains(sourceLanguageB) ? sourceLanguageB : .automatic
+    let resolvedB = supported.contains(sourceLanguageB) ? sourceLanguageB : .automatic
+    self.sourceLanguageB = resolvedB == .automatic
+      ? Self.matchedSourceLanguage(for: targetLanguageB, in: supported) ?? .automatic : resolvedB
     self.targetLanguageB = targetLanguageB
     self.items = items
     self.speechRecognizer = recognizer
@@ -170,6 +181,41 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   private func sourceLanguage(for speaker: Speaker) -> SpeechSourceLanguage {
     speaker == .a ? sourceLanguageA : sourceLanguageB
+  }
+
+  // Choosing a reading language re-aligns that speaker's spoken language, so the chip stays the
+  // single source of truth. The spoken picker remains available as an explicit override until the
+  // reading language changes again. No recognizer for the language means no change.
+  private func alignSpokenLanguage(with target: TargetLanguage, for speaker: Speaker) {
+    guard let match = Self.matchedSourceLanguage(for: target, in: availableSourceLanguages) else { return }
+    switch speaker {
+    case .a: if sourceLanguageA != match { sourceLanguageA = match }
+    case .b: if sourceLanguageB != match { sourceLanguageB = match }
+    }
+  }
+
+  /// The recognizer language matching a reading language: same language code, preferring the
+  /// variant the code most likely implies (fr matches fr-FR over fr-BE, zh-Hant matches zh-TW).
+  static func matchedSourceLanguage(
+    for target: TargetLanguage, in languages: [SpeechSourceLanguage]
+  ) -> SpeechSourceLanguage? {
+    let targetLanguage = Locale.Language(identifier: target.code)
+    guard let code = targetLanguage.languageCode?.identifier else { return nil }
+    let matches = languages.filter { candidate in
+      candidate != .automatic && candidate.locale.language.languageCode?.identifier == code
+    }
+    guard matches.count > 1 else { return matches.first }
+    let implied = Set(
+      targetLanguage.maximalIdentifier.replacingOccurrences(of: "_", with: "-")
+        .split(separator: "-").map(String.init)
+    ).subtracting([code])
+    return matches.first { candidate in
+      let parts = Set(
+        candidate.locale.identifier.replacingOccurrences(of: "_", with: "-")
+          .split(separator: "-").map(String.init)
+      ).subtracting([code])
+      return !parts.intersection(implied).isEmpty
+    } ?? matches.first
   }
 
   private func targetLanguage(for speaker: Speaker) -> TargetLanguage {

@@ -62,6 +62,46 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(viewModel.availableSourceLanguages, [.automatic, recognizer.sourceLanguages[0]])
   }
 
+  func testSpokenLanguageFollowsTheReadingLanguageWhenARecognizerMatches() {
+    let recognizer = FakeSpeechRecognizer()
+    recognizer.sourceLanguages = [
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+      SpeechSourceLanguage(identifier: "ko-KR", name: "Korean (South Korea)"),
+      SpeechSourceLanguage(identifier: "fr-BE", name: "French (Belgium)"),
+      SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)"),
+    ]
+
+    let viewModel = RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
+
+    XCTAssertEqual(viewModel.sourceLanguageA.identifier, "en-US")
+    XCTAssertEqual(viewModel.sourceLanguageB.identifier, "ko-KR")
+
+    viewModel.targetLanguageB = TargetLanguage(code: "fr", name: "French")
+    XCTAssertEqual(viewModel.sourceLanguageB.identifier, "fr-FR")
+  }
+
+  func testMatchedSourceLanguagePrefersImpliedVariantsAndScripts() {
+    let languages = [
+      SpeechSourceLanguage.automatic,
+      SpeechSourceLanguage(identifier: "zh-CN", name: "Chinese (China)"),
+      SpeechSourceLanguage(identifier: "zh-TW", name: "Chinese (Taiwan)"),
+      SpeechSourceLanguage(identifier: "en-GB", name: "English (United Kingdom)"),
+      SpeechSourceLanguage(identifier: "en-US", name: "English (United States)"),
+    ]
+
+    XCTAssertEqual(
+      RealtimeTranslateViewModel.matchedSourceLanguage(
+        for: TargetLanguage(code: "zh-Hant", name: "Traditional Chinese"), in: languages
+      )?.identifier, "zh-TW")
+    XCTAssertEqual(
+      RealtimeTranslateViewModel.matchedSourceLanguage(
+        for: TargetLanguage(code: "en", name: "English"), in: languages
+      )?.identifier, "en-US")
+    XCTAssertNil(
+      RealtimeTranslateViewModel.matchedSourceLanguage(
+        for: TargetLanguage(code: "th", name: "Thai"), in: languages))
+  }
+
   func testPlatformSourceLanguageCatalogFiltersToOnDeviceLocales() {
     let english = Locale(identifier: "en-US")
     let french = Locale(identifier: "fr-FR")
