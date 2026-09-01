@@ -83,6 +83,23 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(waitForDisappearance(toast, timeout: 6))
   }
 
+  func testLongPressingABubbleCopiesItAndShowsTheCopiedToast() {
+    let app = launch(state: "ended")
+    let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 5))
+
+    bubble.press(forDuration: 1.2)
+
+    let copy = app.buttons["copy-bubble"]
+    XCTAssertTrue(copy.waitForExistence(timeout: 5))
+    copy.tap()
+
+    let toast = app.staticTexts["Copied"]
+    XCTAssertTrue(toast.waitForExistence(timeout: 3))
+    XCTAssertGreaterThan(toast.frame.minY, app.frame.midY)
+    XCTAssertTrue(waitForDisappearance(toast, timeout: 6))
+  }
+
   private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed

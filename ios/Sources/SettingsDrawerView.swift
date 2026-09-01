@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The right-side settings drawer, its scrim, and the copy-confirmation toast. Presented as a
-/// full-screen overlay above the main screen so the wordmark button stays where it is.
+/// The right-side settings drawer and its scrim, with the shared copy-confirmation toast layered
+/// over it. Presented as a full-screen overlay above the main screen so the wordmark button stays
+/// where it is.
 struct SettingsDrawerOverlay: View {
   @ObservedObject var model: SettingsDrawerModel
 
@@ -14,7 +15,9 @@ struct SettingsDrawerOverlay: View {
       }
     }
     .animation(.easeOut(duration: 0.22), value: model.isOpen)
-    .overlay(alignment: .bottom) { Toast(message: model.toast) }
+    .overlay(alignment: .bottom) {
+      ToastLayer(center: model.toasts, identifier: "settings-toast")
+    }
   }
 }
 
@@ -160,28 +163,5 @@ private struct SettingsRow: View {
     .buttonStyle(.plain)
     .accessibilityIdentifier(identifier)
     .accessibilityLabel(accessibilityLabel)
-  }
-}
-
-/// Bottom-of-screen confirmation. Text only, no icon, and it fades itself out.
-private struct Toast: View {
-  let message: String?
-
-  var body: some View {
-    ZStack {
-      if let message {
-        Text(message)
-          .font(.caption)
-          .foregroundStyle(DesignToken.surface)
-          .padding(.horizontal, 16)
-          .padding(.vertical, 10)
-          .background(DesignToken.textPrimary)
-          .clipShape(RoundedRectangle(cornerRadius: Layout.control))
-          .padding(.bottom, 24)
-          .accessibilityIdentifier("settings-toast")
-      }
-    }
-    .animation(.easeInOut(duration: 0.2), value: message)
-    .allowsHitTesting(false)
   }
 }

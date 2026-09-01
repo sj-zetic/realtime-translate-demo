@@ -644,6 +644,173 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(FirstRunCopy.consentSize, "The translation model is about 1.9 GB.")
   }
 
+  // MARK: - Session comfort
+
+  func testScreenStaysAwakeExactlyWhileASessionIsLive() {
+    let live: [SessionState] = [
+      .ready, .listening(.a), .listening(.b), .finalizing(.a), .translating(.b), .error("nope")
+    ]
+    let idle: [SessionState] = [
+      .permissionRequired, .setup, .loadingModel(nil), .loadingModel(0.5),
+      .modelLoadFailed("nope"), .endingSession, .ended
+    ]
+
+    for state in live {
+      XCTAssertTrue(ScreenAwakePolicy.shouldKeepAwake(state: state, isForeground: true), "\(state)")
+      // Backgrounding hands the idle timer back whatever the session is doing.
+      XCTAssertFalse(ScreenAwakePolicy.shouldKeepAwake(state: state, isForeground: false), "\(state)")
+    }
+    for state in idle {
+      XCTAssertFalse(ScreenAwakePolicy.shouldKeepAwake(state: state, isForeground: true), "\(state)")
+      XCTAssertFalse(ScreenAwakePolicy.shouldKeepAwake(state: state, isForeground: false), "\(state)")
+    }
+  }
+
+  func testKeepAwakeDecisionMatchesTheLiveSessionFlagTheControlsUse() {
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: FakeSpeechRecognizer(), translationRuntime: FakeTranslationRuntime()
+    )
+
+    XCTAssertTrue(viewModel.isSessionLive)
+    XCTAssertEqual(
+      viewModel.isSessionLive,
+      ScreenAwakePolicy.shouldKeepAwake(state: .ready, isForeground: true)
+    )
+  }
+
+  func testIdleTimerIsOnlyWrittenWhenTheDecisionActuallyChanges() {
+    let timer = FakeIdleTimer()
+    let controller = ScreenAwakeController(idleTimer: timer)
+
+    controller.update(state: .setup, isForeground: true)
+    XCTAssertEqual(timer.written, [])
+
+    controller.update(state: .ready, isForeground: true)
+    // A live session redraws on every partial transcript; the value is written once, not per frame.
+    controller.update(state: .listening(.a), isForeground: true)
+    controller.update(state: .translating(.a), isForeground: true)
+    XCTAssertEqual(timer.written, [true])
+    XCTAssertTrue(controller.isKeepingAwake)
+
+    controller.update(state: .listening(.a), isForeground: false)
+    XCTAssertEqual(timer.written, [true, false])
+    XCTAssertFalse(controller.isKeepingAwake)
+
+    controller.update(state: .listening(.a), isForeground: true)
+    controller.release()
+    XCTAssertEqual(timer.written, [true, false, true, false])
+    controller.release()
+    XCTAssertEqual(timer.written, [true, false, true, false])
+  }
+
+  func testHapticEventsMapToSubtleFeedbackAndOnlyOneErrorNotification() {
+    XCTAssertEqual(HapticEvent.turnBegan.feedback, .impact(.medium))
+    XCTAssertEqual(HapticEvent.turnEnded.feedback, .impact(.light))
+    XCTAssertEqual(HapticEvent.translationDelivered.feedback, .impact(.soft))
+    XCTAssertEqual(HapticEvent.sessionError.feedback, .notification(.error))
+  }
+
+  func testATurnTapsOnPressReleaseAndDelivery() async {
+    let haptics = FakeHaptics()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), haptics: haptics
+    )
+
+    viewModel.beginTurn(.a)
+    XCTAssertEqual(haptics.played, [.turnBegan])
+
+    recognizer.sendPartial("Hello")
+    XCTAssertEqual(haptics.played, [.turnBegan])
+
+    viewModel.endTurn(.a)
+    XCTAssertEqual(haptics.played, [.turnBegan, .turnEnded])
+
+    recognizer.sendFinal("Hello.")
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(haptics.played, [.turnBegan, .turnEnded, .translationDelivered])
+  }
+
+  func testAFailedTranslationStaysSilentAndAFailedStartUsesTheErrorNotification() async {
+    let quiet = FakeHaptics()
+    let recognizer = FakeSpeechRecognizer()
+    let failing = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(translateError: TestError.failed), haptics: quiet
+    )
+
+    failing.beginTurn(.b)
+    failing.endTurn(.b)
+    recognizer.sendFinal("Hello.")
+    await waitUntil { failing.state == .ready }
+    // The bubble carries the failure; the session keeps going, so it does not buzz.
+    XCTAssertEqual(quiet.played, [.turnBegan, .turnEnded])
+
+    let loud = FakeHaptics()
+    let broken = FakeSpeechRecognizer()
+    broken.startError = TestError.failed
+    let erroring = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: broken, translationRuntime: FakeTranslationRuntime(),
+      haptics: loud
+    )
+
+    erroring.beginTurn(.a)
+
+    XCTAssertEqual(loud.played, [.sessionError])
+    XCTAssertEqual(erroring.items.count, 0)
+  }
+
+  func testABubbleCopiesItsTranslationOnceThereIsOneAndItsTranscriptUntilThen() {
+    let language = TargetLanguage.hyMT2Candidates[2]
+    func item(_ transcript: String, _ translation: String?,
+              _ state: ConversationItem.DeliveryState) -> ConversationItem {
+      ConversationItem(id: UUID(), speaker: .a, transcript: transcript, targetLanguage: language,
+                       translation: translation, state: state)
+    }
+
+    XCTAssertEqual(item("Hello.", "Bonjour.", .translated).copyableText, "Bonjour.")
+    XCTAssertEqual(item("Hello.", nil, .partial).copyableText, "Hello.")
+    XCTAssertEqual(item("Hello.", nil, .finalizing).copyableText, "Hello.")
+    XCTAssertEqual(item("Hello.", nil, .translationFailed("nope")).copyableText, "Hello.")
+    // A translated bubble with no text to show falls back rather than copying nothing.
+    XCTAssertEqual(item("Hello.", nil, .translated).copyableText, "Hello.")
+    // The bubble that is still saying "Listening..." has nothing to copy.
+    XCTAssertNil(item("", nil, .partial).copyableText)
+  }
+
+  func testCopyingABubblePutsItOnTheClipboardAndShowsTheCopiedToast() async {
+    let pasteboard = FakePasteboard()
+    var announcements: [String] = []
+    let model = ConversationCopyModel(
+      pasteboard: pasteboard,
+      toasts: ToastCenter(duration: 0.02, announce: { announcements.append($0) })
+    )
+    let translated = ConversationItem(
+      id: UUID(), speaker: .b, transcript: "Hello.", targetLanguage: TargetLanguage.hyMT2Candidates[9],
+      translation: "\u{c548}\u{b155}.", state: .translated
+    )
+
+    model.copy(translated)
+
+    XCTAssertEqual(pasteboard.written, ["\u{c548}\u{b155}."])
+    XCTAssertEqual(model.toasts.message, "Copied")
+    XCTAssertEqual(announcements, ["Copied"])
+    XCTAssertEqual(ConversationCopyModel.confirmation, "Copied")
+    XCTAssertEqual(ConversationCopyModel.action, "Copy")
+    XCTAssertFalse(ConversationCopyModel.confirmation.contains("\u{2014}"))
+
+    // An empty bubble copies nothing at all, not an empty string.
+    let empty = ConversationItem(
+      id: UUID(), speaker: .a, transcript: "", targetLanguage: TargetLanguage.hyMT2Candidates[1],
+      translation: nil, state: .partial
+    )
+    model.copy(empty)
+    XCTAssertEqual(pasteboard.written, ["\u{c548}\u{b155}."])
+
+    await waitUntil { model.toasts.message == nil }
+  }
+
   /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
   private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
     let manager = FileManager.default
@@ -696,6 +863,17 @@ private final class FakePasteboard: SettingsPasteboard {
   func write(_ text: String) { written.append(text) }
 }
 
+private final class FakeIdleTimer: IdleTimerControlling {
+  private(set) var written: [Bool] = []
+  func setIdleTimerDisabled(_ disabled: Bool) { written.append(disabled) }
+}
+
+@MainActor
+private final class FakeHaptics: HapticSink {
+  private(set) var played: [HapticEvent] = []
+  func play(_ event: HapticEvent) { played.append(event) }
+}
+
 @MainActor
 private final class FakeSpeechRecognizer: SpeechRecognizing {
   private var onPartial: ((String) -> Void)?
@@ -706,12 +884,14 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   private(set) var stopCount = 0
 
   var permission: SpeechPermission = .granted
+  var startError: Error?
 
   func requestPermissions() async -> SpeechPermission { permission }
   func currentPermission() -> SpeechPermission { permission }
   func availableSourceLanguages() -> [SpeechSourceLanguage] { sourceLanguages }
   func start(source: SpeechSourceLanguage, onPartial: @escaping (String) -> Void,
              onFinal: @escaping (String) -> Void) throws {
+    if let startError { throw startError }
     startedSources.append(source)
     self.onPartial = onPartial
     self.onFinal = onFinal
@@ -725,14 +905,17 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
 private final class FakeTranslationRuntime: TranslationRuntime {
   let result: String
   let loadError: Error?
+  let translateError: Error?
   let closeDelayNanoseconds: UInt64
   private(set) var loadCount = 0
   private(set) var closeCount = 0
   private(set) var prompts: [String] = []
 
-  init(result: String = "", loadError: Error? = nil, closeDelayNanoseconds: UInt64 = 0) {
+  init(result: String = "", loadError: Error? = nil, translateError: Error? = nil,
+       closeDelayNanoseconds: UInt64 = 0) {
     self.result = result
     self.loadError = loadError
+    self.translateError = translateError
     self.closeDelayNanoseconds = closeDelayNanoseconds
   }
 
@@ -745,6 +928,7 @@ private final class FakeTranslationRuntime: TranslationRuntime {
 
   func translate(prompt: String) async throws -> String {
     prompts.append(prompt)
+    if let translateError { throw translateError }
     return result
   }
 
