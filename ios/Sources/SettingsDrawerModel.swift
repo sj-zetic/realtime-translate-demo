@@ -54,7 +54,7 @@ final class SettingsDrawerModel: ObservableObject {
   init(
     appInfo: AppInfo = .main,
     pasteboard: SettingsPasteboard = SystemPasteboard(),
-    toastDuration: TimeInterval = 2,
+    toastDuration: TimeInterval = ToastCenter.defaultDuration,
     openURL: @escaping (URL) -> Void = { UIApplication.shared.open($0) },
     announce: @escaping (String) -> Void = {
       UIAccessibility.post(notification: .announcement, argument: $0)

@@ -84,7 +84,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testLongPressingABubbleCopiesItAndShowsTheCopiedToast() {
-    let app = launch(state: "ended")
+    let app = launch(state: "ended", extra: ["-toastSeconds", "6"])
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 5))
 

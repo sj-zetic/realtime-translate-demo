@@ -137,12 +137,22 @@ final class ToastCenter: ObservableObject {
   private let announce: (String) -> Void
   private var dismissal: Task<Void, Never>?
 
-  init(duration: TimeInterval = 2,
+  init(duration: TimeInterval = ToastCenter.defaultDuration,
        announce: @escaping (String) -> Void = {
          UIAccessibility.post(notification: .announcement, argument: $0)
        }) {
     self.duration = duration
     self.announce = announce
+  }
+
+  /// UI tests race the 2 second fade under full-suite load; `-toastSeconds N` stretches it the
+  /// same way `-uiState` forces screens. Production launches never pass it. Nonisolated so it can
+  /// serve as a default argument evaluated off the main actor.
+  nonisolated static var defaultDuration: TimeInterval {
+    let arguments = ProcessInfo.processInfo.arguments
+    guard let index = arguments.firstIndex(of: "-toastSeconds"),
+          let value = arguments.dropFirst(index + 1).first.flatMap(TimeInterval.init) else { return 2 }
+    return value
   }
 
   /// Shows a message and starts its fade. A second message replaces the first and restarts the
