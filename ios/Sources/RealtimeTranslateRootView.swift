@@ -231,16 +231,24 @@ private struct BottomBar: View {
   }
 
   private var hint: String {
-    if case .permissionRequired = viewModel.state {
+    switch viewModel.state {
+    case .permissionRequired:
       return "Grant microphone access to enable push-to-talk."
+    case .loadingModel, .modelLoadFailed:
+      return "Push-to-talk unlocks once the translation model is ready."
+    case .error:
+      return "Resolve the error above to continue."
+    case .endingSession:
+      return "Wait while the session ends."
+    case .setup, .ended:
+      return "Tap Start Session to load the translation model."
+    default:
+      break
     }
     if let active = viewModel.state.activeSpeaker {
       return "Speaker \(active.counterpart.rawValue) cannot begin while speaker \(active.rawValue) is active."
     }
-    if viewModel.isSessionLive {
-      return "Hold a button to talk, or tap once to start and again to stop."
-    }
-    return "Push-to-talk unlocks once the translation model is ready."
+    return "Hold a button to talk, or tap once to start and again to stop."
   }
 
   @ViewBuilder private var sessionButton: some View {

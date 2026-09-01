@@ -120,8 +120,16 @@ class RealtimeTranslateAppTest {
     @Test fun idleMainScreenStartsInOneTapAndKeepsPushToTalkLocked() {
         setApp(SessionUiState(SessionPhase.Ready))
         composeRule.onNodeWithContentDescription("Start conversation").assertIsEnabled()
+        composeRule.onNodeWithText("Tap Start conversation to load the translation model.").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Speaker A push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("Speaker B push-to-talk unlocks when the translation model is ready").assertIsNotEnabled()
+    }
+
+    @Test fun errorStateDefersTheBottomHintToTheBanner() {
+        setApp(readyConversationState().copy(phase = SessionPhase.Error, errorMessage = "Speech recognition failed."))
+        composeRule.onNodeWithText("Speech recognition failed.").assertIsDisplayed()
+        composeRule.onNodeWithText("Resolve the error above to continue.").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Try again").assertIsEnabled()
     }
 
     @Test fun modelLoadingRendersInlineAndLocksLanguageChips() {

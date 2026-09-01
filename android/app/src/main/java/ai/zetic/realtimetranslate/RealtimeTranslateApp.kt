@@ -265,7 +265,11 @@ private fun bottomHint(state: SessionUiState): String {
     val active = state.activeSpeaker()
     return when {
         state.phase == SessionPhase.PermissionRequired -> "Grant microphone access to enable push-to-talk."
-        !state.conversationStarted -> "Push-to-talk unlocks once the translation model is ready."
+        state.phase == SessionPhase.LoadingModel || state.phase == SessionPhase.ModelLoadFailed ->
+            "Push-to-talk unlocks once the translation model is ready."
+        state.phase == SessionPhase.Error -> "Resolve the error above to continue."
+        state.phase == SessionPhase.EndingSession -> "Wait while the session ends."
+        !state.conversationStarted -> "Tap Start conversation to load the translation model."
         active != null -> "Speaker ${active.other().label} cannot begin while speaker ${active.label} is active."
         else -> "Hold a button to talk, or tap once to start and again to stop."
     }
