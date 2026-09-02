@@ -30,6 +30,7 @@
 		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
 		D719E3F94F7FC3578995C13A /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A4B2B427538BCA811EB57E /* Localization.swift */; };
 		EA9392BA581D7A33A62BB609 /* SettingsDrawerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C6E883544E98D95A275E85 /* SettingsDrawerModel.swift */; };
+		F244DCC6DC415775F470BA14 /* UtteranceAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CA0AA42E468D4F6C86D6C5 /* UtteranceAccumulator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		C173CF675A584896801C0C7C /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		CA4397337AD04A9EF1EBB4DE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E2A4B2B427538BCA811EB57E /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		E8CA0AA42E468D4F6C86D6C5 /* UtteranceAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtteranceAccumulator.swift; sourceTree = "<group>"; };
 		F0E635E8688EF84DCA1C958E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelangeTranslationRuntime.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -148,6 +150,7 @@
 				260826688BD2D9E6DEA3F2F1 /* SettingsDrawerView.swift */,
 				4B5142AD3A4DF83370A7CAB5 /* SpeechOutput.swift */,
 				B3AFC7D00DD330A1C60FC5CA /* TypedInput.swift */,
+				E8CA0AA42E468D4F6C86D6C5 /* UtteranceAccumulator.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -312,6 +315,7 @@
 				80A85661905D6731180EFF61 /* SettingsDrawerView.swift in Sources */,
 				C03DECB7178100E42CD39DA0 /* SpeechOutput.swift in Sources */,
 				73FEFB4E94F4EA71069FB291 /* TypedInput.swift in Sources */,
+				F244DCC6DC415775F470BA14 /* UtteranceAccumulator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
