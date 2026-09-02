@@ -15,6 +15,12 @@ Turn Translate is a single screen. Setup, model loading, conversation, and error
 5. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
 6. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
 
+### Launch
+
+Cold launch shows the official ZETIC logo lockup centered on `color.surface`, so the first frame is the app's own background rather than a blank white flash, and the transition into the header is a continuation of the same surface. iOS declares this with the image-based `UILaunchScreen` in `Sources/Info.plist` (`UIImageName` = `LaunchLogo`, `UIColorName` = `LaunchBackground`); there is no storyboard. `LaunchLogo` is a 240 pt wide render of the lockup at 1x/2x/3x, roughly 60% of the screen width, because the launch screen draws the image at its natural size instead of scaling it to fit. Android parity is pending.
+
+The app icon is the ZETIC Z monogram, teal `color.accent` on a near-black field, shipped as the single 1024x1024 universal entry in `Sources/Assets.xcassets/AppIcon.appiconset` on iOS. It is provisional and may be replaced.
+
 ### Screen layout
 
 ```text
