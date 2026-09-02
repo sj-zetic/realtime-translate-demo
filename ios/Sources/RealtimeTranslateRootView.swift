@@ -683,9 +683,11 @@ private struct ConversationBubble: View {
     case .partial:
       Text("Recognizing speech", comment: "Chat bubble state while speech is still being recognized")
         .font(.caption).foregroundStyle(DesignToken.textSecondary)
+      provisionalLine
     case .finalizing:
       Text("Translation pending", comment: "Chat bubble state while a translation is in flight")
         .font(.caption).foregroundStyle(DesignToken.textSecondary)
+      provisionalLine
     case .translated:
       Text(verbatim: item.translation ?? "")
         .font(.body).fontWeight(.medium).foregroundStyle(DesignToken.textPrimary)
@@ -713,6 +715,25 @@ private struct ConversationBubble: View {
         .accessibilityLabel(TranslationFailureCopy.retryAction)
         .accessibilityHint(TranslationFailureCopy.retryHint)
       }
+    }
+  }
+
+  /// The live translation, while the turn is still being spoken or is waiting for its final answer.
+  ///
+  /// Same size as a finished translation, because it is the same sentence and it has to be readable
+  /// across a table, and deliberately not the same weight or color: the final is `textPrimary` at
+  /// `.medium`, this is `textSecondary` at the body's own weight. That is the whole of the
+  /// distinction, and it is the same one the rest of the screen already uses for text that is not
+  /// the point yet, from the destination line to the session notice. It sits under the state caption
+  /// that is already there, so nothing has to say "provisional" in words: `Recognizing speech`
+  /// followed by grey text is the caption naming what the text below it is, and that is also how
+  /// VoiceOver reads the combined bubble.
+  @ViewBuilder private var provisionalLine: some View {
+    if let provisional = item.provisionalTranslation {
+      Text(verbatim: provisional)
+        .font(.body).foregroundStyle(DesignToken.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("provisional-translation")
     }
   }
 }
