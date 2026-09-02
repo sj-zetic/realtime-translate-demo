@@ -869,7 +869,7 @@
       }
     },
     "Settings" : {
-      "comment" : "Settings drawer panel heading",
+      "comment" : "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1363,23 +1363,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vous n’êtes pas en Wi-Fi. Mieux vaut télécharger un fichier de cette taille en Wi-Fi."
-          }
-        }
-      }
-    },
-    "ZETIC, opens settings" : {
-      "comment" : "Accessibility label for the wordmark button in the navigation bar",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ZETIC, abre los ajustes"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ZETIC, ouvre les réglages"
           }
         }
       }

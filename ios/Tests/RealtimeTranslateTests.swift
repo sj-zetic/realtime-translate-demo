@@ -1029,7 +1029,21 @@ final class RealtimeTranslateTests: XCTestCase {
     return FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { true })
   }
 
-  func testSettingsDrawerOpensFromTheWordmarkAndCloses() {
+  /// The wordmark stopped being a control and a standalone menu button took the drawer over, so
+  /// the label that described the old combined control has to leave with it. Left in the catalog
+  /// it is a phrase the language experts keep re-reviewing for a button that is not there.
+  func testTheWordmarkButtonsAccessibilityLabelLeftTheCatalog() throws {
+    let catalog = try Self.stringCatalog()
+
+    XCTAssertNil(catalog.strings["ZETIC, opens settings"],
+                 "the wordmark is decoration now and carries no such label")
+    // The one word the button and the panel heading both say, shared rather than duplicated.
+    XCTAssertNotNil(catalog.strings["Settings"])
+    // And the brand name never reaches the catalog: it is spelled the same in every language.
+    XCTAssertNil(catalog.strings["ZETIC"])
+  }
+
+  func testSettingsDrawerOpensFromTheMenuButtonAndCloses() {
     let model = SettingsDrawerModel(appInfo: .main, pasteboard: FakePasteboard())
 
     XCTAssertFalse(model.isOpen)
@@ -2800,7 +2814,7 @@ final class RealtimeTranslateTests: XCTestCase {
   /// one screen making two contradictory claims about sound.
   func testTheOnlySpeechGlyphLeftIsTheActionOne() {
     XCTAssertEqual(SpeechGlyph.replay, "play.circle")
-    for glyph in [SpeechGlyph.replay, ZeticWordmarkGlyph.settings] {
+    for glyph in [SpeechGlyph.replay, SettingsMenuGlyph.menu] {
       XCTAssertNotNil(UIImage(systemName: glyph), "\(glyph) is not an SF Symbol on this platform")
     }
   }

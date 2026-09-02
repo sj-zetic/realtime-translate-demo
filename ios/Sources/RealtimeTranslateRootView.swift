@@ -34,41 +34,54 @@ extension Speaker {
   var borderColor: Color { self == .a ? DesignToken.borderA : DesignToken.borderB }
 }
 
-/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`, as the button that opens
-/// the settings drawer.
+/// The official ZETIC logo lockup, from `Assets.xcassets/ZeticLogo`, at the leading edge of the
+/// navigation bar.
 ///
-/// The glyph beside it is the only affordance that says the lockup is tappable, so it has to be
-/// telling the truth about what happens. A downward chevron promises something that drops from
-/// where it stands; the drawer slides in from the trailing edge. The three lines are the
-/// platform's own settled sign for "a list of settings lives behind this", with no direction in
-/// them to get wrong.
-enum ZeticWordmarkGlyph {
-  static let settings = "line.3.horizontal"
+/// Decoration, not a control. Carrying the settings drawer behind the brand mark meant the one way
+/// into settings was a logo, which is a thing users read rather than a thing they press, and it
+/// needed a glyph glued to its side to admit that it was tappable at all. The drawer now has its
+/// own button at the trailing edge, so the lockup is back to being what it looks like.
+private struct ZeticWordmark: View {
+  var body: some View {
+    Image("ZeticLogo")
+      .resizable()
+      .scaledToFit()
+      .frame(height: 24)
+      .accessibilityIdentifier("zetic-wordmark")
+      // `Text(verbatim:)`, like the product name: the brand is spelled the same in every language
+      // and must never reach the string catalog.
+      .accessibilityLabel(Text(verbatim: "ZETIC"))
+  }
 }
 
-private struct ZeticWordmarkButton: View {
+/// The three lines are the platform's own settled sign for "a list of settings lives behind this",
+/// with no direction in them to get wrong. Not a downward chevron: a chevron pointing down
+/// promises something that drops from where it stands, and the drawer slides in from the trailing
+/// edge.
+enum SettingsMenuGlyph {
+  static let menu = "line.3.horizontal"
+}
+
+/// The standalone menu button that opens the settings drawer, at the trailing edge of the
+/// navigation bar. Icon-only, and drawn to a full `Layout.tapTarget` box in both directions
+/// however small the glyph inside it measures.
+private struct SettingsMenuButton: View {
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 6) {
-        Image("ZeticLogo")
-          .resizable()
-          .scaledToFit()
-          .frame(height: 16)
-        Image(systemName: ZeticWordmarkGlyph.settings)
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(DesignToken.textSecondary)
-      }
-      .frame(minHeight: Layout.tapTarget)
-      .contentShape(Rectangle())
+      Image(systemName: SettingsMenuGlyph.menu)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(DesignToken.textSecondary)
+        .frame(minWidth: Layout.tapTarget, minHeight: Layout.tapTarget, alignment: .trailing)
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityIdentifier("zetic-settings")
+    .accessibilityIdentifier("settings-menu")
     // The `Text` overload rather than the string one, so the label can carry a translator comment
     // and still resolve against the environment locale.
-    .accessibilityLabel(Text("ZETIC, opens settings",
-                             comment: "Accessibility label for the wordmark button in the navigation bar"))
+    .accessibilityLabel(Text("Settings",
+                             comment: "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it"))
   }
 }
 
@@ -243,16 +256,27 @@ struct RealtimeTranslateRootView: View {
       // never reach the catalog.
       .navigationTitle(AppText.productName)
       .navigationBarTitleDisplayMode(.inline)
+      // Three things in one bar: wordmark, title, menu button. All three survive every Dynamic
+      // Type category, checked at `accessibility5` on the narrowest phone this app runs on, because
+      // an inline navigation title caps its own growth well below where the row would run out of
+      // width. Nothing here has to be hidden or truncated at the accessibility sizes.
       .toolbar {
-        // iOS 26 wraps toolbar buttons in a glass capsule; the minimal chrome stays flat.
+        // iOS 26 wraps toolbar items in a glass capsule; the minimal chrome stays flat, and the
+        // wordmark in particular must not be handed a capsule that would make decoration read as
+        // a control again.
         if #available(iOS 26.0, *) {
+          ToolbarItem(placement: .navigationBarLeading) {
+            ZeticWordmark()
+          }
+          .sharedBackgroundVisibility(.hidden)
           ToolbarItem(placement: .navigationBarTrailing) {
-            ZeticWordmarkButton(action: settings.open)
+            SettingsMenuButton(action: settings.open)
           }
           .sharedBackgroundVisibility(.hidden)
         } else {
+          ToolbarItem(placement: .navigationBarLeading) { ZeticWordmark() }
           ToolbarItem(placement: .navigationBarTrailing) {
-            ZeticWordmarkButton(action: settings.open)
+            SettingsMenuButton(action: settings.open)
           }
         }
       }
