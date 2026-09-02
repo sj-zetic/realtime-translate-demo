@@ -1,1866 +1,1866 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "- hold to talk" : {
-      "comment" : "Push-to-talk button, after the speaker letter, while idle",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "- mantén pulsado"
+  "sourceLanguage": "en",
+  "strings": {
+    "- tap to talk": {
+      "comment": "Talk button, after the speaker letter, while idle",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "- toca para hablar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "- maintenir pour parler"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "- toucher pour parler"
           }
         }
       }
     },
-    "About" : {
-      "comment" : "Settings drawer section heading above the app name and version",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Información"
+    "About": {
+      "comment": "Settings drawer section heading above the app name and version",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Información"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "À propos"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À propos"
           }
         }
       }
     },
-    "Allow microphone access" : {
-      "comment" : "Session banner button that triggers the system prompts",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permitir acceso al micrófono"
+    "Allow microphone access": {
+      "comment": "Session banner button that triggers the system prompts",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir acceso al micrófono"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autoriser le micro"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoriser le micro"
           }
         }
       }
     },
-    "App language" : {
-      "comment" : "Settings drawer row: chooses the app's own language",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Idioma de la app"
+    "App language": {
+      "comment": "Settings drawer row: chooses the app's own language",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idioma de la app"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Langue de l’app"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue de l’app"
           }
         }
       }
     },
-    "Automatic" : {
-      "comment" : "Spoken language option: let iOS pick the recognition language",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automático"
+    "Automatic": {
+      "comment": "Spoken language option: let iOS pick the recognition language",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automático"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatique"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatique"
           }
         }
       }
     },
-    "Both run on this phone. No audio and no text leave the device." : {
-      "comment" : "Permission priming screen privacy line, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ambos funcionan en este teléfono. Ni el audio ni el texto salen del dispositivo."
+    "Both run on this phone. No audio and no text leave the device.": {
+      "comment": "Permission priming screen privacy line, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ambos funcionan en este teléfono. Ni el audio ni el texto salen del dispositivo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les deux fonctionnent sur ce téléphone. Aucun son ni aucun texte ne quitte l’appareil."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les deux fonctionnent sur ce téléphone. Aucun son ni aucun texte ne quitte l’appareil."
           }
         }
       }
     },
-    "Cancel" : {
-      "comment" : "Dismissal button: the typed input sheet, and the model preparation the bottom bar calls off",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancelar"
+    "Cancel": {
+      "comment": "Dismissal button: the typed input sheet, and the model preparation the bottom bar calls off",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Annuler"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
           }
         }
       }
     },
-    "Choose the languages above, then start the session." : {
-      "comment" : "Empty transcript hint before a session starts",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige los idiomas de arriba y empieza la sesión."
+    "Choose the languages above, then start the session.": {
+      "comment": "Empty transcript hint before a session starts",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige los idiomas de arriba y empieza la sesión."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez les langues ci-dessus, puis démarrez la session."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez les langues ci-dessus, puis démarrez la session."
           }
         }
       }
     },
-    "Clear conversation" : {
-      "comment" : "Settings drawer row title",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Borrar conversación"
+    "Clear conversation": {
+      "comment": "Settings drawer row title",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar conversación"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effacer la conversation"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer la conversation"
           }
         }
       }
     },
-    "Close settings" : {
-      "comment" : "Accessibility label for the drawer scrim and close button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar los ajustes"
+    "Close settings": {
+      "comment": "Accessibility label for the drawer scrim and close button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar los ajustes"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fermer les réglages"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer les réglages"
           }
         }
       }
     },
-    "Contact us" : {
-      "comment" : "Settings drawer row title",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contáctanos"
+    "Contact us": {
+      "comment": "Settings drawer row title",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contáctanos"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nous contacter"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nous contacter"
           }
         }
       }
     },
-    "Continue" : {
-      "comment" : "Permission priming screen primary button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuar"
+    "Continue": {
+      "comment": "Permission priming screen primary button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer"
           }
         }
       }
     },
-    "Conversation cleared" : {
-      "comment" : "Toast after the transcript is emptied",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conversación borrada"
+    "Conversation cleared": {
+      "comment": "Toast after the transcript is emptied",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación borrada"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conversation effacée"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation effacée"
           }
         }
       }
     },
-    "Copied" : {
-      "comment" : "Toast after a chat bubble is copied to the clipboard",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copiado"
+    "Copied": {
+      "comment": "Toast after a chat bubble is copied to the clipboard",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiado"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copié"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copié"
           }
         }
       }
     },
-    "Copy" : {
-      "comment" : "Long press menu action on a chat bubble",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copiar"
+    "Copy": {
+      "comment": "Long press menu action on a chat bubble",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copier"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier"
           }
         }
       }
     },
-    "Dismiss the model download step" : {
-      "comment" : "Accessibility label for the consent card's scrim",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descartar el paso de descarga del modelo"
+    "Dismiss the model download step": {
+      "comment": "Accessibility label for the consent card's scrim",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar el paso de descarga del modelo"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ignorer l’étape de téléchargement du modèle"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignorer l’étape de téléchargement du modèle"
           }
         }
       }
     },
-    "Download now" : {
-      "comment" : "Consent card primary button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descargar ahora"
+    "Download now": {
+      "comment": "Consent card primary button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargar ahora"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Télécharger"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger"
           }
         }
       }
     },
-    "Download the translation model" : {
-      "comment" : "Model download consent card title",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descargar el modelo de traducción"
+    "Download the translation model": {
+      "comment": "Model download consent card title",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargar el modelo de traducción"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Télécharger le modèle de traduction"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger le modèle de traduction"
           }
         }
       }
     },
-    "Downloading translation model" : {
-      "comment" : "Session banner headline while the model downloads, without a percentage",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descargando el modelo de traducción"
+    "Downloading translation model": {
+      "comment": "Session banner headline while the model downloads, without a percentage",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargando el modelo de traducción"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Téléchargement du modèle de traduction"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargement du modèle de traduction"
           }
         }
       }
     },
-    "Email address copied" : {
-      "comment" : "Toast after the Contact us row copies the address",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dirección copiada"
+    "Email address copied": {
+      "comment": "Toast after the Contact us row copies the address",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirección copiada"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adresse copiée"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse copiée"
           }
         }
       }
     },
-    "End session" : {
-      "comment" : "Bottom bar action that ends a live session",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminar sesión"
+    "End session": {
+      "comment": "Bottom bar action that ends a live session",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar sesión"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminer la session"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer la session"
           }
         }
       }
     },
-    "Get started" : {
-      "comment" : "Welcome screen primary button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empezar"
+    "Get started": {
+      "comment": "Welcome screen primary button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Commencer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencer"
           }
         }
       }
     },
-    "Grant microphone access to enable push-to-talk." : {
-      "comment" : "Bottom bar hint while the microphone prompt is unanswered",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permite el acceso al micrófono para hablar."
+    "Grant microphone access to enable push-to-talk.": {
+      "comment": "Bottom bar hint while the microphone prompt is unanswered",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite el acceso al micrófono para hablar."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autorisez le micro pour activer les boutons de parole."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez le micro pour activer les boutons de parole."
           }
         }
       }
     },
-    "Hold a button to talk, or tap once to start and again to stop." : {
-      "comment" : "Bottom bar hint while the session is idle and ready",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantén pulsado un botón para hablar, o tócalo una vez para empezar y otra para parar."
+    "Interrupted. Tap to talk again.": {
+      "comment": "Session banner note after a call, alarm, or Siri took the audio session",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrumpido. Toca para hablar de nuevo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maintenez un bouton pour parler, ou touchez pour lancer puis arrêter."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompu. Touchez pour reprendre."
           }
         }
       }
     },
-    "Hold to talk, or tap once to start and again to end." : {
-      "comment" : "Push-to-talk accessibility hint while it is available",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantén pulsado para hablar, o toca una vez para empezar y otra vez para terminar."
+    "It downloads once, then it stays on this phone.": {
+      "comment": "Consent card body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se descarga una vez y se queda en este teléfono."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maintenez pour parler, ou touchez une fois pour commencer et une fois pour terminer."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il se télécharge une fois, puis il reste sur ce téléphone."
           }
         }
       }
     },
-    "Interrupted. Tap to talk again." : {
-      "comment" : "Session banner note after a call, alarm, or Siri took the audio session",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interrumpido. Toca para hablar de nuevo."
+    "Keeps the session and the languages": {
+      "comment": "Settings drawer row subtitle under Clear conversation",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantiene la sesión y los idiomas"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interrompu. Touchez pour reprendre."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserve la session et les langues"
           }
         }
       }
     },
-    "It downloads once, then it stays on this phone." : {
-      "comment" : "Consent card body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se descarga una vez y se queda en este teléfono."
+    "Language applies fully after reopening the app": {
+      "comment": "Toast confirming an app language change",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El idioma se aplica por completo al reabrir la app"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il se télécharge une fois, puis il reste sur ce téléphone."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effet complet au prochain lancement de l’app"
           }
         }
       }
     },
-    "Keeps the session and the languages" : {
-      "comment" : "Settings drawer row subtitle under Clear conversation",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantiene la sesión y los idiomas"
+    "Listening...": {
+      "comment": "Chat bubble placeholder before any words are recognized",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escuchando..."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conserve la session et les langues"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écoute..."
           }
         }
       }
     },
-    "Language applies fully after reopening the app" : {
-      "comment" : "Toast confirming an app language change",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El idioma se aplica por completo al reabrir la app"
+    "Message": {
+      "comment": "Accessibility label for the typed input text field",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effet complet au prochain lancement de l’app"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message"
           }
         }
       }
     },
-    "Listening..." : {
-      "comment" : "Chat bubble placeholder before any words are recognized",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escuchando..."
+    "Microphone and speech": {
+      "comment": "Permission priming screen title",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micrófono y voz"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Écoute..."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micro et reconnaissance vocale"
           }
         }
       }
     },
-    "Message" : {
-      "comment" : "Accessibility label for the typed input text field",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje"
+    "Microphone permission is required.": {
+      "comment": "Session banner error when the microphone prompt was refused",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se necesita permiso del micrófono."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’autorisation du micro est requise."
           }
         }
       }
     },
-    "Microphone and speech" : {
-      "comment" : "Permission priming screen title",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Micrófono y voz"
+    "Microphone permission required": {
+      "comment": "Status strip: the microphone and speech prompts are unanswered",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta permiso de micrófono"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Micro et reconnaissance vocale"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisation requise"
           }
         }
       }
     },
-    "Microphone permission is required." : {
-      "comment" : "Session banner error when the microphone prompt was refused",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se necesita permiso del micrófono."
+    "Microphone: to hear whoever is holding a button.": {
+      "comment": "Permission priming screen: what the microphone is for, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micrófono: para oír a quien mantiene pulsado un botón."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’autorisation du micro est requise."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micro : pour entendre la personne qui maintient un bouton."
           }
         }
       }
     },
-    "Microphone permission required" : {
-      "comment" : "Status strip: the microphone and speech prompts are unanswered",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Falta permiso de micrófono"
+    "No speech was recognized. Tap to talk again.": {
+      "comment": "Session banner note after a turn the recognizer heard nothing in",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se reconoció ninguna voz. Toca para hablar de nuevo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autorisation requise"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune parole n’a été reconnue. Touchez pour reprendre."
           }
         }
       }
     },
-    "Microphone: to hear whoever is holding a button." : {
-      "comment" : "Permission priming screen: what the microphone is for, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Micrófono: para oír a quien mantiene pulsado un botón."
+    "Not now": {
+      "comment": "Secondary button that dismisses a first run step",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora no"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Micro : pour entendre la personne qui maintient un bouton."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tard"
           }
         }
       }
     },
-    "No speech was recognized. Tap to talk again." : {
-      "comment" : "Session banner note after a turn the recognizer heard nothing in",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se reconoció ninguna voz. Toca para hablar de nuevo."
+    "Open app settings": {
+      "comment": "Session banner button that opens this app's page in iOS Settings",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucune parole n’a été reconnue. Touchez pour reprendre."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les Réglages"
           }
         }
       }
     },
-    "Not now" : {
-      "comment" : "Secondary button that dismisses a first run step",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ahora no"
+    "Opens a box to type a turn instead of speaking it.": {
+      "comment": "Accessibility hint for the keyboard glyph on the bottom bar",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre un cuadro para escribir un turno en vez de decirlo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plus tard"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre une zone pour écrire un tour de parole au lieu de le dire."
           }
         }
       }
     },
-    "Open app settings" : {
-      "comment" : "Session banner button that opens this app's page in iOS Settings",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abrir Ajustes"
+    "Play translation": {
+      "comment": "Accessibility label for a bubble's replay control",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproducir la traducción"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvrir les Réglages"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lire la traduction"
           }
         }
       }
     },
-    "Opens a box to type a turn instead of speaking it." : {
-      "comment" : "Accessibility hint for the keyboard glyph on the bottom bar",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre un cuadro para escribir un turno en vez de decirlo."
+    "Preparing translation model": {
+      "comment": "Session banner headline while a local model loads",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparando el modelo de traducción"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvre une zone pour écrire un tour de parole au lieu de le dire."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Préparation du modèle de traduction"
           }
         }
       }
     },
-    "Play translation" : {
-      "comment" : "Accessibility label for a bubble's replay control",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reproducir la traducción"
+    "Push-to-talk unlocks once the translation model is ready.": {
+      "comment": "Bottom bar hint while the model is not ready",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los botones para hablar se activan cuando el modelo esté listo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lire la traduction"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les boutons de parole s’activent quand le modèle est prêt."
           }
         }
       }
     },
-    "Preparing translation model" : {
-      "comment" : "Session banner headline while a local model loads",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preparando el modelo de traducción"
+    "Reading language": {
+      "comment": "Section label in a speaker's language menu",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idioma de lectura"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Préparation du modèle de traduction"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue de lecture"
           }
         }
       }
     },
-    "Push-to-talk unlocks once the translation model is ready." : {
-      "comment" : "Bottom bar hint while the model is not ready",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los botones para hablar se activan cuando el modelo esté listo."
+    "Reads this translation aloud.": {
+      "comment": "Accessibility hint for a bubble's play control",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lee esta traducción en voz alta."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les boutons de parole s’activent quand le modèle est prêt."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lit cette traduction à voix haute."
           }
         }
       }
     },
-    "Reading language" : {
-      "comment" : "Section label in a speaker's language menu",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Idioma de lectura"
+    "Ready to start": {
+      "comment": "Status strip: idle, before a session starts",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo para empezar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Langue de lecture"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prêt à démarrer"
           }
         }
       }
     },
-    "Reads this translation aloud." : {
-      "comment" : "Accessibility hint for a bubble's play control",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lee esta traducción en voz alta."
+    "Ready to talk": {
+      "comment": "Status strip: the model is loaded and idle",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo para hablar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lit cette traduction à voix haute."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prêt à parler"
           }
         }
       }
     },
-    "Ready to start" : {
-      "comment" : "Status strip: idle, before a session starts",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Listo para empezar"
+    "Recognizing speech": {
+      "comment": "Chat bubble state while speech is still being recognized",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconociendo la voz"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prêt à démarrer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnaissance en cours"
           }
         }
       }
     },
-    "Ready to talk" : {
-      "comment" : "Status strip: the model is loaded and idle",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Listo para hablar"
+    "Resolve the error above to continue.": {
+      "comment": "Bottom bar hint while a session error banner is showing",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resuelve el error de arriba para continuar."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prêt à parler"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corrigez l’erreur ci-dessus pour continuer."
           }
         }
       }
     },
-    "Recognizing speech" : {
-      "comment" : "Chat bubble state while speech is still being recognized",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconociendo la voz"
+    "Retry model load": {
+      "comment": "Session banner button that loads the model again after a failure",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a cargar el modelo"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnaissance en cours"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recharger le modèle"
           }
         }
       }
     },
-    "Resolve the error above to continue." : {
-      "comment" : "Bottom bar hint while a session error banner is showing",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resuelve el error de arriba para continuar."
+    "Send": {
+      "comment": "Typed input sheet confirmation button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Corrigez l’erreur ci-dessus pour continuer."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer"
           }
         }
       }
     },
-    "Retry model load" : {
-      "comment" : "Session banner button that loads the model again after a failure",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Volver a cargar el modelo"
+    "Session status: %@": {
+      "comment": "Accessibility label for the status strip. %@ is the status",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado de la sesión: %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recharger le modèle"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "État de la session : %@"
           }
         }
       }
     },
-    "Send" : {
-      "comment" : "Typed input sheet confirmation button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enviar"
+    "Settings": {
+      "comment": "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Envoyer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages"
           }
         }
       }
     },
-    "Session status: %@" : {
-      "comment" : "Accessibility label for the status strip. %@ is the status",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Estado de la sesión: %@"
+    "Speaker %@": {
+      "comment": "Chat bubble heading. %@ is the speaker label, A or B",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablante %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "État de la session : %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interlocuteur %@"
           }
         }
       }
     },
-    "Settings" : {
-      "comment" : "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajustes"
+    "Speaker A or B can begin speaking.": {
+      "comment": "Empty transcript hint while a session is live",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hablante A o el B ya puede hablar."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réglages"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’interlocuteur A ou B peut prendre la parole."
           }
         }
       }
     },
-    "Speaker %@" : {
-      "comment" : "Chat bubble heading. %@ is the speaker label, A or B",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hablante %@"
+    "Speech and translation run on this phone. Nothing is sent to a server.": {
+      "comment": "Welcome screen privacy line, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La voz y la traducción funcionan en este teléfono. No se envía nada a ningún servidor."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interlocuteur %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnaissance vocale et traduction se font sur ce téléphone. Rien n’est envoyé à un serveur."
           }
         }
       }
     },
-    "Speaker A or B can begin speaking." : {
-      "comment" : "Empty transcript hint while a session is live",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El hablante A o el B ya puede hablar."
+    "Speech recognition permission is required.": {
+      "comment": "Session banner error when the speech recognition prompt was refused",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se necesita permiso para el reconocimiento de voz."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’interlocuteur A ou B peut prendre la parole."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’autorisation de la reconnaissance vocale est requise."
           }
         }
       }
     },
-    "Speech and translation run on this phone. Nothing is sent to a server." : {
-      "comment" : "Welcome screen privacy line, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La voz y la traducción funcionan en este teléfono. No se envía nada a ningún servidor."
+    "Speech recognition: to turn that audio into text.": {
+      "comment": "Permission priming screen: what speech recognition is for, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconocimiento de voz: para convertir ese audio en texto."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnaissance vocale et traduction se font sur ce téléphone. Rien n’est envoyé à un serveur."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnaissance vocale : pour transformer ce son en texte."
           }
         }
       }
     },
-    "Speech recognition permission is required." : {
-      "comment" : "Session banner error when the speech recognition prompt was refused",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se necesita permiso para el reconocimiento de voz."
+    "Speech, translation, everything stays on this phone.": {
+      "comment": "Settings drawer About block, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La voz, la traducción, todo se queda en este teléfono."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’autorisation de la reconnaissance vocale est requise."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnaissance vocale, traduction : tout reste sur ce téléphone."
           }
         }
       }
     },
-    "Speech recognition: to turn that audio into text." : {
-      "comment" : "Permission priming screen: what speech recognition is for, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconocimiento de voz: para convertir ese audio en texto."
+    "Spoken language": {
+      "comment": "Section label in a speaker's language menu",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idioma hablado"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnaissance vocale : pour transformer ce son en texte."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue parlée"
           }
         }
       }
     },
-    "Speech, translation, everything stays on this phone." : {
-      "comment" : "Settings drawer About block, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La voz, la traducción, todo se queda en este teléfono."
+    "Start session": {
+      "comment": "Bottom bar action that starts a session",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar sesión"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnaissance vocale, traduction : tout reste sur ce téléphone."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer la session"
           }
         }
       }
     },
-    "Spoken language" : {
-      "comment" : "Section label in a speaker's language menu",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Idioma hablado"
+    "System": {
+      "comment": "App language option: follow the language chosen in iOS Settings",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistema"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Langue parlée"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Système"
           }
         }
       }
     },
-    "Start session" : {
-      "comment" : "Bottom bar action that starts a session",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empezar sesión"
+    "Tap Start session to begin translating.": {
+      "comment": "Bottom bar hint before a session starts. Start session is a button",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca Empezar sesión para traducir."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Démarrer la session"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez « Démarrer la session » pour commencer à traduire."
           }
         }
       }
     },
-    "System" : {
-      "comment" : "App language option: follow the language chosen in iOS Settings",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sistema"
+    "Tap a speaker's button to talk, and tap again to stop.": {
+      "comment": "Bottom bar hint under the talk buttons",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca el botón de un hablante para hablar y toca otra vez para parar."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Système"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toucher le bouton d’un interlocuteur pour parler, puis toucher de nouveau pour terminer."
           }
         }
       }
     },
-    "Tap Start session to begin translating." : {
-      "comment" : "Bottom bar hint before a session starts. Start session is a button",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toca Empezar sesión para traducir."
+    "Tap to start talking, and tap again to end.": {
+      "comment": "Talk button accessibility hint while it is available",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca para empezar a hablar y toca otra vez para terminar."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Touchez « Démarrer la session » pour commencer à traduire."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toucher pour commencer à parler, puis toucher de nouveau pour terminer."
           }
         }
       }
     },
-    "The translation came back empty." : {
-      "comment" : "Translation failure: the model produced no text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traducción llegó vacía."
+    "The translation came back empty.": {
+      "comment": "Translation failure: the model produced no text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción llegó vacía."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traduction est revenue vide."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduction est revenue vide."
           }
         }
       }
     },
-    "The translation did not finish." : {
-      "comment" : "Translation failure: the model stopped part way through",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traducción no se completó."
+    "The translation did not finish.": {
+      "comment": "Translation failure: the model stopped part way through",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción no se completó."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traduction n’est pas allée au bout."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduction n’est pas allée au bout."
           }
         }
       }
     },
-    "This build of the app cannot download the translation model." : {
-      "comment" : "Model load failure: the build has no download credential",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta versión de la app no puede descargar el modelo de traducción."
+    "This build of the app cannot download the translation model.": {
+      "comment": "Model load failure: the build has no download credential",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta versión de la app no puede descargar el modelo de traducción."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette version de l’app ne peut pas télécharger le modèle de traduction."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette version de l’app ne peut pas télécharger le modèle de traduction."
           }
         }
       }
     },
-    "To %@ - %@" : {
-      "comment" : "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To %1$@ - %2$@"
+    "To %@ - %@": {
+      "comment": "Chat bubble destination line. %1$@ is a speaker label, %2$@ a language name",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To %1$@ - %2$@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Para %1$@ - %2$@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para %1$@ - %2$@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vers %1$@ - %2$@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vers %1$@ - %2$@"
           }
         }
       }
     },
-    "Translates this turn again." : {
-      "comment" : "Accessibility hint for the retry button on a failed chat bubble",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vuelve a traducir este turno."
+    "Translates this turn again.": {
+      "comment": "Accessibility hint for the retry button on a failed chat bubble",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a traducir este turno."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduit à nouveau ce tour de parole."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduit à nouveau ce tour de parole."
           }
         }
       }
     },
-    "Translation is not ready yet." : {
-      "comment" : "Translation failure: a request arrived before the model was ready",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traducción aún no está lista."
+    "Translation is not ready yet.": {
+      "comment": "Translation failure: a request arrived before the model was ready",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción aún no está lista."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La traduction n’est pas encore prête."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduction n’est pas encore prête."
           }
         }
       }
     },
-    "Translation model unavailable" : {
-      "comment" : "Status strip: the model failed to load",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modelo no disponible"
+    "Translation model unavailable": {
+      "comment": "Status strip: the model failed to load",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo no disponible"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modèle indisponible"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle indisponible"
           }
         }
       }
     },
-    "Translation pending" : {
-      "comment" : "Chat bubble state while a translation is in flight",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traducción pendiente"
+    "Translation pending": {
+      "comment": "Chat bubble state while a translation is in flight",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción pendiente"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduction en attente"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduction en attente"
           }
         }
       }
     },
-    "Try again" : {
-      "comment" : "Button that runs a failed piece of work again",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reintentar"
+    "Try again": {
+      "comment": "Button that runs a failed piece of work again",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Réessayer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réessayer"
           }
         }
       }
     },
-    "Turn Translate needs microphone and speech recognition access on this device." : {
-      "comment" : "Session banner body text. Turn Translate is the product name, keep it as is",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn Translate necesita acceso al micrófono y al reconocimiento de voz en este dispositivo."
+    "Turn Translate needs microphone and speech recognition access on this device.": {
+      "comment": "Session banner body text. Turn Translate is the product name, keep it as is",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn Translate necesita acceso al micrófono y al reconocimiento de voz en este dispositivo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn Translate a besoin du micro et de la reconnaissance vocale sur cet appareil."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn Translate a besoin du micro et de la reconnaissance vocale sur cet appareil."
           }
         }
       }
     },
-    "Two people, two languages, one phone." : {
-      "comment" : "Welcome screen tagline, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dos personas, dos idiomas, un teléfono."
+    "Two people, two languages, one phone.": {
+      "comment": "Welcome screen tagline, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos personas, dos idiomas, un teléfono."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deux personnes, deux langues, un téléphone."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deux personnes, deux langues, un téléphone."
           }
         }
       }
     },
-    "Type a message" : {
-      "comment" : "Typed input sheet title and button label",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escribir un mensaje"
+    "Type a message": {
+      "comment": "Typed input sheet title and button label",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir un mensaje"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Écrire un message"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire un message"
           }
         }
       }
     },
-    "Typing unlocks once the translation model is ready." : {
-      "comment" : "Shown in the typed input sheet, and as a hint, while typing is blocked",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podrás escribir cuando el modelo esté listo."
+    "Typing unlocks once the translation model is ready.": {
+      "comment": "Shown in the typed input sheet, and as a hint, while typing is blocked",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podrás escribir cuando el modelo esté listo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’écriture s’active quand le modèle est prêt."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’écriture s’active quand le modèle est prêt."
           }
         }
       }
     },
-    "Unable to process" : {
-      "comment" : "Status strip: the session hit an error",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo procesar"
+    "Unable to process": {
+      "comment": "Status strip: the session hit an error",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo procesar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traitement impossible"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement impossible"
           }
         }
       }
     },
-    "Visit zetic.ai" : {
-      "comment" : "Settings drawer row title. zetic.ai is a domain, keep it as is",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Visitar zetic.ai"
+    "Visit zetic.ai": {
+      "comment": "Settings drawer row title. zetic.ai is a domain, keep it as is",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visitar zetic.ai"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aller sur zetic.ai"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aller sur zetic.ai"
           }
         }
       }
     },
-    "Visit zetic.ai, opens the website" : {
-      "comment" : "Accessibility label for the Visit zetic.ai row",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Visitar zetic.ai, abre el sitio web"
+    "Visit zetic.ai, opens the website": {
+      "comment": "Accessibility label for the Visit zetic.ai row",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visitar zetic.ai, abre el sitio web"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aller sur zetic.ai, ouvre le site web"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aller sur zetic.ai, ouvre le site web"
           }
         }
       }
     },
-    "Who is speaking" : {
-      "comment" : "Typed input sheet A/B segmented control label",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quién habla"
+    "Who is speaking": {
+      "comment": "Typed input sheet A/B segmented control label",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quién habla"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qui parle"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui parle"
           }
         }
       }
     },
-    "You are not on Wi-Fi. A download this large is better on Wi-Fi." : {
-      "comment" : "Consent card warning shown on an expensive or constrained network",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No estás conectado a Wi-Fi. Una descarga tan grande es mejor con Wi-Fi."
+    "You are not on Wi-Fi. A download this large is better on Wi-Fi.": {
+      "comment": "Consent card warning shown on an expensive or constrained network",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No estás conectado a Wi-Fi. Una descarga tan grande es mejor con Wi-Fi."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous n’êtes pas en Wi-Fi. Mieux vaut télécharger un fichier de cette taille en Wi-Fi."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous n’êtes pas en Wi-Fi. Mieux vaut télécharger un fichier de cette taille en Wi-Fi."
           }
         }
       }
     },
-    "about.versionLine" : {
-      "comment" : "About block. %1$@ is the marketing version, %2$@ the build number",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version %1$@ (%2$@)"
+    "about.versionLine": {
+      "comment": "About block. %1$@ is the marketing version, %2$@ the build number",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %1$@ (%2$@)"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Versión %1$@ (%2$@)"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión %1$@ (%2$@)"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version %1$@ (%2$@)"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %1$@ (%2$@)"
           }
         }
       }
     },
-    "bottomBar.otherSpeakerActive" : {
-      "comment" : "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaker %1$@ cannot begin while Speaker %2$@ is active."
+    "bottomBar.otherSpeakerActive": {
+      "comment": "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker %1$@ cannot begin while Speaker %2$@ is active."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El hablante %1$@ no puede empezar mientras el hablante %2$@ tiene la palabra."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hablante %1$@ no puede empezar mientras el hablante %2$@ tiene la palabra."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’interlocuteur %1$@ ne peut pas parler tant que l’interlocuteur %2$@ a la parole."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’interlocuteur %1$@ ne peut pas parler tant que l’interlocuteur %2$@ a la parole."
           }
         }
       }
     },
-    "consent.size" : {
-      "comment" : "Consent card body text. %@ is a formatted size such as 1.91 GB",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The translation model is %@."
+    "consent.size": {
+      "comment": "Consent card body text. %@ is a formatted size such as 1.91 GB",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The translation model is %@."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El modelo de traducción ocupa %@."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El modelo de traducción ocupa %@."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modèle de traduction pèse %@."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le modèle de traduction pèse %@."
           }
         }
       }
     },
-    "iOS asks for each one next." : {
-      "comment" : "Permission priming screen: what happens after the button, body text",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS te los pedirá a continuación."
+    "iOS asks for each one next.": {
+      "comment": "Permission priming screen: what happens after the button, body text",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS te los pedirá a continuación."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS vous les demandera ensuite."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS vous les demandera ensuite."
           }
         }
       }
     },
-    "languageChip.accessibility" : {
-      "comment" : "Language chip accessibility label. %1$@ speaker, %2$@ reading, %3$@ spoken",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaker %1$@ languages: reads %2$@, speaks %3$@"
+    "languageChip.accessibility": {
+      "comment": "Language chip accessibility label. %1$@ speaker, %2$@ reading, %3$@ spoken",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker %1$@ languages: reads %2$@, speaks %3$@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Idiomas del hablante %1$@: lee %2$@, habla %3$@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idiomas del hablante %1$@: lee %2$@, habla %3$@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Langues de l’interlocuteur %1$@ : lit %2$@, parle %3$@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langues de l’interlocuteur %1$@ : lit %2$@, parle %3$@"
           }
         }
       }
     },
-    "modelPreparation.downloading" : {
-      "comment" : "Model download headline. %lld is the percentage complete",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading translation model %lld%%"
+    "modelPreparation.downloading": {
+      "comment": "Model download headline. %lld is the percentage complete",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading translation model %lld%%"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descargando el modelo de traducción %lld%%"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargando el modelo de traducción %lld%%"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Téléchargement du modèle de traduction %lld %%"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargement du modèle de traduction %lld %%"
           }
         }
       }
     },
-    "modelPreparation.transferred" : {
-      "comment" : "Model download detail: %1$@ is the amount transferred, %2$@ the total",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ of %2$@"
+    "modelPreparation.transferred": {
+      "comment": "Model download detail: %1$@ is the amount transferred, %2$@ the total",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ of %2$@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ de %2$@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ de %2$@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ sur %2$@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ sur %2$@"
           }
         }
       }
     },
-    "ptt.accessibility.end" : {
-      "comment" : "Push-to-talk accessibility label while recording. %@ is A or B",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "End Speaker %@'s turn"
+    "ptt.accessibility.end": {
+      "comment": "Push-to-talk accessibility label while recording. %@ is A or B",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End Speaker %@'s turn"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminar el turno del hablante %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar el turno del hablante %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminer le tour de parole de l’interlocuteur %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer le tour de parole de l’interlocuteur %@"
           }
         }
       }
     },
-    "ptt.accessibility.start" : {
-      "comment" : "Push-to-talk accessibility label while idle. %@ is A or B",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start Speaker %@'s turn"
+    "ptt.accessibility.start": {
+      "comment": "Push-to-talk accessibility label while idle. %@ is A or B",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start Speaker %@'s turn"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empezar el turno del hablante %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar el turno del hablante %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Démarrer le tour de parole de l’interlocuteur %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer le tour de parole de l’interlocuteur %@"
           }
         }
       }
     },
-    "ptt.blockedByOtherSpeaker" : {
-      "comment" : "Push-to-talk accessibility hint. %1$@ is this speaker, %2$@ the active one",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaker %1$@ cannot start while Speaker %2$@ is active."
+    "ptt.blockedByOtherSpeaker": {
+      "comment": "Push-to-talk accessibility hint. %1$@ is this speaker, %2$@ the active one",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker %1$@ cannot start while Speaker %2$@ is active."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El hablante %1$@ no puede empezar mientras el hablante %2$@ está hablando."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hablante %1$@ no puede empezar mientras el hablante %2$@ está hablando."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’interlocuteur %1$@ ne peut pas commencer tant que l’interlocuteur %2$@ a la parole."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’interlocuteur %1$@ ne peut pas commencer tant que l’interlocuteur %2$@ a la parole."
           }
         }
       }
     },
-    "recording - release to stop" : {
-      "comment" : "Push-to-talk button, after the speaker letter, while recording",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "grabando - suelta para parar"
+    "recording - tap to stop": {
+      "comment": "Talk button, after the speaker letter, while recording",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "grabando - toca para parar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "enregistrement, relâcher pour arrêter"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enregistrement - toucher pour terminer"
           }
         }
       }
     },
-    "settings.clearConversation.accessibility.available" : {
-      "comment" : "Accessibility label for the Clear conversation row. %@ is the row title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, keeps the session and the languages"
+    "settings.clearConversation.accessibility.available": {
+      "comment": "Accessibility label for the Clear conversation row. %@ is the row title",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, keeps the session and the languages"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, mantiene la sesión y los idiomas"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, mantiene la sesión y los idiomas"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, conserve la session et les langues"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, conserve la session et les langues"
           }
         }
       }
     },
-    "settings.clearConversation.accessibility.unavailable" : {
-      "comment" : "Accessibility label for the disabled Clear conversation row. %@ is the row title",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, unavailable, there is nothing to clear"
+    "settings.clearConversation.accessibility.unavailable": {
+      "comment": "Accessibility label for the disabled Clear conversation row. %@ is the row title",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, unavailable, there is nothing to clear"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, no disponible, no hay nada que borrar"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, no disponible, no hay nada que borrar"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, indisponible, il n’y a rien à effacer"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, indisponible, il n’y a rien à effacer"
           }
         }
       }
     },
-    "settings.contactUs.accessibility" : {
-      "comment" : "Accessibility label for the Contact us row. %@ is an email address",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contact us, copies %@"
+    "settings.contactUs.accessibility": {
+      "comment": "Accessibility label for the Contact us row. %@ is an email address",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contact us, copies %@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contáctanos, copia %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contáctanos, copia %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nous contacter, copie %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nous contacter, copie %@"
           }
         }
       }
     },
-    "speech.microphoneUnavailable" : {
-      "comment" : "Session banner error. %@ is the underlying system error, which iOS localizes",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unable to start the microphone: %@"
+    "speech.microphoneUnavailable": {
+      "comment": "Session banner error. %@ is the underlying system error, which iOS localizes",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to start the microphone: %@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo iniciar el micrófono: %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo iniciar el micrófono: %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de démarrer le micro : %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de démarrer le micro : %@"
           }
         }
       }
     },
-    "speech.onDeviceUnsupported" : {
-      "comment" : "Session banner error. %@ is a spoken language name",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ does not support on-device speech recognition on this device."
+    "speech.onDeviceUnsupported": {
+      "comment": "Session banner error. %@ is a spoken language name",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ does not support on-device speech recognition on this device."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este dispositivo no admite el reconocimiento de voz local para %@."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo no admite el reconocimiento de voz local para %@."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La reconnaissance vocale sur l’appareil n’est pas disponible pour %@."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La reconnaissance vocale sur l’appareil n’est pas disponible pour %@."
           }
         }
       }
     },
-    "speech.recognitionUnavailable" : {
-      "comment" : "Session banner error. %@ is a spoken language name",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ speech recognition is unavailable on this device."
+    "speech.recognitionUnavailable": {
+      "comment": "Session banner error. %@ is a spoken language name",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ speech recognition is unavailable on this device."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El reconocimiento de voz para %@ no está disponible en este dispositivo."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El reconocimiento de voz para %@ no está disponible en este dispositivo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La reconnaissance vocale pour %@ n’est pas disponible sur cet appareil."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La reconnaissance vocale pour %@ n’est pas disponible sur cet appareil."
           }
         }
       }
     },
-    "status.finalizing" : {
-      "comment" : "Status strip: %@ is the speaker label, A or B",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finalizing Speaker %@'s transcript"
+    "status.finalizing": {
+      "comment": "Status strip: %@ is the speaker label, A or B",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizing Speaker %@'s transcript"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finalizando la transcripción del hablante %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizando la transcripción del hablante %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Finalisation du texte de l’interlocuteur %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalisation du texte de l’interlocuteur %@"
           }
         }
       }
     },
-    "status.listening" : {
-      "comment" : "Status strip: %@ is the speaker label, A or B",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaker %@ is speaking"
+    "status.listening": {
+      "comment": "Status strip: %@ is the speaker label, A or B",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker %@ is speaking"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El hablante %@ está hablando"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hablante %@ está hablando"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’interlocuteur %@ parle"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’interlocuteur %@ parle"
           }
         }
       }
     },
-    "status.translating" : {
-      "comment" : "Status strip: %@ is the receiving speaker's label, A or B",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Translating for Speaker %@"
+    "status.translating": {
+      "comment": "Status strip: %@ is the receiving speaker's label, A or B",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translating for Speaker %@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduciendo para el hablante %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduciendo para el hablante %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduction pour l’interlocuteur %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduction pour l’interlocuteur %@"
           }
         }
       }
     },
-    "typedInput.guidance" : {
-      "comment" : "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaker %1$@ types in %2$@. It is translated into %3$@ for Speaker %4$@."
+    "typedInput.guidance": {
+      "comment": "Typed input guidance. %1$@ and %4$@ are speaker labels, %2$@ and %3$@ are languages",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaker %1$@ types in %2$@. It is translated into %3$@ for Speaker %4$@."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El hablante %1$@ escribe en %2$@. Se traduce a %3$@ para el hablante %4$@."
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El hablante %1$@ escribe en %2$@. Se traduce a %3$@ para el hablante %4$@."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’interlocuteur %1$@ écrit en %2$@. Le texte est traduit en %3$@ pour l’interlocuteur %4$@."
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’interlocuteur %1$@ écrit en %2$@. Le texte est traduit en %3$@ pour l’interlocuteur %4$@."
           }
         }
       }
     },
-    "typedInput.placeholder" : {
-      "comment" : "Typed input field placeholder. %@ is a language name",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type in %@"
+    "typedInput.placeholder": {
+      "comment": "Typed input field placeholder. %@ is a language name",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type in %@"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escribe en %@"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe en %@"
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Écrire en %@"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire en %@"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

@@ -44,8 +44,8 @@ Ready to talk
                             To A - Korean
                             Bonjour       (>)
 ------------------------------------
- [ A - hold to talk  ]        [ B - hold to talk  ]
- Hold a button to talk, or tap once to start and again to stop.  [keyb]
+ [ A - tap to talk  ]         [ B - tap to talk  ]
+ Tap a speaker's button to talk, and tap again to stop.  [keyb]
  [ End session ]
 ```
 
@@ -557,7 +557,7 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
   - The status strip is a top safe-area inset, so it is placed under the navigation bar rather than laid out alongside it.
   - The session banner scrolls inside a bounded box above `accessibility1`, and only when there is a banner to bound. At `AX5` the permission banner alone is taller than the phone.
   - The bottom bar drops its hint line above `accessibility1`. Every sentence the hint says is already the accessibility hint on the control it is about, and at `AX5` it ran to five lines of a bar that is a safe-area inset and takes whatever height it asks for. The typed-input control stays: it is an affordance, not commentary.
-- **Push-to-talk never truncates.** The two controls the app is built around read `A - hold to talk` in full at every size, wrapping to as many lines as they need.
+- **Push-to-talk never truncates.** The two controls the app is built around read `A - tap to talk` in full at every size, wrapping to as many lines as they need.
 
 ## Android/iOS parity criteria
 
