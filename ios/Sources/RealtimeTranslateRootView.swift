@@ -46,7 +46,7 @@ private struct ZeticWordmark: View {
     Image("ZeticLogo")
       .resizable()
       .scaledToFit()
-      .frame(height: 21)
+      .frame(height: 24)
       .accessibilityIdentifier("zetic-wordmark")
       // `Text(verbatim:)`, like the product name: the brand is spelled the same in every language
       // and must never reach the string catalog.
