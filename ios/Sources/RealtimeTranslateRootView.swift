@@ -829,7 +829,7 @@ private struct BottomBar: View {
                     defaultValue: "Speaker \(active.counterpart.rawValue) cannot begin while Speaker \(active.rawValue) is active.",
                     comment: "Bottom bar hint. %1$@ is the blocked speaker, %2$@ the active one")
     }
-    return String(localized: "Hold a button to talk, or tap once to start and again to stop.",
+    return String(localized: "Tap a speaker's button to talk, and tap again to stop.",
                   comment: "Bottom bar hint while the session is idle and ready")
   }
 
@@ -905,10 +905,10 @@ private struct PTTButton: View {
   /// literals, so each half can carry its own translator comment.
   private var suffix: Text {
     isListening
-      ? Text("recording - release to stop",
-             comment: "Push-to-talk button, after the speaker letter, while recording")
-      : Text("- hold to talk",
-             comment: "Push-to-talk button, after the speaker letter, while idle")
+      ? Text("recording - tap to stop",
+             comment: "Talk button, after the speaker letter, while recording")
+      : Text("- tap to talk",
+             comment: "Talk button, after the speaker letter, while idle")
   }
   private var prefixColor: Color {
     if isListening { return DesignToken.surface }
@@ -956,9 +956,9 @@ private struct PTTButton: View {
       RoundedRectangle(cornerRadius: Layout.control).stroke(borderColor, lineWidth: 1)
     )
     .disabled(isBlocked)
-    .simultaneousGesture(LongPressGesture(minimumDuration: 0.15).onEnded { _ in
-      if !isListening && !isBlocked { begin(speaker) }
-    })
+    // No long-press gesture: an earlier build had one that began a turn on hold but had no
+    // release-to-stop half, which made the old "hold to talk" label a lie. The control is an
+    // honest toggle: tap to start, tap to stop.
     .accessibilityLabel(
       isListening
         ? String(localized: "ptt.accessibility.end",
@@ -971,8 +971,8 @@ private struct PTTButton: View {
     .accessibilityHint(
       isBlocked
         ? blockedHint
-        : String(localized: "Hold to talk, or tap once to start and again to end.",
-                 comment: "Push-to-talk accessibility hint while it is available")
+        : String(localized: "Tap to start talking, and tap again to end.",
+                 comment: "Talk button accessibility hint while it is available")
     )
   }
 }
