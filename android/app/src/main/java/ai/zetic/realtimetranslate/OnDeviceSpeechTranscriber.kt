@@ -169,6 +169,53 @@ object SpeechLanguageCatalogMapping {
     }
 }
 
+/**
+ * The installed recognizer language matching a reading language: same primary language subtag,
+ * preferring the variant that code most likely implies (`fr` picks `fr-FR` over `fr-BE`, `zh-Hant`
+ * picks `zh-TW`). A language with no installed recognizer has no match, and the caller leaves the
+ * spoken language alone.
+ */
+object SpokenLanguageMatching {
+    fun match(reading: TranslationLanguage, available: List<SpeechLanguage>): SpeechLanguage.Installed? {
+        val primary = primarySubtag(reading.code) ?: return null
+        val matches = available.filterIsInstance<SpeechLanguage.Installed>()
+            .filter { primarySubtag(it.languageTag) == primary }
+        if (matches.size <= 1) return matches.firstOrNull()
+        val implied = variantSubtags(reading.code) + likelyVariants.getOrElse(reading.code) { emptySet() }
+        return matches.firstOrNull { candidate ->
+            variantSubtags(candidate.languageTag).any(implied::contains)
+        } ?: matches.first()
+    }
+
+    private fun primarySubtag(tag: String): String? =
+        Locale.forLanguageTag(tag).language.takeIf { it.isNotEmpty() }
+
+    /** Everything after the primary subtag, upper-cased so `Hant` and `HANT` compare equal. */
+    private fun variantSubtags(tag: String): Set<String> =
+        tag.split('-', '_').drop(1).filter(String::isNotEmpty).map { it.uppercase(Locale.ROOT) }.toSet()
+
+    /**
+     * The variant a bare reading code implies, for the Hy-MT2 languages a device plausibly carries
+     * more than one recognizer for. Everything else resolves on the primary subtag alone.
+     */
+    private val likelyVariants = mapOf(
+        "ar" to setOf("SA"),
+        "bn" to setOf("BD"),
+        "de" to setOf("DE"),
+        "en" to setOf("US"),
+        "es" to setOf("ES"),
+        "fr" to setOf("FR"),
+        "it" to setOf("IT"),
+        "ms" to setOf("MY"),
+        "nl" to setOf("NL"),
+        "pt" to setOf("BR"),
+        "ta" to setOf("IN"),
+        "ur" to setOf("PK"),
+        "zh" to setOf("CN", "HANS"),
+        "zh-Hant" to setOf("TW", "HANT"),
+    )
+}
+
 interface OnDeviceSpeechRecognizerPlatform {
     fun isOnDeviceRecognitionAvailable(context: Context): Boolean
     fun createOnDeviceSpeechRecognizer(context: Context): SpeechRecognizer

@@ -40,7 +40,9 @@ class SessionViewModel(
         )
         is SessionAction.RefreshSpeechLanguages -> refreshSpeechLanguages(action.context)
         is SessionAction.InputLanguageChanged -> updateSettings(action.speaker) { it.copy(inputLanguage = action.language) }
-        is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) { it.copy(readingLanguage = action.language) }
+        is SessionAction.ReadingLanguageChanged -> updateSettings(action.speaker) {
+            alignInputLanguage(it.copy(readingLanguage = action.language), mutableState.value.speechLanguages)
+        }
         is SessionAction.StartConversation -> loadModel(action.context)
         SessionAction.EndSession -> endSession()
         is SessionAction.PttPress -> start(action.context, action.speaker)
@@ -54,12 +56,29 @@ class SessionViewModel(
         mutableState.value = current.copy(settings = current.settings + (speaker to transform(current.settingsFor(speaker))))
     }
 
+    /**
+     * A speaker's chip language drives what the recognizer listens for, so a speaker shown as
+     * Korean is listened to in Korean. A reading language with no installed recognizer leaves the
+     * spoken language exactly as it was.
+     */
+    private fun alignInputLanguage(settings: SpeakerSettings, languages: List<SpeechLanguage>): SpeakerSettings {
+        val match = SpokenLanguageMatching.match(settings.readingLanguage, languages) ?: return settings
+        return settings.copy(inputLanguage = match)
+    }
+
     private fun refreshSpeechLanguages(context: Context) {
         if (mutableState.value.conversationStarted || mutableState.value.speechLanguageCatalogLoading) return
         mutableState.value = mutableState.value.copy(speechLanguageCatalogLoading = true, speechLanguageCatalogMessage = null)
         speechLanguageCatalog.load(context.applicationContext) { result ->
             val validLanguages = result.languages.ifEmpty { listOf(SpeechLanguage.Automatic) }
-            mutableState.value = mutableState.value.copy(speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
+            val current = mutableState.value
+            // The catalog arriving is the first moment a spoken language can be derived at all, so
+            // it stands in for init here. A speaker who has explicitly picked a spoken language is
+            // left alone; that override survives until their reading language changes again.
+            val aligned = current.settings.mapValues { (_, settings) ->
+                if (settings.inputLanguage == SpeechLanguage.Automatic) alignInputLanguage(settings, validLanguages) else settings
+            }
+            mutableState.value = current.copy(settings = aligned, speechLanguages = validLanguages, speechLanguageCatalogLoading = false, speechLanguageCatalogMessage = result.message)
         }
     }
 
@@ -157,28 +176,29 @@ class SessionViewModel(
 
     private fun completeTranslation(id: String, translation: String) {
         val current = mutableState.value
-        if (!current.conversationStarted || current.phase == SessionPhase.EndingSession) return
+        if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translation = translation, translationError = null) else it })
     }
     private fun failTranslation(id: String, message: String) {
         val current = mutableState.value
-        if (!current.conversationStarted || current.phase == SessionPhase.EndingSession) return
+        if (!current.conversationStarted) return
         mutableState.value = current.copy(phase = SessionPhase.Ready, conversations = current.conversations.map { if (it.id == id) it.copy(translationError = message) else it })
     }
     private fun fail(message: String, owner: SpeechTranscriber? = transcriber) {
-        if (owner !== transcriber || mutableState.value.phase == SessionPhase.EndingSession) return
+        if (owner !== transcriber || !mutableState.value.conversationStarted) return
         owner?.destroy(); transcriber = null
         mutableState.value = mutableState.value.copy(phase = SessionPhase.Error, errorMessage = message)
     }
+    /**
+     * Ending a session stops recognition and clears the conversation but keeps the model resident,
+     * so the next Start conversation reaches Ready without loading again. The model is released in
+     * [onCleared], when the view model itself goes away.
+     */
     private fun endSession() {
-        mutableState.value = mutableState.value.copy(phase = SessionPhase.EndingSession, errorMessage = null)
         val activeTranscriber = transcriber
         transcriber = null
         activeTranscriber?.destroy()
-        viewModelScope.launch {
-            runCatching { translator.unload() }
-            mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
-        }
+        mutableState.value = mutableState.value.copy(phase = SessionPhase.Ready, conversationStarted = false, conversations = emptyList(), errorMessage = null, modelLoadProgress = 0f)
     }
     private fun retry() {
         val current = mutableState.value
