@@ -541,6 +541,291 @@ final class RealtimeTranslateTests: XCTestCase {
     }
   }
 
+  // MARK: - Live translation: the throttle
+
+  /// The two gates that have nothing to do with time: one pass at a time, and only for text that
+  /// has actually changed since the pass before it started.
+  func testTheLivePartialThrottleRunsOnePassAtATimeOverChangedTextOnly() {
+    var scheduler = LivePartialTranslationScheduler()
+
+    XCTAssertEqual(scheduler.begin(text: "", now: 0), .skipEmpty)
+    XCTAssertEqual(scheduler.begin(text: "I went", now: 0), .start)
+    XCTAssertTrue(scheduler.isPassInFlight)
+
+    // However much the transcript grows while that pass generates, nothing else starts. A second
+    // pass would only queue behind the first on the runtime's own queue and land further out of
+    // date than the one already running.
+    XCTAssertEqual(scheduler.begin(text: "I went to", now: 5), .skipInFlight)
+    XCTAssertEqual(scheduler.begin(text: "I went to the market", now: 9), .skipInFlight)
+
+    scheduler.finishPass()
+    XCTAssertFalse(scheduler.isPassInFlight)
+
+    // The same words again buy nothing: the pass that just finished was started from them.
+    XCTAssertEqual(scheduler.begin(text: "I went", now: 5), .skipUnchanged)
+    XCTAssertEqual(scheduler.begin(text: "I went to the market", now: 5), .start)
+  }
+
+  /// The third gate, and the one that exists for the 1.8B model rather than for correctness: two
+  /// passes never start closer together than the minimum gap, so word-by-word churn on a live
+  /// recognizer cannot turn into a queue of near-identical generations in front of the final.
+  func testTheLivePartialThrottleKeepsAMinimumGapBetweenPasses() {
+    XCTAssertEqual(LivePartialTranslationScheduler.minimumGap, 0.7)
+    XCTAssertTrue((0.5 ... 1.0).contains(LivePartialTranslationScheduler.minimumGap))
+
+    // Measured from a zero base, so the boundary is the boundary rather than whatever a subtraction
+    // of two larger doubles rounds to.
+    var scheduler = LivePartialTranslationScheduler()
+    XCTAssertEqual(scheduler.begin(text: "I", now: 0), .start)
+    scheduler.finishPass()
+
+    XCTAssertEqual(scheduler.begin(text: "I went", now: 0.69), .skipTooSoon)
+    XCTAssertEqual(scheduler.begin(text: "I went", now: LivePartialTranslationScheduler.minimumGap),
+                   .start)
+    scheduler.finishPass()
+
+    // A new turn starts from nothing: the same words at the same instant, which both other gates
+    // would refuse, are the first pass of the next utterance and have to run.
+    XCTAssertEqual(scheduler.begin(text: "I went", now: 2), .skipUnchanged)
+    scheduler.reset()
+    XCTAssertFalse(scheduler.isPassInFlight)
+    XCTAssertEqual(scheduler.begin(text: "I went", now: 2), .start)
+  }
+
+  // MARK: - Live translation: the stale-guard
+
+  /// Everything that can happen to a bubble between a partial pass starting and its answer coming
+  /// back. The pass is never cancelled, because cancellation would have to run through the same
+  /// runtime the final translation is waiting on, so every late answer arrives and is judged here.
+  func testALatePartialTranslationIsDroppedByEverythingThatOutrunsIt() {
+    let itemID = UUID()
+    let pass = PartialTranslationPass(itemID: itemID, revision: 4, text: "Good morning")
+    func bubble(_ id: UUID = itemID,
+                _ state: ConversationItem.DeliveryState = .partial) -> ConversationItem {
+      ConversationItem(id: id, speaker: .a, transcript: "Good morning",
+                       targetLanguage: .hyMT2Candidates[9], translation: nil, state: state)
+    }
+    func applies(liveItemID: UUID?, item: ConversationItem?, appliedRevision: Int) -> Bool {
+      LivePartialTranslationGuard.shouldApply(pass: pass, liveItemID: liveItemID, item: item,
+                                              appliedRevision: appliedRevision)
+    }
+
+    // The ordinary case, and the one that matters just as much: a pass that comes back after the
+    // control was released still shows, because the final it is waiting for is seconds away and
+    // the alternative is an empty translation region for all of them.
+    XCTAssertTrue(applies(liveItemID: itemID, item: bubble(), appliedRevision: 3))
+    XCTAssertTrue(applies(liveItemID: itemID, item: bubble(itemID, .finalizing), appliedRevision: 3))
+
+    // A newer pass already applied. Equal counts as newer: a revision is used exactly once.
+    XCTAssertFalse(applies(liveItemID: itemID, item: bubble(), appliedRevision: 4))
+    XCTAssertFalse(applies(liveItemID: itemID, item: bubble(), appliedRevision: 9))
+
+    // The final landed, either way a final can land. The translation region belongs to the final
+    // answer or to the failure and its retry, and no partial may touch it again.
+    XCTAssertFalse(applies(liveItemID: itemID, item: bubble(itemID, .translated), appliedRevision: 0))
+    XCTAssertFalse(applies(liveItemID: itemID, item: bubble(itemID, .translationFailed("nope")),
+                           appliedRevision: 0))
+
+    // The turn was abandoned by an interruption, a clear, or the end of the session.
+    XCTAssertFalse(applies(liveItemID: nil, item: bubble(), appliedRevision: 3))
+    // Somebody else is talking now.
+    XCTAssertFalse(applies(liveItemID: UUID(), item: bubble(), appliedRevision: 3))
+    // The bubble is gone, and the bubble is not the one this pass was started for.
+    XCTAssertFalse(applies(liveItemID: itemID, item: nil, appliedRevision: 3))
+    XCTAssertFalse(applies(liveItemID: itemID, item: bubble(UUID()), appliedRevision: 3))
+  }
+
+  // MARK: - Live translation: end to end
+
+  /// The behavior the whole thing exists for: a translation on screen while the person is still
+  /// talking. And the invariant that keeps it from breaking everything else, because a provisional
+  /// translation is not a delivered turn: the bubble stays `partial`, so nothing that keys off
+  /// `translated` (the play control and what it speaks, the retry, a replay) can see it.
+  func testATranslationAppearsWhileTheSpeakerIsStillTalkingWithoutDeliveringTheTurn() async throws {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "\u{c548}\u{b155}")
+    let speech = FakeSpeechOutput()
+    let clock = ManualTimeSource()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: runtime,
+      speechOutput: speech, audioInterruptions: FakeAudioInterruptions(), now: { clock.seconds }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good morning")
+    await waitUntil { viewModel.items.last?.provisionalTranslation != nil }
+
+    let item = try XCTUnwrap(viewModel.items.last)
+    XCTAssertEqual(item.provisionalTranslation, "\u{c548}\u{b155}")
+    // The pipeline is the existing one: the same request type, the same prompt, the counterpart's
+    // reading language.
+    XCTAssertEqual(runtime.prompts.first,
+                   HyMT2Request(sourceText: "Good morning",
+                                targetLanguage: viewModel.targetLanguageB).flatPrompt)
+    // ... and it is not the turn's request, which is still the final one that has not happened yet.
+    XCTAssertNil(viewModel.mostRecentTranslationRequest)
+
+    // Nothing about delivery moved.
+    XCTAssertEqual(item.state, .partial)
+    XCTAssertNil(item.translation)
+    XCTAssertNil(item.speakableTranslation)
+    XCTAssertEqual(SpokenTranslation.decision(for: item), .silent)
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertFalse(viewModel.canRetryTranslation)
+
+    // The two controls that read off a delivered turn stay silent when they are asked anyway.
+    viewModel.replay(item)
+    viewModel.retryTranslation(item)
+    XCTAssertTrue(speech.spoken.isEmpty)
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertEqual(runtime.prompts.count, 1)
+  }
+
+  /// The throttle, from the outside: a recognizer emitting a word at a time does not put a
+  /// generation on the model for every one of them.
+  func testAWordAtATimeDoesNotPutAGenerationOnTheModelForEveryWord() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "\u{c548}\u{b155}")
+    let clock = ManualTimeSource()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: runtime,
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      now: { clock.seconds }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good")
+    await waitUntil { runtime.prompts.count == 1 }
+
+    recognizer.sendPartial("Good morning")
+    recognizer.sendPartial("Good morning to")
+    recognizer.sendPartial("Good morning to you")
+    await Task.yield()
+    XCTAssertEqual(runtime.prompts.count, 1, "three partials inside the gap ran three generations")
+
+    clock.advance(LivePartialTranslationScheduler.minimumGap)
+    recognizer.sendPartial("Good morning to you both")
+    await waitUntil { runtime.prompts.count == 2 }
+    XCTAssertEqual(runtime.prompts.last,
+                   HyMT2Request(sourceText: "Good morning to you both",
+                                targetLanguage: viewModel.targetLanguageB).flatPrompt)
+  }
+
+  /// The final always wins. A pass that was still generating when the turn concluded comes back
+  /// into a bubble that has already been delivered, and must change nothing about it.
+  func testTheFinalTranslationBeatsAPartialThatWasStillInFlight() async {
+    let gate = AsyncGate()
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime()
+    runtime.queuedResults = ["PARTIAL", "FINAL"]
+    runtime.translateGates = [gate]
+    let clock = ManualTimeSource()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: runtime,
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      now: { clock.seconds }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good")
+    await waitUntil { runtime.prompts.count == 1 }
+    XCTAssertNil(viewModel.items.last?.provisionalTranslation, "the pass is still generating")
+
+    // Released while the partial is mid-flight. The final goes out behind it and lands first,
+    // because nothing here cancels the partial: the guard is what makes a late answer harmless.
+    recognizer.sendFinal("Good morning")
+    viewModel.endTurn(.a)
+    await waitUntil { viewModel.items.last?.state == .translated }
+    XCTAssertEqual(viewModel.items.last?.translation, "FINAL")
+    XCTAssertNil(viewModel.items.last?.provisionalTranslation)
+
+    await gate.open()
+    await Task.yield()
+    await Task.yield()
+
+    XCTAssertEqual(viewModel.items.last?.translation, "FINAL")
+    XCTAssertNil(viewModel.items.last?.provisionalTranslation)
+    XCTAssertEqual(viewModel.items.last?.state, .translated)
+    XCTAssertEqual(viewModel.state, .ready)
+  }
+
+  /// The finalizing path is untouched by any of this. A turn released while a partial is still
+  /// generating arms the same watchdog, takes the same exit when the recognizer answers, and
+  /// delivers its final translation.
+  func testATurnConcludingMidPartialStillDeliversItsFinalTranslation() async {
+    let gate = AsyncGate()
+    let finalizingClock = ManualFinalizingClock()
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime()
+    runtime.queuedResults = ["PARTIAL", "FINAL"]
+    runtime.translateGates = [gate]
+    let clock = ManualTimeSource()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: runtime,
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      finalizingDelay: { await finalizingClock.delay($0) }, now: { clock.seconds }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good")
+    await waitUntil { runtime.prompts.count == 1 }
+
+    // No final in hand at the release, so the watchdog is armed exactly as before.
+    viewModel.endTurn(.a)
+    XCTAssertEqual(viewModel.state, .finalizing(.a))
+    await waitUntil { finalizingClock.waits.count == 1 }
+    XCTAssertEqual(finalizingClock.waits.first, RealtimeTranslateViewModel.finalizingTimeout)
+
+    recognizer.sendFinal("Good morning")
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.translation, "FINAL")
+    XCTAssertEqual(viewModel.items.last?.state, .translated)
+    XCTAssertNil(viewModel.notice)
+
+    // The watchdog was cancelled, and the partial is still harmless whenever it answers.
+    await finalizingClock.fire()
+    await gate.open()
+    await Task.yield()
+    await Task.yield()
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertEqual(viewModel.items.last?.translation, "FINAL")
+    XCTAssertNil(viewModel.items.last?.provisionalTranslation)
+  }
+
+  /// An interruption takes the utterance away while a partial is generating. The bubble is gone by
+  /// the time the answer arrives, and the next speaker's bubble must not inherit it.
+  func testAnAbandonedTurnDropsItsPartialAndNeverLandsItOnTheNextTurn() async {
+    let gate = AsyncGate()
+    let recognizer = FakeSpeechRecognizer()
+    let interruptions = FakeAudioInterruptions()
+    let runtime = FakeTranslationRuntime(result: "PARTIAL")
+    runtime.translateGates = [gate]
+    let clock = ManualTimeSource()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: runtime,
+      speechOutput: FakeSpeechOutput(), audioInterruptions: interruptions, now: { clock.seconds }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Good")
+    await waitUntil { runtime.prompts.count == 1 }
+
+    interruptions.send(.began)
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertTrue(viewModel.items.isEmpty)
+
+    // Speaker B takes the phone before the abandoned pass answers.
+    viewModel.beginTurn(.b)
+    XCTAssertEqual(viewModel.state, .listening(.b))
+    await gate.open()
+    await Task.yield()
+    await Task.yield()
+
+    XCTAssertEqual(viewModel.items.count, 1)
+    XCTAssertEqual(viewModel.items.last?.speaker, .b)
+    XCTAssertNil(viewModel.items.last?.provisionalTranslation)
+  }
+
   // MARK: - A pause mid-sentence
 
   /// The field-reported bug, as the pure type sees it. An on-device recognizer reads a breath
@@ -1435,6 +1720,19 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(item("Hello.", nil, .translated).copyableText, "Hello.")
     // The bubble that is still saying "Listening..." has nothing to copy.
     XCTAssertNil(item("", nil, .partial).copyableText)
+
+    // A live translation is a translation on screen, so a copy takes it rather than silently
+    // handing back the source transcript underneath it. The final still wins once it lands, and a
+    // failure withdraws the provisional along with everything else it withdraws.
+    func live(_ state: ConversationItem.DeliveryState, _ provisional: String?) -> ConversationItem {
+      ConversationItem(id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: language,
+                       translation: state == .translated ? "Bonjour." : nil, state: state,
+                       provisionalTranslation: provisional)
+    }
+    XCTAssertEqual(live(.partial, "Bonj").copyableText, "Bonj")
+    XCTAssertEqual(live(.finalizing, "Bonj").copyableText, "Bonj")
+    XCTAssertEqual(live(.translated, "Bonj").copyableText, "Bonjour.")
+    XCTAssertEqual(live(.translationFailed("nope"), "Bonj").copyableText, "Hello.")
   }
 
   func testCopyingABubblePutsItOnTheClipboardAndShowsTheCopiedToast() async {
@@ -3181,6 +3479,16 @@ private final class ManualFinalizingClock {
   }
 }
 
+/// Monotonic seconds under the test's hand, for the live-translation throttle's minimum gap.
+///
+/// The same trade the finalizing watchdog's clock makes: a throttle asserted against the real clock
+/// is either a suite that sleeps or a suite that is flaky, and here it would be both.
+private final class ManualTimeSource {
+  private(set) var seconds: TimeInterval = 0
+
+  func advance(_ amount: TimeInterval) { seconds += amount }
+}
+
 private final class FakeSpeechAudioSession: SpeechAudioSession {
   enum Event: Equatable { case activate, deactivate }
 
@@ -3264,6 +3572,12 @@ private final class FakeTranslationRuntime: TranslationRuntime {
   /// Errors handed out one per call, ahead of `translateError`, so a retry test can fail the first
   /// attempt and let the second one through.
   var queuedTranslateErrors: [Error?] = []
+  /// Results handed out one per call, ahead of `result`, so a live-translation test can tell a
+  /// partial pass's answer apart from the final one's.
+  var queuedResults: [String] = []
+  /// Holds `translate` calls open until the test lets them go, one gate per call in order. This is
+  /// the only way to catch a partial pass mid-flight, which is where every stale-guard case lives.
+  var translateGates: [AsyncGate] = []
   /// Mirrors the real runtime: set when a load installs a model, cleared only by `close`, and in
   /// particular not cleared by ending a session.
   private(set) var isModelResident = false
@@ -3299,6 +3613,8 @@ private final class FakeTranslationRuntime: TranslationRuntime {
     prompts.append(prompt)
     translateStarted = true
     let queued = queuedTranslateErrors.isEmpty ? nil : queuedTranslateErrors.removeFirst()
+    let queuedResult = queuedResults.isEmpty ? nil : queuedResults.removeFirst()
+    if !translateGates.isEmpty { await translateGates.removeFirst().wait() }
     if translateDelayNanoseconds > 0 {
       do {
         try await Task.sleep(nanoseconds: translateDelayNanoseconds)
@@ -3309,7 +3625,7 @@ private final class FakeTranslationRuntime: TranslationRuntime {
     }
     if let queued { throw queued }
     if let translateError { throw translateError }
-    return result
+    return queuedResult ?? result
   }
 
   func cancelLoad() { cancelLoadCount += 1 }

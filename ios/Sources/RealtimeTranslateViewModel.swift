@@ -44,6 +44,21 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// The one translation in flight. Held so ending a session can cancel it: a translation nobody
   /// is waiting for is a model still generating tokens on a phone whose session is over.
   private var translationTask: Task<Void, Never>?
+  /// The one partial (live) translation pass in flight, and the state that decides when the next one
+  /// may start. See `LiveTranslation.swift` for both decisions; this is only the wiring.
+  private var partialTranslationTask: Task<Void, Never>?
+  private var partialScheduler = LivePartialTranslationScheduler()
+  /// A session-wide counter, so "newer" is one comparison across the whole conversation.
+  private var partialRevisionCounter = 0
+  private var appliedPartialRevision = 0
+  /// The bubble a partial translation may still be written into: set when a turn begins, kept across
+  /// the release and the final translation so a pass that lands while the final is generating still
+  /// shows, and cleared the moment the final lands or the turn is abandoned.
+  private var liveTranslationItemID: UUID?
+  /// Monotonic seconds, for the partial throttle's minimum gap. `systemUptime` rather than a `Date`,
+  /// because a clock that a user or the network can move backwards would open the gate early or
+  /// close it forever. Injected so the throttle is a unit test rather than a stopwatch.
+  private let now: () -> TimeInterval
   /// Whether this view model started the recognizer and has not released it yet. A typed turn
   /// travels the same finalized-transcript path without ever opening a microphone, so the release
   /// at the end of that path has to know whether there is anything to release: stopping a
@@ -77,7 +92,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
        speechOutput: (any SpeechOutput)? = nil,
        preferences: (any LanguagePreferenceStoring)? = nil,
        audioInterruptions: (any AudioInterruptionObserving)? = nil,
-       finalizingDelay: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) }) {
+       finalizingDelay: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) },
+       now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     let store = preferences ?? EphemeralLanguagePreferences()
@@ -104,6 +120,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.haptics = haptics ?? SystemHaptics()
     self.speechOutput = speechOutput ?? SystemSpeechOutput()
     self.finalizingDelay = finalizingDelay
+    self.now = now
     self.preferences = store
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
@@ -216,6 +233,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     items.append(item)
     activeItemID = item.id
     pendingFinalTranscript = nil
+    beginLiveTranslation(for: item.id)
     do {
       try speechRecognizer.start(
         source: language,
@@ -228,6 +246,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     } catch {
       items.removeAll { $0.id == item.id }
       activeItemID = nil
+      endLiveTranslation()
       isRecognizerRunning = false
       speechRecognizer.stop()
       state = .error(SessionFailure.from(error))
@@ -258,8 +277,12 @@ final class RealtimeTranslateViewModel: ObservableObject {
     state = .finalizing(speaker)
     haptics.play(.turnEnded)
     updateActiveItem { item in
+      // The provisional translation survives the release. It is the only thing in the translation
+      // region until the final lands, and taking it away at the exact moment someone stops speaking
+      // would be the one place the live translation visibly goes backwards.
       ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
-                       targetLanguage: item.targetLanguage, translation: nil, state: .finalizing)
+                       targetLanguage: item.targetLanguage, translation: nil, state: .finalizing,
+                       provisionalTranslation: item.provisionalTranslation)
     }
     speechRecognizer.finish()
     // An answer that already arrived is taken now, empty or not. Everything else waits for the
@@ -346,6 +369,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   func clearConversation() {
     guard canClearConversation else { return }
     cancelFinalizingWatchdog()
+    endLiveTranslation()
     speechOutput.stop()
     items = []
     mostRecentTranslationRequest = nil
@@ -370,6 +394,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   func beginNewSession() {
     translationTask?.cancel()
     translationTask = nil
+    endLiveTranslation()
     cancelFinalizingWatchdog()
     isRecognizerRunning = false
     speechRecognizer.stop()
@@ -409,6 +434,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// bubble stays where it is.
   private func abandonUtterance(_ note: String) {
     cancelFinalizingWatchdog()
+    endLiveTranslation()
     isRecognizerRunning = false
     speechRecognizer.stop()
     speechOutput.stop()
@@ -549,8 +575,83 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private func receivePartial(_ transcript: String, speaker: Speaker) {
     guard !transcript.isEmpty, state == .listening(speaker) else { return }
     updateActiveItem { item in
+      // The provisional translation is carried across, not rebuilt: it belongs to words that are
+      // still in this transcript, and blanking it on every partial would make the live translation
+      // flicker in and out several times a second.
       ConversationItem(id: item.id, speaker: speaker, transcript: transcript,
-                       targetLanguage: item.targetLanguage, translation: nil, state: .partial)
+                       targetLanguage: item.targetLanguage, translation: nil, state: .partial,
+                       provisionalTranslation: item.provisionalTranslation)
+    }
+    scheduleLivePartialTranslation(speaker)
+  }
+
+  // MARK: - Live translation
+
+  /// Opens live translation for a turn that is starting.
+  private func beginLiveTranslation(for itemID: UUID) {
+    partialTranslationTask?.cancel()
+    partialTranslationTask = nil
+    partialScheduler.reset()
+    liveTranslationItemID = itemID
+  }
+
+  /// Closes it, for every way a turn stops existing: the recognizer refused to start, the utterance
+  /// was abandoned, the conversation was cleared, the session ended, or the final landed. An answer
+  /// still in flight is cancelled where it can be and dropped by the stale-guard where it cannot.
+  private func endLiveTranslation() {
+    partialTranslationTask?.cancel()
+    partialTranslationTask = nil
+    partialScheduler.reset()
+    liveTranslationItemID = nil
+  }
+
+  /// Runs the throttle and, if it opens, starts one partial pass over everything said so far.
+  ///
+  /// Only ever while the turn is live. A released turn stops scheduling here, which is the whole of
+  /// "the final wins": there is at most one pass left in flight by then, and the stale-guard decides
+  /// what happens to it.
+  private func scheduleLivePartialTranslation(_ speaker: Speaker) {
+    guard state == .listening(speaker), let itemID = liveTranslationItemID,
+          let item = items.first(where: { $0.id == itemID }) else { return }
+    let transcript = item.transcript
+    guard partialScheduler.begin(text: transcript, now: now()) == .start else { return }
+    partialRevisionCounter += 1
+    let pass = PartialTranslationPass(itemID: itemID, revision: partialRevisionCounter,
+                                      text: transcript)
+    // The existing pipeline, unchanged: the same request type, the same prompt, the same runtime
+    // call a finished turn makes. `mostRecentTranslationRequest` is deliberately not written here,
+    // because it names the request for the turn, and a turn's request is its final one.
+    let request = HyMT2Request(sourceText: transcript, targetLanguage: item.targetLanguage)
+    partialTranslationTask = Task { [weak self] in
+      guard let self else { return }
+      let translation = try? await translationRuntime.translate(prompt: request.flatPrompt)
+      guard !Task.isCancelled else { return }
+      partialScheduler.finishPass()
+      // A partial that failed is silent. The bubble keeps whatever it had, nothing is said about it,
+      // and the final is the answer that is allowed to report a failure.
+      if let translation { applyPartialTranslation(translation, pass: pass) }
+      // The transcript has almost certainly moved on while this was generating, so try again with
+      // whatever it says now. Refused by the same three gates, including the minimum gap.
+      if let live = state.activeSpeaker { scheduleLivePartialTranslation(live) }
+    }
+  }
+
+  /// Writes a completed partial pass into its bubble, if the stale-guard still allows it.
+  private func applyPartialTranslation(_ translation: String, pass: PartialTranslationPass) {
+    let text = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return }
+    guard LivePartialTranslationGuard.shouldApply(
+      pass: pass, liveItemID: liveTranslationItemID,
+      item: items.first(where: { $0.id == pass.itemID }), appliedRevision: appliedPartialRevision
+    ) else { return }
+    appliedPartialRevision = pass.revision
+    updateItem(id: pass.itemID) { item in
+      // Everything else about the bubble is left exactly as it stands, `state` above all: a
+      // provisional translation never advances the delivery state, so nothing keyed off `translated`
+      // can see it.
+      ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
+                       targetLanguage: item.targetLanguage, translation: item.translation,
+                       state: item.state, provisionalTranslation: text)
     }
   }
 
@@ -581,7 +682,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
     let target = targetLanguage(for: speaker.counterpart)
     updateActiveItem { item in
       ConversationItem(id: item.id, speaker: speaker, transcript: transcript,
-                       targetLanguage: target, translation: nil, state: .finalizing)
+                       targetLanguage: target, translation: nil, state: .finalizing,
+                       provisionalTranslation: item.provisionalTranslation)
     }
     state = .translating(speaker)
     // Only when there is one to release. A typed turn reaches here with the microphone closed, and
@@ -632,6 +734,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
       do {
         let translation = try await translationRuntime.translate(prompt: request.flatPrompt)
         guard !Task.isCancelled, state == .translating(speaker), let itemID else { return }
+        // The final replaces the provisional rather than sitting under it: `provisionalTranslation`
+        // goes back to nil here, which is also what closes the door on any partial still in flight.
+        endLiveTranslation()
         updateItem(id: itemID) { item in
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: translation, state: .translated)
@@ -641,6 +746,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
         haptics.play(.translationDelivered)
       } catch {
         guard !Task.isCancelled, state == .translating(speaker), let itemID else { return }
+        // A failed final also ends live translation: the region now belongs to the failure and its
+        // retry, and a provisional left standing under them would read as a translation that worked.
+        endLiveTranslation()
         updateItem(id: itemID) { item in
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: nil,
@@ -670,6 +778,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   deinit {
     sessionTask?.cancel()
     translationTask?.cancel()
+    partialTranslationTask?.cancel()
     finalizingWatchdog?.cancel()
     Task { [translationRuntime] in await translationRuntime.close() }
   }

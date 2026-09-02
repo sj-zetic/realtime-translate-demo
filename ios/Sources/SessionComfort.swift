@@ -173,11 +173,21 @@ final class ToastCenter: ObservableObject {
 extension ConversationItem {
   /// What a copy takes from this bubble: the translation once there is one, and the source
   /// transcript until then. A bubble still waiting for its first words has nothing to copy.
+  ///
+  /// A provisional (live) translation counts as "there is one", which is the one judgement call in
+  /// the live-translation work. Copy takes what the bubble is showing, and a bubble showing a
+  /// translation that hands back only the source transcript is the surprising answer, not the safe
+  /// one. What the clipboard loses is the styling that marked the text as provisional, which is
+  /// acceptable for two reasons: a copy is a snapshot of a moving screen either way, and the final
+  /// replaces the provisional a second or two later, so a second copy gets the settled wording. The
+  /// final still wins here as everywhere: a `translated` bubble copies its final translation, and a
+  /// failed one copies its transcript rather than a provisional the failure has already withdrawn.
   var copyableText: String? {
     let text: String
     switch state {
     case .translated: text = translation ?? transcript
-    default: text = transcript
+    case .partial, .finalizing: text = provisionalTranslation ?? transcript
+    case .translationFailed: text = transcript
     }
     return text.isEmpty ? nil : text
   }

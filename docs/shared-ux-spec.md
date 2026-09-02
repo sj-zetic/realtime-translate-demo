@@ -54,7 +54,7 @@ Ready to talk
 - A bubble sizes to its content rather than filling the row, with at least `64 dp/pt` of empty gutter on its far side, so the lean of the shape is legible across a table. Two near-full-width blocks whose only difference is a 12 pt label and two tints a step apart are not two speakers at the distance this app is used at.
 - An A bubble identifies `To B - <B reading language>`; a B bubble identifies `To A - <A reading language>`.
 - An empty transcript carries one line, and it is a different line per state: `Choose the languages above, then start the session.` in `setup`, `Speaker A or B can begin speaking.` once the session is live, and nothing at all in `permissionRequired`, `modelLoading`, `modelLoadFailed`, and `error`, where the banner directly above is already explaining. Keyed on the state rather than on "is a session live", which is what made a 1.9 GB download tell someone to choose languages from chips it had just locked.
-- The active utterance's partial source text updates only its existing active bubble. Partial text is never translated.
+- The active utterance's partial source text updates only its existing active bubble. Partial text *is* translated, provisionally and under a throttle, and shown in the same bubble's translation region: see [Live translation](#live-translation).
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
 - Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and push-to-talk row avoid system bars and gesture areas.
 
@@ -476,6 +476,32 @@ An empty final never displaces a transcript the recognizer did deliver: a recogn
 - Ending a session waits for the loaded model to clean up and close, clears the prior conversation, and returns the same screen to its idle state. View-model teardown also releases the model.
 - `MELANGE_PERSONAL_KEY` is supplied through the build environment and must not appear in source control or logs. Development builds embed it for SDK initialization; production distribution requires rotatable credential provisioning.
 
+### Live translation
+
+**A translation appears while the person is still talking, not only when they stop.** Waiting for the release meant the listener watched a transcript grow in a language they cannot read and then waited again for the model, which is the whole conversation spent behind the speaker. So while a turn is live the app also translates what has been said so far, provisionally.
+
+**Provisional is not final, anywhere it matters.** The provisional translation is a field of its own on the bubble, not an early write into the delivered translation, and it never advances the bubble's delivery state: a bubble showing a live translation is still `partial` (or `finalizing` after the release). Everything the app decides about a finished turn keys off the delivered state and is therefore untouched by a provisional one: no play control appears and nothing is spoken, no retry is offered, a replay has nothing to replay, and the soft delivery tick is the final's alone. The one thing a provisional does reach is `Copy`, which takes what the bubble is showing: a copy made while a live translation is on screen copies that text, and a copy made after the final lands copies the final. What the clipboard loses is the styling that marked it provisional, which is accepted because a copy is a snapshot of a moving screen either way.
+
+**Provisional styling.** The live translation is drawn in the same size as a finished one, because it is the same sentence and has to be readable across a table, and in `color.textSecondary` at the body's own weight rather than the final's `color.textPrimary` at medium. It sits under the state caption that is already there, so `Recognizing speech` or `Translation pending` names what the text below it is, in words, and that is also how the combined bubble reads to a screen reader. No new string, no badge, no spinner.
+
+**The throttle.** A partial pass is a whole translation of everything said so far on a 1.8B on-device model, so it is not run per word. Three gates, all of which must open:
+
+1. **One at a time.** Never more than one partial pass in flight. The runtime serializes on its own queue, so a second pass would only queue behind the first and land further out of date.
+2. **Something changed.** A pass starts only when the accumulated transcript differs from the text the previous pass started with.
+3. **A minimum gap.** Two passes never start closer together than `0.7 s`. It is a constant with the reasoning beside it: below it the word-by-word churn of a live recognizer becomes a queue of near-identical generations in front of the final, above it the provisional visibly stops keeping up.
+
+A pass is attempted when a partial arrives and again when a pass finishes; nothing runs on a timer. The consequence is that a speaker who trails off without releasing can leave their last few words untranslated until the release, and the final covers them, with the whole utterance rather than a suffix of it. The [pause-safe accumulator](#shared-state-transitions) already feeds each pass the whole utterance so far, so a pause needs no handling of its own here. Typed input is unaffected: it arrives final and translates once.
+
+**The final always wins.** Every pass is tagged with the bubble it was started for and a session-wide revision, and a pass is never cancelled: cancellation would have to run through the same runtime the final translation is queued on, so late answers are allowed to arrive and are judged instead. A completed pass is written only if all of the following hold:
+
+1. the bubble still exists, and it is still the one live translation may write to, which it is from the moment the turn begins until the final lands or the turn is abandoned; and
+2. no newer pass has already been applied; and
+3. the final has not landed, in either of the ways it can land. A `translated` bubble's translation region belongs to the final answer, and a failed one's belongs to the failure and its retry control.
+
+Releasing the control stops new passes being scheduled. If one is in flight it is left to finish, the final queues behind it, and the guard drops its answer if the final got there first. Ending a session, clearing the conversation, an audio interruption, and a recognizer failure all drop an in-flight pass's answer the same way, including onto the next speaker's bubble. The finalizing watchdog is untouched by any of it: a turn concluding while a partial is generating arms the same six second timer and delivers its final translation exactly as before.
+
+**Android parity note.** Live translation is iOS only for now; Android still translates only at the release. It is flagged as pending rather than implemented because Android's turn pipeline has not been through the [pause-safe accumulator](#shared-state-transitions) work either, and the two belong in one pass: the throttle and the stale-guard above are platform-neutral decisions and should be ported as the same two values under the same names, over the same accumulated transcript.
+
 ## Design tokens
 
 The palette is the ZETIC minimal system: white surfaces, near-black text, gray supporting text, thin dividers, and a single teal accent, plus two muted per-speaker families drawn from the same two hues.
@@ -545,7 +571,8 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Start A | A partial bubble on the left and active-A state; B control disabled with explanatory text |
 | Start B | B partial bubble on the right and active-B state; A control disabled with explanatory text |
 | A pause mid-sentence, still holding | iOS only for now: the recognizer's final ends a segment rather than the turn, the bubble keeps every word said so far and appends the post-pause speech to it, and the release produces one transcript covering the whole thing. Android parity is pending |
-| Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language |
+| Speaking a long turn | iOS only for now: a provisional translation of everything said so far appears in the same bubble while the control is still held, in secondary text under the state caption, throttled to one pass at a time and no closer than `0.7 s` apart. It never marks the turn delivered, and the final replaces it. Android parity is pending |
+| Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language. Any provisional translation still generating is left to finish and its answer is dropped if the final landed first |
 | Translation succeeds | Source text, target language, and translated text appear in one bubble |
 | Change a reading language mid-session | The chip updates, that speaker's recognition language re-aligns to the matching recognizer when the device has one, the model is not reloaded, and only later utterances use the new target |
 | Change a recognition language mid-session | The `Spoken language` section updates and the new language is used from the next utterance start |

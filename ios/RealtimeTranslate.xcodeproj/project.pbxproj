@@ -31,6 +31,7 @@
 		D719E3F94F7FC3578995C13A /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A4B2B427538BCA811EB57E /* Localization.swift */; };
 		EA9392BA581D7A33A62BB609 /* SettingsDrawerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C6E883544E98D95A275E85 /* SettingsDrawerModel.swift */; };
 		F244DCC6DC415775F470BA14 /* UtteranceAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CA0AA42E468D4F6C86D6C5 /* UtteranceAccumulator.swift */; };
+		F61F6CFCA71C16C4E97625F5 /* LiveTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranslation.swift; sourceTree = "<group>"; };
 		B3AFC7D00DD330A1C60FC5CA /* TypedInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedInput.swift; sourceTree = "<group>"; };
 		B87040CCB7C778A88CA14D00 /* FirstRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunModel.swift; sourceTree = "<group>"; };
 		BEAE3493413F94E95B7EE900 /* AudioInterruption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInterruption.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 				2BFD8E6380B80BDCD63ED044 /* FirstRunViews.swift */,
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
 				643EB71C1BBBD833D363F7FB /* LanguagePreferences.swift */,
+				99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */,
 				77B9ED1CAE9D7F4E967F826D /* Localizable.xcstrings */,
 				E2A4B2B427538BCA811EB57E /* Localization.swift */,
 				6BA31D04C1728DB6AC330181 /* LocalModelStore.swift */,
@@ -302,6 +305,7 @@
 				26600BD0758062479C63A689 /* FirstRunModel.swift in Sources */,
 				28EB34287B125AB2B5BD5034 /* FirstRunViews.swift in Sources */,
 				888B1D32E944556F19D52343 /* LanguagePreferences.swift in Sources */,
+				F61F6CFCA71C16C4E97625F5 /* LiveTranslation.swift in Sources */,
 				A55AE6021547FD129D79A526 /* LocalModelStore.swift in Sources */,
 				D719E3F94F7FC3578995C13A /* Localization.swift in Sources */,
 				8EC6C3010220ACCEC54729E0 /* MelangeTranslationRuntime.swift in Sources */,

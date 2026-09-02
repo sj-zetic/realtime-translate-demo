@@ -261,4 +261,28 @@ struct ConversationItem: Identifiable, Equatable {
   let targetLanguage: TargetLanguage
   let translation: String?
   let state: DeliveryState
+  /// A translation of the words heard so far, shown while the turn is still being spoken or is
+  /// waiting for its final answer. See `LiveTranslation.swift`.
+  ///
+  /// Deliberately a field of its own rather than an early write into `translation`, and deliberately
+  /// no new `DeliveryState` case. Everything this app decides about a finished turn keys off
+  /// `state == .translated` with a `translation` beside it: whether the play control exists and what
+  /// it speaks, whether a retry is offered, what a replay replays. A provisional translation is none
+  /// of those things, so it is kept where none of them can see it, and the final clears it as it
+  /// lands.
+  let provisionalTranslation: String?
+
+  /// Written out rather than left to the memberwise initializer so `provisionalTranslation` can
+  /// default to nil: every call site that predates live translation builds a bubble that has no
+  /// provisional text and never will.
+  init(id: UUID, speaker: Speaker, transcript: String, targetLanguage: TargetLanguage,
+       translation: String?, state: DeliveryState, provisionalTranslation: String? = nil) {
+    self.id = id
+    self.speaker = speaker
+    self.transcript = transcript
+    self.targetLanguage = targetLanguage
+    self.translation = translation
+    self.state = state
+    self.provisionalTranslation = provisionalTranslation
+  }
 }
