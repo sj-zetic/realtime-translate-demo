@@ -14,46 +14,22 @@ enum SpeechOutputCopy {
   static var replayAction: String {
     String(localized: "Play translation", comment: "Accessibility label for a bubble's replay control")
   }
+  /// Not "again": with speech on tap only, this control is the first play as often as it is the
+  /// second, and a hint that promises a repeat is wrong on every bubble nobody has played yet.
   static var replayHint: String {
-    String(localized: "Speaks this translation again.",
-           comment: "Accessibility hint for a bubble's replay control")
-  }
-  static var soundOnLabel: String {
-    String(localized: "Spoken translation on",
-           comment: "Accessibility label for the sound toggle while it is unmuted")
-  }
-  static var soundOffLabel: String {
-    String(localized: "Spoken translation off",
-           comment: "Accessibility label for the sound toggle while it is muted")
-  }
-  static var soundOnHint: String {
-    String(localized: "Turns spoken translation off.",
-           comment: "Accessibility hint for the sound toggle while it is unmuted")
-  }
-  static var soundOffHint: String {
-    String(localized: "Turns spoken translation on.",
-           comment: "Accessibility hint for the sound toggle while it is muted")
+    String(localized: "Reads this translation aloud.",
+           comment: "Accessibility hint for a bubble's play control")
   }
 }
 
-/// The two sound glyphs, and the one that is deliberately not a sound glyph.
+/// The one speech glyph left on the screen.
 ///
-/// The mute toggle and the per-bubble replay used to be the same speaker face. One of them is a
-/// state ("this app is currently silent") and the other is an action ("say this sentence again"),
-/// and one drawing cannot be both: a screen with a crossed-out speaker in the status strip and a
-/// live speaker on every bubble is a screen making two contradictory claims about sound. The
-/// replay is an action, so it takes the platform's sign for an action that plays something.
+/// There used to be two, and the pair was the problem: a crossed-out speaker in the status strip
+/// saying "this app is currently silent" over a live speaker on every bubble is one screen making
+/// two contradictory claims about sound. With speech on tap only there is no state to draw, so
+/// only the action remains, and it takes the platform's sign for an action that plays something.
 enum SpeechGlyph {
-  static let soundOn = "speaker.wave.2"
-  static let soundOff = "speaker.slash"
   static let replay = "play.circle"
-}
-
-/// The mute preference lives in platform preferences under one key, written by the toolbar's
-/// `@AppStorage` and read by the view model when it seeds itself, so the very first frame after a
-/// launch already agrees with the toggle.
-enum SpeechOutputDefaults {
-  static let mutedKey = "speech.muted"
 }
 
 // MARK: - What gets spoken
@@ -73,21 +49,24 @@ extension SessionState {
 extension ConversationItem {
   /// The text this bubble can speak: a finished translation and nothing else. A bubble that is
   /// still recognizing, still translating, or whose translation failed has nothing to say, which
-  /// is exactly when the replay control is hidden.
+  /// is exactly when the play control is hidden.
   var speakableTranslation: String? {
     guard case .translated = state, let translation else { return nil }
     return translation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : translation
   }
 }
 
-/// Whether a bubble speaks, and in which voice language. The one rule both the automatic
-/// announcement and the replay button go through, so muting cannot suppress only one of them.
+/// Whether a bubble speaks, and in which voice language.
+///
+/// One rule, and now one caller: a tap on that bubble's play control. Nothing speaks on delivery
+/// any more, so this no longer arbitrates between an automatic announcement and a replay, and
+/// there is no mute to consult: the tap is the consent.
 enum SpokenTranslation: Equatable {
   case speak(text: String, languageCode: String)
   case silent
 
-  static func decision(for item: ConversationItem, isMuted: Bool) -> SpokenTranslation {
-    guard !isMuted, let text = item.speakableTranslation else { return .silent }
+  static func decision(for item: ConversationItem) -> SpokenTranslation {
+    guard let text = item.speakableTranslation else { return .silent }
     return .speak(text: text, languageCode: item.targetLanguage.code)
   }
 }

@@ -93,15 +93,12 @@ enum Layout {
 /// main screen is never rebuilt on the way in and there is no navigation to unwind.
 struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
-  @StateObject private var settings = SettingsDrawerModel.fromLaunchArguments()
+  @StateObject private var settings = SettingsDrawerModel()
   @StateObject private var firstRun: FirstRunModel
   @StateObject private var conversationCopy = ConversationCopyModel()
   @StateObject private var typedInput = TypedInputModel()
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
-  /// The mute toggle's stored state. The view model seeds itself from the same key, so this is
-  /// the one place the preference is written and there is no second copy to drift.
-  @AppStorage(SpeechOutputDefaults.mutedKey) private var speechMuted = false
   /// The app-language override, as its raw value. `@AppStorage` cannot bind an enum without a
   /// `RawRepresentable` conformance that would then also have to survive an unknown stored value,
   /// so the raw string is the stored form and `AppLanguage.named` is the one tolerant reader.
@@ -133,7 +130,6 @@ struct RealtimeTranslateRootView: View {
       .overlay {
         SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
                               clearConversation: viewModel.clearConversation,
-                              modelHold: viewModel.modelHold,
                               appLanguage: AppLanguage.named(appLanguageRaw),
                               selectAppLanguage: selectAppLanguage)
       }
@@ -145,13 +141,11 @@ struct RealtimeTranslateRootView: View {
       .environment(\.locale, localeOverride ?? .autoupdatingCurrent)
       .onAppear {
         viewModel.adoptExistingPermission()
-        viewModel.setMuted(speechMuted)
         updateScreenAwake()
       }
       .onDisappear { screenAwake.release() }
       .onChange(of: viewModel.state) { _ in updateScreenAwake() }
       .onChange(of: scenePhase) { _ in updateScreenAwake() }
-      .onChange(of: speechMuted) { viewModel.setMuted($0) }
   }
 
   /// The one place the idle timer is decided: a live session in the foreground keeps the screen
@@ -226,9 +220,8 @@ struct RealtimeTranslateRootView: View {
         // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
         // screen, so it never lands on top of the push-to-talk row or the session action.
         ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy,
-                         showsReplay: !viewModel.isMuted, canReplay: viewModel.canReplay,
-                         replay: viewModel.replay, canRetry: viewModel.canRetryTranslation,
-                         retry: viewModel.retryTranslation)
+                         canReplay: viewModel.canReplay, replay: viewModel.replay,
+                         canRetry: viewModel.canRetryTranslation, retry: viewModel.retryTranslation)
           .overlay(alignment: .bottom) {
             ToastLayer(center: conversationCopy.toasts, identifier: "copy-toast")
           }
@@ -240,12 +233,8 @@ struct RealtimeTranslateRootView: View {
       // title and the ZETIC button. As an inset it is placed under the bar and pushes the rest of
       // the screen down instead of overlapping anything.
       .safeAreaInset(edge: .top, spacing: 0) {
-        // The mute toggle rides the status strip: that row is one short line of text with the
-        // whole trailing half empty, so the app's only always-present control lands there without
-        // crowding the wordmark or adding a row of chrome.
         VStack(spacing: 0) {
-          StatusStrip(title: viewModel.state.title, isMuted: speechMuted,
-                      toggleMute: { speechMuted.toggle() })
+          StatusStrip(title: viewModel.state.title)
           ThinDivider()
         }
         .background(DesignToken.surface)
@@ -332,10 +321,11 @@ struct ToastLayer: View {
   var body: some View { Toast(message: center.message, identifier: identifier) }
 }
 
+/// The app's one line of running commentary. It carried the sound toggle at its trailing end until
+/// speech became a per-bubble tap: with nothing to mute there is no state to draw up here, and the
+/// row goes back to being the one short sentence it always was.
 private struct StatusStrip: View {
   let title: String
-  let isMuted: Bool
-  let toggleMute: () -> Void
 
   var body: some View {
     HStack(spacing: 8) {
@@ -352,32 +342,10 @@ private struct StatusStrip: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel(Text("Session status: \(title)",
                                  comment: "Accessibility label for the status strip. %@ is the status"))
-      SpeechMuteToggle(isMuted: isMuted, toggle: toggleMute)
     }
     .padding(.leading, 16)
-    .padding(.trailing, 4)
+    .padding(.trailing, 16)
     .padding(.vertical, 4)
-  }
-}
-
-/// The one sound control: speaker on, speaker crossed out off. The glyph is the whole face, so
-/// the label carries the state in words for anything that cannot see it.
-private struct SpeechMuteToggle: View {
-  let isMuted: Bool
-  let toggle: () -> Void
-
-  var body: some View {
-    Button(action: toggle) {
-      Image(systemName: isMuted ? SpeechGlyph.soundOff : SpeechGlyph.soundOn)
-        .font(.system(size: 15, weight: .medium))
-        .foregroundStyle(isMuted ? DesignToken.textSecondary : DesignToken.textPrimary)
-        .frame(width: Layout.tapTarget, height: Layout.tapTarget)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .accessibilityIdentifier("speech-mute")
-    .accessibilityLabel(isMuted ? SpeechOutputCopy.soundOffLabel : SpeechOutputCopy.soundOnLabel)
-    .accessibilityHint(isMuted ? SpeechOutputCopy.soundOffHint : SpeechOutputCopy.soundOnHint)
   }
 }
 
@@ -581,9 +549,7 @@ private struct ConversationList: View {
   /// Nil in the states where the banner above is already saying what is happening.
   let emptyHint: String?
   let copy: (ConversationItem) -> Void
-  /// Whether a replay control belongs on a translated bubble at all: muted, it does not.
-  let showsReplay: Bool
-  /// Whether tapping one would actually play anything right now.
+  /// Whether tapping a bubble's play control would actually play anything right now.
   let canReplay: Bool
   let replay: (ConversationItem) -> Void
   let canRetry: Bool
@@ -601,9 +567,9 @@ private struct ConversationList: View {
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           ForEach(items) { item in
-            ConversationBubble(item: item, copy: { copy(item) }, showsReplay: showsReplay,
-                               canReplay: canReplay, replay: { replay(item) },
-                               canRetry: canRetry, retry: { retry(item) })
+            ConversationBubble(item: item, copy: { copy(item) }, canReplay: canReplay,
+                               replay: { replay(item) }, canRetry: canRetry,
+                               retry: { retry(item) })
               .id(item.id)
           }
         }
@@ -621,9 +587,6 @@ private struct ConversationList: View {
 private struct ConversationBubble: View {
   let item: ConversationItem
   let copy: () -> Void
-  /// Whether a replay control belongs here at all. Muted, it does not: a visible-but-inert speaker
-  /// glyph on every bubble of a silent app is a row of controls that answer taps with nothing.
-  let showsReplay: Bool
   /// Whether tapping one would play right now: false while the recognizer holds the microphone.
   let canReplay: Bool
   let replay: () -> Void
@@ -631,10 +594,10 @@ private struct ConversationBubble: View {
   let retry: () -> Void
 
   private var isA: Bool { item.speaker == .a }
-  /// Only a finished translation can be replayed, so the glyph is absent, not disabled, on a
-  /// bubble that is still recognizing, still translating, or whose translation failed.
-  private var hasReplayableTranslation: Bool { item.speakableTranslation != nil }
-  private var showsReplayControl: Bool { hasReplayableTranslation && showsReplay }
+  /// Only a finished translation can be played, so the glyph is absent, not disabled, on a bubble
+  /// that is still recognizing, still translating, or whose translation failed. Every other
+  /// translated bubble carries it: it is the only way this app makes a sound.
+  private var showsReplayControl: Bool { item.speakableTranslation != nil }
 
   var body: some View {
     // The bubble sizes to its content and the spacer takes what is left, rather than the bubble
@@ -730,10 +693,9 @@ private struct ConversationBubble: View {
   }
 }
 
-/// The per-bubble replay control. Present only when the app is not muted: a silent app showing an
-/// inert speaker on every bubble is a screen full of controls that do nothing. While the
-/// recognizer holds the microphone it stays but goes disabled, because that is a moment rather
-/// than a setting, and the control has to be in the same place when the moment passes.
+/// The per-bubble play control, and the app's only way of making a sound. While the recognizer
+/// holds the microphone it stays but goes disabled, because that is a moment rather than a
+/// setting, and the control has to be in the same place when the moment passes.
 private struct ReplayButton: View {
   let isEnabled: Bool
   let replay: () -> Void

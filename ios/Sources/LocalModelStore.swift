@@ -126,6 +126,12 @@ enum LocalModelStore {
 
   // MARK: - Storage footprint
 
+  /// Dormant, deliberately. The settings drawer's `Storage` row was removed, so nothing in the app
+  /// calls the footprint reading or the delete below any more. Both are kept whole, and kept under
+  /// test, because they are the hard part: the containment rules that keep a delete inside this
+  /// app's own artifacts took real work to get right, and a future row, or a low-storage prompt,
+  /// should find them here rather than start again.
+
   /// What this app's model occupies on disk, from what this store can actually discover.
   struct Footprint: Equatable {
     /// The stored `.ztc` archive, or 0 when there is none.
@@ -196,8 +202,8 @@ enum LocalModelStore {
     let manager = FileManager.default
     let existed = manager.fileExists(atPath: directory.path)
     // The index goes first, and its write is checked. A full disk that swallows this write after
-    // the directory was already removed leaves an index promising a model that is not there and a
-    // drawer saying "Model deleted" about a delete that half happened.
+    // the directory was already removed leaves an index promising a model that is not there and
+    // whatever called this confirming a delete that only half happened.
     do {
       try data.write(to: indexURL, options: .atomic)
     } catch {

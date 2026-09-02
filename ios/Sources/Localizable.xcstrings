@@ -256,40 +256,6 @@
         }
       }
     },
-    "Delete downloaded model" : {
-      "comment" : "Destructive button in the delete confirmation",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminar el modelo"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimer le modèle"
-          }
-        }
-      }
-    },
-    "Delete the downloaded model?" : {
-      "comment" : "Delete confirmation dialog title",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "¿Eliminar el modelo descargado?"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Supprimer le modèle téléchargé ?"
-          }
-        }
-      }
-    },
     "Dismiss the model download step" : {
       "comment" : "Accessibility label for the consent card's scrim",
       "localizations" : {
@@ -392,23 +358,6 @@
         }
       }
     },
-    "End the session first" : {
-      "comment" : "Storage row subtitle while a session holds the model in memory",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Termina la sesión primero"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminez d’abord la session"
-          }
-        }
-      }
-    },
     "Get started" : {
       "comment" : "Welcome screen primary button",
       "localizations" : {
@@ -507,23 +456,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Il se télécharge une fois, puis il reste sur ce téléphone."
-          }
-        }
-      }
-    },
-    "Keep it" : {
-      "comment" : "Cancel button in the delete confirmation",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conservar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conserver"
           }
         }
       }
@@ -664,40 +596,6 @@
         }
       }
     },
-    "Model deleted" : {
-      "comment" : "Toast after the model is removed from disk",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modelo eliminado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modèle supprimé"
-          }
-        }
-      }
-    },
-    "No model downloaded" : {
-      "comment" : "Storage row subtitle when nothing is on disk",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin modelo descargado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun modèle téléchargé"
-          }
-        }
-      }
-    },
     "No speech was recognized. Tap to talk again." : {
       "comment" : "Session banner note after a turn the recognizer heard nothing in",
       "localizations" : {
@@ -830,6 +728,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Langue de lecture"
+          }
+        }
+      }
+    },
+    "Reads this translation aloud." : {
+      "comment" : "Accessibility hint for a bubble's play control",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lee esta traducción en voz alta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lit cette traduction à voix haute."
           }
         }
       }
@@ -1004,23 +919,6 @@
         }
       }
     },
-    "Speaks this translation again." : {
-      "comment" : "Accessibility hint for a bubble's replay control",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vuelve a decir esta traducción en voz alta."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lit à nouveau cette traduction à voix haute."
-          }
-        }
-      }
-    },
     "Speech and translation run on this phone. Nothing is sent to a server." : {
       "comment" : "Welcome screen privacy line, body text",
       "localizations" : {
@@ -1106,40 +1004,6 @@
         }
       }
     },
-    "Spoken translation off" : {
-      "comment" : "Accessibility label for the sound toggle while it is muted",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traducción hablada desactivada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduction vocale désactivée"
-          }
-        }
-      }
-    },
-    "Spoken translation on" : {
-      "comment" : "Accessibility label for the sound toggle while it is unmuted",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traducción hablada activada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduction vocale activée"
-          }
-        }
-      }
-    },
     "Start session" : {
       "comment" : "Bottom bar action that starts a session",
       "localizations" : {
@@ -1153,23 +1017,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Démarrer la session"
-          }
-        }
-      }
-    },
-    "Storage" : {
-      "comment" : "Settings drawer row title for the downloaded model",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almacenamiento"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stockage"
           }
         }
       }
@@ -1204,23 +1051,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Touchez « Démarrer la session » pour commencer à traduire."
-          }
-        }
-      }
-    },
-    "The app is using it right now" : {
-      "comment" : "Storage row subtitle while the model is in memory outside a live session",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La aplicación lo está usando ahora"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’application l’utilise en ce moment"
           }
         }
       }
@@ -1397,40 +1227,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Turn Translate a besoin du micro et de la reconnaissance vocale sur cet appareil."
-          }
-        }
-      }
-    },
-    "Turns spoken translation off." : {
-      "comment" : "Accessibility hint for the sound toggle while it is unmuted",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Desactiva la traducción hablada."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Désactive la traduction vocale."
-          }
-        }
-      }
-    },
-    "Turns spoken translation on." : {
-      "comment" : "Accessibility hint for the sound toggle while it is muted",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activa la traducción hablada."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Active la traduction vocale."
           }
         }
       }
@@ -2032,75 +1828,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Traduction pour l’interlocuteur %@"
-          }
-        }
-      }
-    },
-    "storage.accessibility.locked" : {
-      "comment" : "Locked Storage row accessibility label. %1$@ row title, %2$@ size, %3$@ reason",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@, unavailable, %3$@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@, no disponible, %3$@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@, indisponible, %3$@"
-          }
-        }
-      }
-    },
-    "storage.confirmationMessage" : {
-      "comment" : "Delete confirmation body. %@ is a formatted size such as 1.9 GB",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This frees %@. The next session downloads the model again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esto libera %@. La próxima sesión vuelve a descargar el modelo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cela libère %@. La prochaine session retéléchargera le modèle."
-          }
-        }
-      }
-    },
-    "storage.onThisPhone" : {
-      "comment" : "Storage row subtitle. %@ is a formatted size such as 1.9 GB",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ on this phone"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ en este teléfono"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ sur ce téléphone"
           }
         }
       }

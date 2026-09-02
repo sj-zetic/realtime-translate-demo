@@ -122,15 +122,24 @@ final class FixedNetworkPath: NetworkPathReporting {
 
 enum ModelDownloadSize {
   /// The measured size of the Hy-MT2 archive, in bytes, as the one fact everything else is derived
-  /// from. Nothing anywhere writes a size out by hand: the consent card, the progress line, and
-  /// the settings drawer's storage row all format bytes through `ModelStorageCopy.size`, so the
-  /// model can never introduce itself as one size and then occupy another.
+  /// from. Nothing anywhere writes a size out by hand: the consent card and the progress line both
+  /// format bytes through `size(bytes:)`, so the model can never introduce itself as one size and
+  /// then transfer another.
   static let bytes: Int64 = 1_908_528_832
-  static var total: String { ModelStorageCopy.size(bytes: bytes) }
+  static var total: String { size(bytes: bytes) }
+
+  /// The one place in the app a byte count becomes words. `ByteCountFormatter` localizes the unit
+  /// and the decimal separator on its own, so nothing here has to.
+  ///
+  /// `.file` is decimal, which is what iOS itself, the App Store, and Finder all count in, so the
+  /// figure here is the figure someone will see in Settings for the same file.
+  static func size(bytes: Int64) -> String {
+    ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+  }
 
   /// How much of it has arrived, at a download fraction, formatted the same way.
   static func transferred(fraction: Double) -> String {
-    ModelStorageCopy.size(bytes: Int64((Double(bytes) * fraction).rounded()))
+    size(bytes: Int64((Double(bytes) * fraction).rounded()))
   }
 }
 

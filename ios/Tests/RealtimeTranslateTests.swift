@@ -367,16 +367,15 @@ final class RealtimeTranslateTests: XCTestCase {
       speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions()
     )
 
-    // While the microphone is still open an empty final means nothing yet, so it is dropped.
+    // While the microphone is still open an empty final changes nothing on screen.
     viewModel.beginTurn(.a)
-    recognizer.sendFinal("")
     XCTAssertEqual(viewModel.state, .listening(.a))
     XCTAssertNil(viewModel.notice)
 
     viewModel.endTurn(.a)
     XCTAssertEqual(viewModel.state, .finalizing(.a))
 
-    // Released, the same empty final is the only answer that will ever come.
+    // Released, the empty final is the only answer that will ever come.
     recognizer.sendFinal("")
 
     XCTAssertEqual(viewModel.state, .ready)
@@ -390,6 +389,156 @@ final class RealtimeTranslateTests: XCTestCase {
     viewModel.beginTurn(.b)
     XCTAssertEqual(viewModel.state, .listening(.b))
     XCTAssertNil(viewModel.notice)
+  }
+
+  /// The other order, and the one the empty-final fix used to miss. A recognizer is free to
+  /// deliver its final while the button is still held; `finish()` then has nothing left to answer
+  /// with, so a release that dropped the empty answer sat in `finalizing` waiting for a callback
+  /// that had already come and gone. Only the six second watchdog would have got out of it.
+  func testAnEmptyFinalDeliveredBeforeTheReleaseStillEndsTheTurnOnRelease() async {
+    let clock = ManualFinalizingClock()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      finalizingDelay: { await clock.delay($0) }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("")
+    XCTAssertEqual(viewModel.state, .listening(.a))
+
+    viewModel.endTurn(.a)
+
+    // Straight out, on the release itself, with no watchdog ever armed.
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertEqual(viewModel.notice, "No speech was recognized. Tap to talk again.")
+    XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertTrue(clock.waits.isEmpty, "an answer already in hand needs no watchdog")
+
+    // A recognizer that says something and then says nothing has already said what was said: the
+    // empty final must not overwrite a transcript it already delivered.
+    viewModel.beginTurn(.b)
+    recognizer.sendFinal("Hello there")
+    recognizer.sendFinal("")
+    viewModel.endTurn(.b)
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.transcript, "Hello there")
+    XCTAssertEqual(viewModel.items.last?.translation, "Translated")
+  }
+
+  // MARK: - The finalizing watchdog
+
+  /// An empty final is an answer. A recognizer that answers nothing at all is the case left over,
+  /// and it strands `finalizing` exactly as completely: every control on the screen blocked, and
+  /// the only way out the one that wipes the conversation. The watchdog is the insurance.
+  func testTheFinalizingWatchdogTakesTheSessionBackFromARecognizerThatNeverAnswers() async {
+    let clock = ManualFinalizingClock()
+    let recognizer = FakeSpeechRecognizer()
+    let earlier = previewTranslatedItem
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [earlier], speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      finalizingDelay: { await clock.delay($0) }
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Hello")
+    viewModel.endTurn(.a)
+
+    XCTAssertEqual(viewModel.state, .finalizing(.a))
+    await waitUntil { clock.waits.count == 1 }
+    XCTAssertEqual(clock.waits.first, RealtimeTranslateViewModel.finalizingTimeout)
+    XCTAssertEqual(RealtimeTranslateViewModel.finalizingTimeout, .seconds(6))
+
+    await clock.fire()
+
+    // The same recovery an interruption takes, and the same note a silent turn leaves.
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.notice, "No speech was recognized. Tap to talk again.")
+    XCTAssertEqual(viewModel.items.map(\.id), [earlier.id])
+    XCTAssertTrue(viewModel.isSessionLive)
+    XCTAssertEqual(recognizer.stopCount, 1)
+
+    // And the next turn works, which is the whole point.
+    viewModel.beginTurn(.b)
+    XCTAssertEqual(viewModel.state, .listening(.b))
+    XCTAssertNil(viewModel.notice)
+  }
+
+  /// A recognizer that answers in time must never be second-guessed six seconds later, and the
+  /// timer must not survive the utterance it was watching: by the time it would fire the session
+  /// may be legitimately finalizing a whole other turn, and killing that one turns a freeze fix
+  /// into a freeze.
+  func testATimelyFinalCancelsTheFinalizingWatchdog() async {
+    let clock = ManualFinalizingClock()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions(),
+      finalizingDelay: { await clock.delay($0) }
+    )
+
+    viewModel.beginTurn(.a)
+    viewModel.endTurn(.a)
+    await waitUntil { clock.waits.count == 1 }
+
+    recognizer.sendFinal("Hello there")
+
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.last?.translation, "Translated")
+    XCTAssertNil(viewModel.notice)
+
+    // The timer firing afterwards is a no-op: it was cancelled, and the utterance it was bound to
+    // is gone either way.
+    await clock.fire()
+
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertNil(viewModel.notice)
+    XCTAssertEqual(viewModel.items.count, 1)
+  }
+
+  /// The two other ways out of a watched utterance, neither of which leaves a timer behind that
+  /// could drop a note on a session that has moved on.
+  func testEndingTheSessionAndAnInterruptionBothCancelTheWatchdog() async {
+    for recovery in ["endSession", "interruption"] {
+      let clock = ManualFinalizingClock()
+      let recognizer = FakeSpeechRecognizer()
+      let interruptions = FakeAudioInterruptions()
+      let viewModel = RealtimeTranslateViewModel(
+        state: .ready, speechRecognizer: recognizer,
+        translationRuntime: FakeTranslationRuntime(result: "Translated"),
+        speechOutput: FakeSpeechOutput(), audioInterruptions: interruptions,
+        finalizingDelay: { await clock.delay($0) }
+      )
+
+      viewModel.beginTurn(.a)
+      viewModel.endTurn(.a)
+      await waitUntil { clock.waits.count == 1 }
+
+      if recovery == "endSession" {
+        viewModel.endSession()
+        XCTAssertEqual(viewModel.state, .setup, recovery)
+      } else {
+        interruptions.send(.began)
+        XCTAssertEqual(viewModel.state, .ready, recovery)
+        XCTAssertEqual(viewModel.notice, AudioInterruptionCopy.notice, recovery)
+      }
+
+      await clock.fire()
+
+      // Whatever the note said before the timer fired, it still says.
+      if recovery == "endSession" {
+        XCTAssertEqual(viewModel.state, .setup, recovery)
+        XCTAssertNil(viewModel.notice, recovery)
+      } else {
+        XCTAssertEqual(viewModel.state, .ready, recovery)
+        XCTAssertEqual(viewModel.notice, AudioInterruptionCopy.notice, recovery)
+      }
+    }
   }
 
   // MARK: - Ending a session
@@ -1167,13 +1316,14 @@ final class RealtimeTranslateTests: XCTestCase {
 
   // MARK: - Spoken translation
 
-  func testAFinishedTranslationIsSpokenOnceInTheTargetLanguage() async {
+  /// Speech is on tap only. A delivered translation says nothing at all, and the same bubble's
+  /// play control is what makes it speak, in the recipient's reading language.
+  func testADeliveredTranslationSaysNothingAndTheTapIsWhatSpeaksIt() async {
     let speech = FakeSpeechOutput()
     let recognizer = FakeSpeechRecognizer()
     let viewModel = RealtimeTranslateViewModel(
       state: .ready, speechRecognizer: recognizer,
-      translationRuntime: FakeTranslationRuntime(result: "\u{c548}\u{b155}."), speechOutput: speech,
-      isMuted: false
+      translationRuntime: FakeTranslationRuntime(result: "\u{c548}\u{b155}."), speechOutput: speech
     )
 
     viewModel.beginTurn(.a)
@@ -1181,9 +1331,33 @@ final class RealtimeTranslateTests: XCTestCase {
     viewModel.endTurn(.a)
     await waitUntil { viewModel.state == .ready }
 
+    XCTAssertEqual(viewModel.items.last?.translation, "\u{c548}\u{b155}.")
+    XCTAssertTrue(speech.spoken.isEmpty, "a finished translation is not announced")
+
+    guard let delivered = viewModel.items.last else { return XCTFail("no bubble") }
+    viewModel.replay(delivered)
+
     // Korean is speaker B's reading language, so an A turn is read in Korean.
     XCTAssertEqual(speech.spoken.map(\.text), ["\u{c548}\u{b155}."])
     XCTAssertEqual(speech.spoken.map(\.languageCode), ["ko"])
+  }
+
+  /// A typed turn travels the same path, so it is the same silence: the sheet's `Send` produces a
+  /// bubble and a translation, and nothing is heard until the bubble is tapped.
+  func testATypedTurnIsAlsoSilentUntilItsBubbleIsTapped() async {
+    let speech = FakeSpeechOutput()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), speechOutput: speech
+    )
+    viewModel.targetLanguageB = .hyMT2Candidates[2]
+
+    viewModel.submitTypedTranscript("Good morning", speaker: .a)
+    await waitUntil { viewModel.state == .ready }
+
+    XCTAssertTrue(speech.spoken.isEmpty)
+    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
+    XCTAssertEqual(speech.spoken.map(\.text), ["Bonjour."])
   }
 
   func testAFailedTranslationSpeaksNothing() async {
@@ -1202,56 +1376,28 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertTrue(speech.spoken.isEmpty)
   }
 
-  func testTheNewestTranslationCancelsTheOneBeingSpoken() async {
+  /// Newest wins survives the move to tap-only: it is now a tap landing on top of a sentence that
+  /// is still playing, which cuts rather than queues. Two people must never build a backlog of
+  /// sentences the phone still owes them.
+  func testANewTapCutsOffTheSentenceStillBeingSpoken() {
     let speech = FakeSpeechOutput()
-    let recognizer = FakeSpeechRecognizer()
-    let viewModel = RealtimeTranslateViewModel(
-      state: .ready, speechRecognizer: recognizer,
-      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), speechOutput: speech,
-      isMuted: false
+    let first = previewTranslatedItem
+    let second = ConversationItem(
+      id: UUID(), speaker: .b, transcript: "Good morning.", targetLanguage: .hyMT2Candidates[2],
+      translation: "Bonjour.", state: .translated
     )
-    viewModel.targetLanguageB = .hyMT2Candidates[2]
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [first, second], speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speech
+    )
 
-    for _ in 0 ..< 2 {
-      viewModel.beginTurn(.a)
-      recognizer.sendFinal("Hello.")
-      viewModel.endTurn(.a)
-      await waitUntil { viewModel.state == .ready }
-    }
+    viewModel.replay(first)
+    viewModel.replay(second)
 
     XCTAssertEqual(speech.spoken.count, 2)
-    // Each utterance is preceded by a stop, so a conversation never queues a backlog: one stop
-    // for the turn that begins, one for the translation that replaces the previous sentence.
-    XCTAssertEqual(speech.stopCount, 4)
-    XCTAssertEqual(speech.events.last, .speak)
-  }
-
-  func testMutingSuppressesTheAnnouncementAndTheReplayAndStopsWhatIsPlaying() async {
-    let speech = FakeSpeechOutput()
-    let recognizer = FakeSpeechRecognizer()
-    let viewModel = RealtimeTranslateViewModel(
-      state: .ready, speechRecognizer: recognizer,
-      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), speechOutput: speech,
-      isMuted: false
-    )
-
-    viewModel.setMuted(true)
-    XCTAssertTrue(viewModel.isMuted)
-    // Reaching for the toggle is how someone makes the phone stop talking mid-sentence.
-    XCTAssertEqual(speech.stopCount, 1)
-
-    viewModel.beginTurn(.a)
-    recognizer.sendFinal("Hello.")
-    viewModel.endTurn(.a)
-    await waitUntil { viewModel.state == .ready }
-    XCTAssertTrue(speech.spoken.isEmpty)
-
-    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
-    XCTAssertTrue(speech.spoken.isEmpty)
-
-    viewModel.setMuted(false)
-    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
-    XCTAssertEqual(speech.spoken.map(\.text), ["Bonjour."])
+    // One stop before each utterance, and nothing else: a cut, not a queue.
+    XCTAssertEqual(speech.stopCount, 2)
+    XCTAssertEqual(speech.events, [.stop, .speak, .stop, .speak])
   }
 
   func testBeginningATurnStopsSpeechBeforeTheRecognizerStarts() {
@@ -1287,7 +1433,7 @@ final class RealtimeTranslateTests: XCTestCase {
     let speech = FakeSpeechOutput()
     let viewModel = RealtimeTranslateViewModel(
       state: .setup, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
-      translationRuntime: FakeTranslationRuntime(), speechOutput: speech, isMuted: false
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speech
     )
 
     viewModel.replay(previewTranslatedItem)
@@ -1312,11 +1458,10 @@ final class RealtimeTranslateTests: XCTestCase {
     // Whitespace is not a sentence, so it neither speaks nor earns a control.
     XCTAssertNil(item("  \n ", .translated).speakableTranslation)
 
-    XCTAssertEqual(SpokenTranslation.decision(for: item("Bonjour.", .translated), isMuted: false),
+    XCTAssertEqual(SpokenTranslation.decision(for: item("Bonjour.", .translated)),
                    .speak(text: "Bonjour.", languageCode: "fr"))
-    XCTAssertEqual(SpokenTranslation.decision(for: item("Bonjour.", .translated), isMuted: true),
-                   .silent)
-    XCTAssertEqual(SpokenTranslation.decision(for: item(nil, .finalizing), isMuted: false), .silent)
+    XCTAssertEqual(SpokenTranslation.decision(for: item(nil, .finalizing)), .silent)
+    XCTAssertEqual(SpokenTranslation.decision(for: item("  \n ", .translated)), .silent)
   }
 
   func testNothingIsSpokenWhileTheRecognizerHoldsTheMicrophone() {
@@ -1329,9 +1474,9 @@ final class RealtimeTranslateTests: XCTestCase {
         XCTAssertFalse(SessionState.setup.isRecognizerLive)
   }
 
-  /// `speak` refuses while the recognizer owns the audio session, so a replay glyph left enabled
+  /// `speak` refuses while the recognizer owns the audio session, so a play glyph left enabled
   /// there answers a tap with nothing at all, which reads as a broken control rather than a busy
-  /// one. Muting already disabled it; this is the other half of the same rule.
+  /// one. It is the only thing that disables the control now that there is no mute.
   func testTheReplayControlIsDisabledWhileTheRecognizerHoldsTheMicrophone() {
     let recognizer = FakeSpeechRecognizer()
     let speech = FakeSpeechOutput()
@@ -1353,9 +1498,6 @@ final class RealtimeTranslateTests: XCTestCase {
     recognizer.sendFinal("hello")
     XCTAssertEqual(viewModel.state, .translating(.a))
     XCTAssertTrue(viewModel.canReplay)
-
-    viewModel.setMuted(true)
-    XCTAssertFalse(viewModel.canReplay)
   }
 
   func testVoiceMatchingPrefersTheExactCodeThenTheImpliedVariantThenAnyVoice() {
@@ -1410,18 +1552,42 @@ final class RealtimeTranslateTests: XCTestCase {
   }
 
   func testSpokenOutputCopyUsesNoEmDash() {
-    let copy = [
-      SpeechOutputCopy.replayAction, SpeechOutputCopy.replayHint, SpeechOutputCopy.soundOnLabel,
-      SpeechOutputCopy.soundOffLabel, SpeechOutputCopy.soundOnHint, SpeechOutputCopy.soundOffHint
-    ]
-
-    for line in copy {
+    for line in [SpeechOutputCopy.replayAction, SpeechOutputCopy.replayHint] {
       XCTAssertFalse(line.contains("\u{2014}"), line)
       XCTAssertFalse(line.contains("\u{2013}"), line)
       XCTAssertFalse(line.isEmpty)
     }
     XCTAssertEqual(SpeechOutputCopy.replayAction, "Play translation")
-    XCTAssertNotEqual(SpeechOutputCopy.soundOnLabel, SpeechOutputCopy.soundOffLabel)
+    // Not "again": with speech on tap only this is the first play as often as the second.
+    XCTAssertEqual(SpeechOutputCopy.replayHint, "Reads this translation aloud.")
+  }
+
+  /// The mute toggle is gone, and so is everything it was made of. A preference left behind and
+  /// still seeded would silence an app whose only remaining control is the tap that asks for
+  /// sound, which is a phone that answers every tap with nothing.
+  func testTheMuteToggleLeftNothingBehind() throws {
+    let catalog = try Self.stringCatalog()
+
+    for key in ["Spoken translation on", "Spoken translation off", "Turns spoken translation on.",
+                "Turns spoken translation off.", "Speaks this translation again."] {
+      XCTAssertNil(catalog.strings[key], "\(key) belongs to a control that no longer exists")
+    }
+    XCTAssertNotNil(catalog.strings["Reads this translation aloud."])
+    // No view model reads the old key any more, so a value left in preferences changes nothing.
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "ai.zetic.turntranslate.tests.muted"))
+    addTeardownBlock {
+      UserDefaults.standard.removePersistentDomain(forName: "ai.zetic.turntranslate.tests.muted")
+    }
+    defaults.set(true, forKey: "speech.muted")
+    let speech = FakeSpeechOutput()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speech
+    )
+
+    XCTAssertTrue(viewModel.canReplay)
+    viewModel.replay(previewTranslatedItem)
+    XCTAssertEqual(speech.spoken.map(\.text), ["Bonjour."])
   }
 
   // MARK: - Remembered languages
@@ -1578,7 +1744,10 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(typed.items.last?.transcript, "Good morning")
     XCTAssertEqual(typed.items.last?.translation, "Bonjour")
     XCTAssertEqual(typed.items.last?.targetLanguage.code, "fr")
-    // The same bubble is spoken, in the same voice language, as a recognized one.
+    // Neither path speaks on delivery, and the same tap speaks the same bubble in the same voice
+    // language a recognized one is read in.
+    XCTAssertTrue(speechOutput.spoken.isEmpty)
+    typed.replay(typed.items.last ?? previewTranslatedItem)
     XCTAssertEqual(speechOutput.spoken.map(\.languageCode), ["fr"])
     XCTAssertEqual(speechOutput.spoken.map(\.text), ["Bonjour"])
   }
@@ -1669,8 +1838,12 @@ final class RealtimeTranslateTests: XCTestCase {
 
     await waitUntil { viewModel.state == .ready }
     XCTAssertEqual(recognizer.stopCount, 0)
-    XCTAssertEqual(speech.spoken.count, 1)
     XCTAssertEqual(viewModel.items.last?.translation, "Translated")
+    // Delivery is silent, and the play control on the delivered bubble still finds a working
+    // audio session rather than one the recognizer stop tore down.
+    XCTAssertTrue(speech.spoken.isEmpty)
+    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
+    XCTAssertEqual(speech.spoken.count, 1)
   }
 
   /// A spoken turn still releases its recognizer, which is the half the guard must not break.
@@ -2093,119 +2266,21 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("artifacts/aaaa").path))
   }
 
-  /// The row locks on what is holding the model, not on what is on screen. The states this covers
-  /// are the two `isSessionLive` misses, and both are produced by a real view model rather than
-  /// passed in as a boolean: the model being mapped during a load, and the model deliberately kept
-  /// resident after `End Session` so the next start is instant.
-  func testTheStorageRowLocksOnWhatHoldsTheModelRatherThanOnWhatIsOnScreen() async {
-    let footprint = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 8, totalBytes: 16)
-    let runtime = FakeTranslationRuntime(result: "Translated")
-    let viewModel = RealtimeTranslateViewModel(
-      state: .setup, speechRecognizer: FakeSpeechRecognizer(), translationRuntime: runtime
-    )
+  /// The `Storage` row is gone from the drawer, and with it every string it carried. The
+  /// machinery underneath it is not: the footprint reading and the delete stay whole and stay
+  /// tested above, as a dormant capability a later row or a low-storage prompt can pick up.
+  func testTheStorageRowLeftNothingBehindButKeptItsMachinery() throws {
+    let catalog = try Self.stringCatalog()
 
-    XCTAssertEqual(viewModel.modelHold, .free)
-    XCTAssertTrue(ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold).isEnabled)
-
-    // Loading: the file is being mapped, and `isSessionLive` is false for all of it.
-    viewModel.startSession()
-    XCTAssertFalse(viewModel.isSessionLive)
-    XCTAssertEqual(viewModel.modelHold, .memory)
-    XCTAssertFalse(ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold).isEnabled)
-
-    await waitUntil { viewModel.state == .ready }
-    XCTAssertEqual(viewModel.modelHold, .session)
-
-    // Ended: no session on screen, and 1.9 GB still mapped. Deleting here is the repro, the next
-    // start short-circuits on the resident model and the app translates from a model it has
-    // already thrown away.
-    viewModel.endSession()
-    XCTAssertFalse(viewModel.isSessionLive)
-    XCTAssertTrue(runtime.isModelResident)
-    XCTAssertEqual(viewModel.modelHold, .memory)
-    let row = ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold)
-    XCTAssertFalse(row.isEnabled)
-    XCTAssertTrue(row.subtitle.contains(ModelStorageCopy.modelInMemory))
-  }
-
-  func testTheStorageRowNamesTheSizeAndLocksWhileASessionHoldsTheModel() {
-    let footprint = LocalModelStore.Footprint(archiveBytes: 1_000_000_000, moduleBytes: 1_000_000_000,
-                                              totalBytes: 2_000_000_000)
-    let size = ModelStorageCopy.size(bytes: 2_000_000_000)
-
-    let idle = ModelStorageRow.row(footprint: footprint, hold: .free)
-    XCTAssertTrue(idle.isEnabled)
-    XCTAssertEqual(idle.subtitle, "\(size) on this phone")
-    XCTAssertTrue(idle.accessibilityLabel.contains(ModelStorageCopy.deleteAction))
-
-    // A loaded model cannot be deleted from under the session that is using it.
-    let live = ModelStorageRow.row(footprint: footprint, hold: .session)
-    XCTAssertFalse(live.isEnabled)
-    XCTAssertTrue(live.subtitle.contains(size))
-    XCTAssertTrue(live.subtitle.contains("End the session first"))
-
-    let empty = ModelStorageRow.row(footprint: .none, hold: .free)
-    XCTAssertFalse(empty.isEnabled)
-    XCTAssertEqual(empty.subtitle, "No model downloaded")
-
-    for line in [ModelStorageCopy.title, ModelStorageCopy.empty, ModelStorageCopy.deleteAction,
-                 ModelStorageCopy.keepAction, ModelStorageCopy.confirmationTitle,
-                 ModelStorageCopy.sessionLive, ModelStorageCopy.modelInMemory,
-                 ModelStorageCopy.deleted, ModelStorageCopy.confirmationMessage(size),
-                 idle.subtitle, live.subtitle,
-                 ModelStorageRow.row(footprint: footprint, hold: .memory).subtitle] {
-      XCTAssertFalse(line.contains("\u{2014}"), line)
-      XCTAssertFalse(line.isEmpty)
+    for key in ["Storage", "No model downloaded", "Delete downloaded model", "Keep it",
+                "Delete the downloaded model?", "End the session first",
+                "The app is using it right now", "Model deleted", "storage.onThisPhone",
+                "storage.confirmationMessage", "storage.accessibility.locked"] {
+      XCTAssertNil(catalog.strings[key], "\(key) belongs to a row that no longer exists")
     }
-  }
 
-  func testTheDrawerAsksBeforeDeletingAndThenReportsAnEmptyStore() async {
-    let stored = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 0, totalBytes: 8)
-    let storage = FixedModelStorage(stored)
-    var announcements: [String] = []
-    let model = SettingsDrawerModel(
-      appInfo: .main, pasteboard: FakePasteboard(), toastDuration: 0.02, openURL: { _ in },
-      announce: { announcements.append($0) }, modelStorage: storage
-    )
-
-    // Opening is what reads the disk, so a download that finished since the last look is seen.
-    model.open()
-    XCTAssertEqual(model.storage, stored)
-    XCTAssertTrue(model.storageRow(hold: .free).isEnabled)
-    XCTAssertFalse(model.isConfirmingDelete)
-
-    // The row asks. It does not delete.
-    model.confirmDeleteModel()
-    XCTAssertTrue(model.isConfirmingDelete)
-    XCTAssertEqual(storage.deletions, 0)
-
-    model.deleteModel()
-
-    XCTAssertFalse(model.isConfirmingDelete)
-    XCTAssertEqual(storage.deletions, 1)
-    XCTAssertTrue(model.storage.isEmpty)
-    XCTAssertEqual(model.storageRow(hold: .free).subtitle, "No model downloaded")
-    XCTAssertEqual(model.toast, "Model deleted")
-    XCTAssertEqual(announcements, ["Model deleted"])
-    // The drawer stays open on purpose: the row itself is the confirmation.
-    XCTAssertTrue(model.isOpen)
-
-    await waitUntil { model.toast == nil }
-  }
-
-  func testARefusedDeleteChangesNothingAndSaysNothing() {
-    let stored = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 0, totalBytes: 8)
-    let storage = FixedModelStorage(stored, outcome: .refused)
-    let model = SettingsDrawerModel(appInfo: .main, pasteboard: FakePasteboard(),
-                                    toastDuration: 0.02, openURL: { _ in }, announce: { _ in },
-                                    modelStorage: storage)
-    model.open()
-
-    model.deleteModel()
-
-    XCTAssertEqual(model.storage, stored)
-    XCTAssertNil(model.toast)
-    XCTAssertFalse(model.isConfirmingDelete)
+    // The one place a byte count still becomes words, and the size the consent card is built on.
+    XCTAssertEqual(ModelDownloadSize.size(bytes: ModelDownloadSize.bytes), "1.91 GB")
   }
 
   func testTheDownloadConsentGateReArmsOnceTheModelIsDeleted() throws {
@@ -2230,17 +2305,6 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
     firstRun.acceptConsent()
     XCTAssertEqual(started, 2)
-  }
-
-  func testTheStorageLaunchArgumentPutsAModelOnTheRowWithoutOneExisting() {
-    XCTAssertNil(FixedModelStorage.fromLaunchArguments([]))
-    XCTAssertNil(FixedModelStorage.fromLaunchArguments(["-modelStorage", "not-a-number"]))
-
-    let storage = FixedModelStorage.fromLaunchArguments(["-modelStorage", "2039431168"])
-
-    XCTAssertEqual(storage?.footprint().totalBytes, 2_039_431_168)
-    XCTAssertEqual(storage?.deleteModel(), .deleted)
-    XCTAssertEqual(storage?.footprint(), LocalModelStore.Footprint.none)
   }
 
   // MARK: - Localization
@@ -2305,7 +2369,6 @@ final class RealtimeTranslateTests: XCTestCase {
     let scratch = try makeScratchDefaults()
     var announcements: [String] = []
     let model = SettingsDrawerModel(toastDuration: 60, announce: { announcements.append($0) },
-                                    modelStorage: FixedModelStorage(.none),
                                     languageDefaults: scratch.defaults)
 
     model.selectAppLanguage(.system)
@@ -2327,9 +2390,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(SessionState.listening(.a).title, "Speaker A is speaking")
     XCTAssertEqual(SessionState.finalizing(.b).title, "Finalizing Speaker B's transcript")
     XCTAssertEqual(SessionState.translating(.a).title, "Translating for Speaker B")
-    XCTAssertEqual(ModelStorageCopy.onThisPhone("1.9 GB"), "1.9 GB on this phone")
-    XCTAssertEqual(ModelStorageCopy.confirmationMessage("1.9 GB"),
-                   "This frees 1.9 GB. The next session downloads the model again.")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "954.3 MB of 1.91 GB")
     XCTAssertEqual(ModelDownloadSize.total, "1.91 GB")
     XCTAssertEqual(AppInfo(info: ["CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"]).versionLine,
                    "Version 1.2 (7)")
@@ -2346,7 +2407,6 @@ final class RealtimeTranslateTests: XCTestCase {
   func testCatalogBackedCopyStillReadsInEnglish() {
     XCTAssertEqual(SessionState.ready.title, "Ready to talk")
     XCTAssertEqual(SettingsDrawerModel.clearConversationTitle, "Clear conversation")
-    XCTAssertEqual(ModelStorageCopy.title, "Storage")
     XCTAssertEqual(SpeechOutputCopy.replayAction, "Play translation")
     XCTAssertEqual(AudioInterruptionCopy.notice, "Interrupted. Tap to talk again.")
     XCTAssertEqual(AppLanguageCopy.title, "App language")
@@ -2366,7 +2426,7 @@ final class RealtimeTranslateTests: XCTestCase {
     )
 
     XCTAssertEqual(compiled["status.listening"], "Speaker %@ is speaking")
-    XCTAssertEqual(compiled["storage.onThisPhone"], "%@ on this phone")
+    XCTAssertEqual(compiled["modelPreparation.transferred"], "%1$@ of %2$@")
     XCTAssertFalse(compiled.isEmpty)
     for (key, value) in compiled {
       XCTAssertFalse(value.contains("\u{2014}"), key)
@@ -2451,11 +2511,13 @@ final class RealtimeTranslateTests: XCTestCase {
     let french = catalog.strings.compactMapValues { $0.values["fr"] }
 
     XCTAssertEqual(french.values.map { $0.filter { $0 == "\u{00A0}" }.count }.reduce(0, +), 9)
-    XCTAssertEqual(french.values.map { $0.filter { $0 == "\u{202F}" }.count }.reduce(0, +), 1)
-    // Espace mot insecable before the colon, espace fine insecable before the question mark.
+    // Zero, and honestly zero: the app's only espace fine insecable stood before the question mark
+    // in `Supprimer le modele telecharge ?`, and that confirmation went with the `Storage` row.
+    // French sets one before `?`, `!`, `;` and `%`, and nothing left in the catalog carries any of
+    // the first three; the percent in the download headline takes a full no-break space above.
+    XCTAssertEqual(french.values.map { $0.filter { $0 == "\u{202F}" }.count }.reduce(0, +), 0)
+    // Espace mot insecable before the colon.
     XCTAssertEqual(french["Session status: %@"], "\u{c9}tat de la session\u{00A0}: %@")
-    XCTAssertEqual(french["Delete the downloaded model?"],
-                   "Supprimer le mod\u{e8}le t\u{e9}l\u{e9}charg\u{e9}\u{202F}?")
     XCTAssertEqual(french["modelPreparation.downloading"],
                    "T\u{e9}l\u{e9}chargement du mod\u{e8}le de traduction %lld\u{00A0}%%")
     // Every French apostrophe is U+2019, which is what a French reviewer expects to see.
@@ -2475,19 +2537,22 @@ final class RealtimeTranslateTests: XCTestCase {
                    "D\u{e9}marrer la session")
     XCTAssertEqual(french.localizedString(forKey: "status.listening", value: nil, table: nil),
                    "L\u{2019}interlocuteur %@ parle")
-    XCTAssertEqual(french.localizedString(forKey: "Storage", value: nil, table: nil), "Stockage")
-    XCTAssertEqual(french.localizedString(forKey: "storage.onThisPhone", value: nil, table: nil),
-                   "%@ sur ce t\u{e9}l\u{e9}phone")
+    XCTAssertEqual(french.localizedString(forKey: "Clear conversation", value: nil, table: nil),
+                   "Effacer la conversation")
+    XCTAssertEqual(french.localizedString(forKey: "Reads this translation aloud.", value: nil,
+                                          table: nil),
+                   "Lit cette traduction \u{e0} voix haute.")
 
     let spanish = try Self.localizedBundle("es")
     XCTAssertEqual(spanish.localizedString(forKey: "Start session", value: nil, table: nil),
                    "Empezar sesi\u{f3}n")
     XCTAssertEqual(spanish.localizedString(forKey: "status.listening", value: nil, table: nil),
                    "El hablante %@ est\u{e1} hablando")
-    XCTAssertEqual(spanish.localizedString(forKey: "Storage", value: nil, table: nil),
-                   "Almacenamiento")
-    XCTAssertEqual(spanish.localizedString(forKey: "storage.onThisPhone", value: nil, table: nil),
-                   "%@ en este tel\u{e9}fono")
+    XCTAssertEqual(spanish.localizedString(forKey: "Clear conversation", value: nil, table: nil),
+                   "Borrar conversaci\u{f3}n")
+    XCTAssertEqual(spanish.localizedString(forKey: "Reads this translation aloud.", value: nil,
+                                           table: nil),
+                   "Lee esta traducci\u{f3}n en voz alta.")
   }
 
   /// A `UserDefaults` domain of this test's own. Nothing here may touch `.standard`: the host app
@@ -2580,31 +2645,21 @@ final class RealtimeTranslateTests: XCTestCase {
   }
 
   /// One byte count, one formatter, one string. The consent card used to promise a hand-written
-  /// "about 1.9 GB" and the storage row then reported the measured bytes as something else.
-  func testTheConsentCardAndTheStorageRowNameTheSameSize() {
+  /// "about 1.9 GB" while the measured bytes read as something else everywhere else.
+  func testTheConsentCardAndTheProgressLineNameTheSameSize() {
     XCTAssertEqual(ModelDownloadSize.bytes, 1_908_528_832)
-    XCTAssertEqual(ModelDownloadSize.total, ModelStorageCopy.size(bytes: ModelDownloadSize.bytes))
     XCTAssertEqual(ModelDownloadSize.total, "1.91 GB")
     XCTAssertTrue(FirstRunCopy.consentSize.contains(ModelDownloadSize.total))
-    XCTAssertTrue(
-      ModelStorageRow.row(
-        footprint: LocalModelStore.Footprint(archiveBytes: ModelDownloadSize.bytes, moduleBytes: 0,
-                                             totalBytes: ModelDownloadSize.bytes),
-        hold: .free
-      ).subtitle.contains(ModelDownloadSize.total)
-    )
     // And the progress line under the bar, so no two numbers on the download screen disagree.
     XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "954.3 MB of 1.91 GB")
   }
 
-  /// A state toggle and an action cannot be the same drawing. The status strip's speaker says
-  /// whether the app is silent; a bubble's control says "read this one again".
-  func testTheReplayActionIsNotTheMuteStatesGlyph() {
+  /// One speech glyph is left, and it is the action rather than the state. The pair was the
+  /// problem: a crossed-out speaker in the status strip over a live speaker on every bubble was
+  /// one screen making two contradictory claims about sound.
+  func testTheOnlySpeechGlyphLeftIsTheActionOne() {
     XCTAssertEqual(SpeechGlyph.replay, "play.circle")
-    XCTAssertNotEqual(SpeechGlyph.replay, SpeechGlyph.soundOn)
-    XCTAssertNotEqual(SpeechGlyph.replay, SpeechGlyph.soundOff)
-    for glyph in [SpeechGlyph.replay, SpeechGlyph.soundOn, SpeechGlyph.soundOff,
-                  ZeticWordmarkGlyph.settings] {
+    for glyph in [SpeechGlyph.replay, ZeticWordmarkGlyph.settings] {
       XCTAssertNotNil(UIImage(systemName: glyph), "\(glyph) is not an SF Symbol on this platform")
     }
   }
@@ -2940,6 +2995,34 @@ private final class FakeSpeechOutput: SpeechOutput {
     stopCount += 1
     events.append(.stop)
     isSpeaking = false
+  }
+}
+
+/// The finalizing watchdog's wait, under the test's hand rather than the clock's.
+///
+/// Injected in place of `Task.sleep`, so "six seconds later" is a line in a test rather than six
+/// real seconds of a suite. It records what it was asked to wait for, which is how the timeout
+/// itself is asserted, and it returns only when the test fires it.
+@MainActor
+private final class ManualFinalizingClock {
+  private(set) var waits: [Duration] = []
+  private var resume: (() -> Void)?
+
+  func delay(_ duration: Duration) async {
+    waits.append(duration)
+    await withCheckedContinuation { continuation in
+      resume = { continuation.resume() }
+    }
+  }
+
+  /// Lets the pending wait return, then hands the main actor over so whatever it woke has run
+  /// before the test looks at the result. Firing with nothing waiting is a no-op, which is what
+  /// makes it safe to call at the end of a test that expects the watchdog to have been cancelled.
+  func fire() async {
+    let resuming = resume
+    resume = nil
+    resuming?()
+    await Task.yield()
   }
 }
 

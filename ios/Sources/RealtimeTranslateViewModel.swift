@@ -27,10 +27,6 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// Whether the microphone and speech-recognition prompts have already been answered with a yes.
   /// Drives the first-run priming step only; the session flow still keys off `state`.
   @Published private(set) var permissionGranted: Bool
-  /// Whether spoken output is silenced. Seeded from the same preference key the toolbar toggle
-  /// writes, so a launch that starts muted never speaks a first translation before the view
-  /// appears.
-  @Published private(set) var isMuted: Bool
   /// One quiet line about something that happened to the session rather than to a bubble. Today
   /// that is only an audio interruption. It is not an error state: the session is live, the model
   /// is loaded, and the next push-to-talk clears it.
@@ -53,7 +49,22 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// at the end of that path has to know whether there is anything to release: stopping a
   /// recognizer that never started tears down the audio session the spoken output is using.
   private var isRecognizerRunning = false
+  /// The timer watching a released turn that has not finalized yet. See `finalizingTimeout`.
+  private var finalizingWatchdog: Task<Void, Never>?
+  /// The wait that watchdog performs, injected so a test can fire it on demand rather than
+  /// spending six real seconds proving it fires.
+  private let finalizingDelay: (Duration) async -> Void
   private(set) var mostRecentTranslationRequest: HyMT2Request?
+
+  /// How long a released turn may sit in `finalizing` before the session takes itself back.
+  ///
+  /// A recognizer is supposed to answer `finish()` with a final result, and an empty one is a real
+  /// answer that already has its own exit. A recognizer that answers nothing at all still strands
+  /// the session: `finalizing` has no other way out, so every control on the screen is blocked and
+  /// the only remaining action is the one that wipes the conversation. Six seconds is far past any
+  /// finalization a working recognizer performs, which lands in well under a second, and short
+  /// enough that nobody has yet decided the app is frozen.
+  static let finalizingTimeout: Duration = .seconds(6)
 
   // Defaults let a first session start in one tap: automatic recognition for both speakers and two
   // different reading languages (English for A, Korean for B), matching the Android defaults.
@@ -64,9 +75,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
        translationRuntime: (any TranslationRuntime)? = nil,
        haptics: (any HapticSink)? = nil,
        speechOutput: (any SpeechOutput)? = nil,
-       isMuted: Bool = UserDefaults.standard.bool(forKey: SpeechOutputDefaults.mutedKey),
        preferences: (any LanguagePreferenceStoring)? = nil,
-       audioInterruptions: (any AudioInterruptionObserving)? = nil) {
+       audioInterruptions: (any AudioInterruptionObserving)? = nil,
+       finalizingDelay: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) }) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     let store = preferences ?? EphemeralLanguagePreferences()
@@ -92,7 +103,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
     self.haptics = haptics ?? SystemHaptics()
     self.speechOutput = speechOutput ?? SystemSpeechOutput()
-    self.isMuted = isMuted
+    self.finalizingDelay = finalizingDelay
     self.preferences = store
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
@@ -251,9 +262,47 @@ final class RealtimeTranslateViewModel: ObservableObject {
                        targetLanguage: item.targetLanguage, translation: nil, state: .finalizing)
     }
     speechRecognizer.finish()
-    if let transcript = pendingFinalTranscript, state == .finalizing(speaker) {
-      completeTurn(transcript, speaker: speaker)
+    // An answer that already arrived is taken now, empty or not. Everything else waits for the
+    // recognizer, under a watchdog, because a recognizer that never answers has to be survivable.
+    if pendingFinalTranscript != nil {
+      concludeUtterance(speaker)
+    } else {
+      startFinalizingWatchdog(for: speaker)
     }
+  }
+
+  /// The one exit from `finalizing`, taken by whichever of the three arrives first: the final the
+  /// recognizer delivers after the release, the final it already delivered before it, or the
+  /// watchdog. A transcript with words in it becomes a translation; anything else ends the turn
+  /// the way an interruption does, with the bubble discarded and one quiet line.
+  private func concludeUtterance(_ speaker: Speaker) {
+    guard state == .finalizing(speaker) else { return }
+    guard let transcript = pendingFinalTranscript, !transcript.isEmpty else {
+      abandonUtterance(EmptyTurnCopy.notice)
+      return
+    }
+    completeTurn(transcript, speaker: speaker)
+  }
+
+  /// Arms the timer that takes the session back from a recognizer that never finishes.
+  ///
+  /// Bound to this utterance, not just to this state: by the time it fires the session may have
+  /// been through a whole other turn that is legitimately finalizing, and killing that one would
+  /// turn a freeze fix into a freeze.
+  private func startFinalizingWatchdog(for speaker: Speaker) {
+    let utterance = activeItemID
+    finalizingWatchdog?.cancel()
+    finalizingWatchdog = Task { [weak self] in
+      guard let self else { return }
+      await finalizingDelay(Self.finalizingTimeout)
+      guard !Task.isCancelled, state == .finalizing(speaker), activeItemID == utterance else { return }
+      abandonUtterance(EmptyTurnCopy.notice)
+    }
+  }
+
+  private func cancelFinalizingWatchdog() {
+    finalizingWatchdog?.cancel()
+    finalizingWatchdog = nil
   }
 
   // MARK: - Typed turns
@@ -296,6 +345,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// a bubble that is going away, so it stops with it.
   func clearConversation() {
     guard canClearConversation else { return }
+    cancelFinalizingWatchdog()
     speechOutput.stop()
     items = []
     mostRecentTranslationRequest = nil
@@ -320,6 +370,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   func beginNewSession() {
     translationTask?.cancel()
     translationTask = nil
+    cancelFinalizingWatchdog()
     isRecognizerRunning = false
     speechRecognizer.stop()
     speechOutput.stop()
@@ -357,6 +408,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// Only the utterance dies. The model stays loaded, the languages stay chosen, and every earlier
   /// bubble stays where it is.
   private func abandonUtterance(_ note: String) {
+    cancelFinalizingWatchdog()
     isRecognizerRunning = false
     speechRecognizer.stop()
     speechOutput.stop()
@@ -381,28 +433,10 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// decides whether the display stays awake (see `ScreenAwakePolicy`).
   var isSessionLive: Bool { state.isSessionLive }
 
-  /// Whether the model is in memory or on its way there, which is the only thing that makes
-  /// deleting it from disk unsafe. Deliberately not `isSessionLive`: that answers a different
-  /// question, and its two blind spots are the two states where a delete does the most damage.
-  /// `loadingModel` is the file being mapped as it is removed, and the state after `End Session`
-  /// is a model kept resident on purpose, where a delete would leave the app translating happily
-  /// from memory and silently downloading 1.9 GB again on the next launch.
-  var isModelHeld: Bool {
-    if case .loadingModel = state { return true }
-    return translationRuntime.isModelResident
-  }
-
-  /// What the settings drawer's storage row is allowed to offer, from the two facts only this view
-  /// model has: whether a session is on screen to end, and whether the model is in memory.
-  var modelHold: ModelStorageRow.Hold {
-    if isSessionLive { return .session }
-    return isModelHeld ? .memory : .free
-  }
-
-  /// Whether a bubble's replay glyph does anything if it is tapped. Muted it plays nothing, and
-  /// while the recognizer holds the microphone `speak` refuses, so the control is disabled rather
-  /// than left looking live and doing nothing.
-  var canReplay: Bool { !isMuted && !state.isRecognizerLive }
+  /// Whether a bubble's play glyph does anything if it is tapped. While the recognizer holds the
+  /// microphone `speak` refuses, so the control is disabled rather than left looking live and
+  /// doing nothing.
+  var canReplay: Bool { !state.isRecognizerLive }
 
   /// A single tap can start the first session once permissions are granted.
   var canStartSession: Bool {
@@ -432,20 +466,13 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   // MARK: - Spoken output
 
-  /// Adopts the toolbar toggle's stored preference. Muting also cuts whatever is being spoken
-  /// right now, because the toggle is what someone reaches for to make the phone stop talking.
-  func setMuted(_ muted: Bool) {
-    guard muted != isMuted else { return }
-    isMuted = muted
-    if muted { speechOutput.stop() }
-  }
-
-  /// Replays one bubble's translation, from its speaker glyph. Same decision as the automatic
-  /// announcement, so a muted app stays silent here too.
+  /// Speaks one bubble's translation, from its play glyph. This is now the only way anything is
+  /// ever spoken: a finished translation is not announced as it lands, so a phone on a table
+  /// between two people says nothing until somebody asks it to.
   func replay(_ item: ConversationItem) { speak(item) }
 
   private func speak(_ item: ConversationItem) {
-    guard case let .speak(text, languageCode) = SpokenTranslation.decision(for: item, isMuted: isMuted)
+    guard case let .speak(text, languageCode) = SpokenTranslation.decision(for: item)
     else { return }
     // Never over an open microphone: while a turn is being recorded or finalized the recognizer
     // owns the audio session.
@@ -530,27 +557,27 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// The recognizer's last word on an utterance, which is sometimes that there were none.
   ///
   /// An empty final is realistic and not an error: a silent turn produces one, and the platform
-  /// recognizer synthesizes one for any recognition failure that is not a cancellation. While the
-  /// turn is still recording it means nothing yet, so it is dropped. Once the button is released
-  /// it is the only answer that will ever come, and dropping it there leaves `finalizing` with no
-  /// exit: every control blocked, and the only way out the one that wipes the conversation. So it
-  /// ends the utterance the way an interruption does, with the bubble discarded and a quiet note.
+  /// recognizer synthesizes one for any recognition failure that is not a cancellation. It is
+  /// remembered even while the turn is still recording, where it changes nothing yet. Dropping it
+  /// there was a second way to strand `finalizing`: `finish()` has nothing left to answer with
+  /// once the final has already been delivered, so a release that did not carry the empty answer
+  /// forward sat waiting for a callback that had already come and gone.
+  ///
+  /// It never displaces a transcript the recognizer did deliver. A recognizer that says something
+  /// and then says nothing has already told us what was said.
   private func receiveFinal(_ transcript: String, speaker: Speaker) {
     guard state == .listening(speaker) || state == .finalizing(speaker) else { return }
-    guard !transcript.isEmpty else {
-      if state == .finalizing(speaker) { abandonUtterance(EmptyTurnCopy.notice) }
-      return
-    }
-    pendingFinalTranscript = transcript
+    if !transcript.isEmpty || pendingFinalTranscript == nil { pendingFinalTranscript = transcript }
     guard state == .finalizing(speaker) else { return }
-    completeTurn(transcript, speaker: speaker)
+    concludeUtterance(speaker)
   }
 
   /// The one path a finalized transcript takes, whatever produced it: a released push-to-talk or
   /// a typed message. It resolves the counterpart's reading language, releases the recognizer
-  /// (already idle for a typed turn), issues exactly one Hy-MT2 request, and speaks the result.
+  /// (already idle for a typed turn), and issues exactly one Hy-MT2 request.
   private func completeTurn(_ transcript: String, speaker: Speaker) {
     guard state == .finalizing(speaker) else { return }
+    cancelFinalizingWatchdog()
     let target = targetLanguage(for: speaker.counterpart)
     updateActiveItem { item in
       ConversationItem(id: item.id, speaker: speaker, transcript: transcript,
@@ -609,10 +636,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: translation, state: .translated)
         }
+        // The soft tick is the whole of the delivery. Nothing is read aloud here: speech happens
+        // when the play control on this bubble is tapped, and only then.
         haptics.play(.translationDelivered)
-        // A finished translation is read aloud as it lands, which is also the moment the previous
-        // one stops mattering: a conversation must not build a backlog of sentences to play.
-        if let delivered = items.first(where: { $0.id == itemID }) { speak(delivered) }
       } catch {
         guard !Task.isCancelled, state == .translating(speaker), let itemID else { return }
         updateItem(id: itemID) { item in
@@ -644,6 +670,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   deinit {
     sessionTask?.cancel()
     translationTask?.cancel()
+    finalizingWatchdog?.cancel()
     Task { [translationRuntime] in await translationRuntime.close() }
   }
 

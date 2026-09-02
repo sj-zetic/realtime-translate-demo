@@ -9,10 +9,6 @@ struct SettingsDrawerOverlay: View {
   /// still knows nothing about the view model behind it.
   let canClearConversation: Bool
   let clearConversation: () -> Void
-  /// What is holding the model, so the drawer knows whether deleting it from disk is something it
-  /// can offer at all. Not the same question as whether a session is on screen: the model outlives
-  /// the session that loaded it.
-  let modelHold: ModelStorageRow.Hold
   /// The app-language override, owned by the root view's `@AppStorage` so the environment locale
   /// and the row can never disagree, and handed down here the same way the clear action is.
   let appLanguage: AppLanguage
@@ -23,7 +19,7 @@ struct SettingsDrawerOverlay: View {
       if model.isOpen {
         Scrim(close: model.close)
         SettingsDrawerPanel(model: model, canClearConversation: canClearConversation,
-                            clearConversation: clearConversation, modelHold: modelHold,
+                            clearConversation: clearConversation,
                             appLanguage: appLanguage, selectAppLanguage: selectAppLanguage)
           .transition(.move(edge: .trailing))
       }
@@ -55,7 +51,6 @@ private struct SettingsDrawerPanel: View {
   @ObservedObject var model: SettingsDrawerModel
   let canClearConversation: Bool
   let clearConversation: () -> Void
-  let modelHold: ModelStorageRow.Hold
   let appLanguage: AppLanguage
   let selectAppLanguage: (AppLanguage) -> Void
 
@@ -129,8 +124,6 @@ private struct SettingsDrawerPanel: View {
       ThinDivider()
       AppLanguageRow(selected: appLanguage, select: selectAppLanguage)
       ThinDivider()
-      storageRow
-      ThinDivider()
       SettingsRow(
         title: String(localized: "Visit zetic.ai",
                       comment: "Settings drawer row title. zetic.ai is a domain, keep it as is"),
@@ -154,40 +147,6 @@ private struct SettingsDrawerPanel: View {
         ),
         action: model.copyContactEmail
       )
-    }
-  }
-
-  /// The model's footprint, and the app's only destructive action behind the app's only
-  /// confirmation. The row itself never deletes: it asks.
-  ///
-  /// An `alert`, not a `confirmationDialog`. On a regular-width presentation SwiftUI renders a
-  /// confirmation dialog as a popover and drops the `.cancel` button from it, on the grounds that
-  /// tapping outside a popover dismisses it. What that left on screen was the app's only
-  /// destructive action, alone, with no visible way out: the only "no" was a tap on the dimmed
-  /// area, and the UI test covering this had grown a branch to cope with the missing button. An
-  /// alert keeps both buttons in every presentation, which is what a destructive confirmation
-  /// needs.
-  private var storageRow: some View {
-    let row = model.storageRow(hold: modelHold)
-    return SettingsRow(
-      title: ModelStorageCopy.title,
-      subtitle: row.subtitle,
-      symbol: "internaldrive",
-      identifier: "settings-storage",
-      accessibilityLabel: row.accessibilityLabel,
-      isEnabled: row.isEnabled,
-      action: model.confirmDeleteModel
-    )
-    .alert(ModelStorageCopy.confirmationTitle, isPresented: $model.isConfirmingDelete) {
-      // No identifiers here: SwiftUI turns these into alert actions, which carry their titles as
-      // their identifiers, and an identifier of our own would be dropped on some releases and
-      // shadow the title on others.
-      Button(ModelStorageCopy.deleteAction, role: .destructive, action: model.deleteModel)
-      Button(ModelStorageCopy.keepAction, role: .cancel) {}
-    } message: {
-      Text(verbatim: ModelStorageCopy.confirmationMessage(
-        ModelStorageCopy.size(bytes: model.storage.totalBytes)
-      ))
     }
   }
 
