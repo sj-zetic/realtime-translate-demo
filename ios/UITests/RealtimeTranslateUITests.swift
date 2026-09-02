@@ -33,10 +33,14 @@ final class RealtimeTranslateUITests: XCTestCase {
     let app = launch(state: "ended")
     XCTAssertTrue(app.buttons["Start Session"].exists)
     XCTAssertTrue(app.buttons["Start Session"].isEnabled)
-    XCTAssertTrue(app.buttons["languages-A"].label.contains("reads English"))
-    XCTAssertTrue(app.buttons["languages-A"].label.contains("speaks Automatic"))
-    XCTAssertTrue(app.buttons["languages-B"].label.contains("reads Korean"))
-    XCTAssertTrue(app.buttons["languages-B"].label.contains("speaks Automatic"))
+    // The spoken language follows the reading language when the host offers a matching
+    // on-device recognizer, and stays Automatic when it does not; accept both hosts.
+    let labelA = app.buttons["languages-A"].label
+    XCTAssertTrue(labelA.contains("reads English"))
+    XCTAssertTrue(labelA.contains("speaks English") || labelA.contains("speaks Automatic"))
+    let labelB = app.buttons["languages-B"].label
+    XCTAssertTrue(labelB.contains("reads Korean"))
+    XCTAssertTrue(labelB.contains("speaks Korean") || labelB.contains("speaks Automatic"))
     XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
   }
 
