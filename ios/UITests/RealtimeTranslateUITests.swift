@@ -192,6 +192,74 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(failed.buttons["replay-translation"].exists)
   }
 
+  // MARK: - Following the conversation
+
+  /// The promise the specification has always made, on a transcript far taller than the phone: the
+  /// newest bubble is on screen without anybody scrolling, and there is no jump control offering to
+  /// take you somewhere you already are.
+  func testALongConversationOpensOnTheNewestBubble() {
+    let app = launch(state: "longConversation")
+    let newest = newestBubble(app)
+    XCTAssertTrue(newest.waitForExistence(timeout: 10))
+    XCTAssertTrue(newest.isHittable)
+    XCTAssertLessThan(newest.frame.maxY, app.buttons["Start Speaker A's turn"].frame.minY)
+    XCTAssertFalse(app.buttons["jump-to-latest"].exists)
+  }
+
+  /// Reading mode, end to end. Scrolling back stops the transcript moving; a turn that arrives
+  /// while somebody is reading does not drag them anywhere, and the one control that appears puts
+  /// them back at the newest bubble.
+  ///
+  /// The turn is typed rather than spoken, because a UI test has no microphone: a typed message
+  /// travels the exact path a released push-to-talk hands a finalized transcript to, so the
+  /// transcript changes exactly as it would for a spoken turn.
+  func testATurnArrivingWhileScrolledBackOffersAJumpToLatest() {
+    let app = launch(state: "longConversation")
+    XCTAssertTrue(newestBubble(app).waitForExistence(timeout: 10))
+
+    let jump = app.buttons["jump-to-latest"]
+    // The transcript is the only scroller on this screen. Three swipes put the reader well past
+    // one bubble's height, which is where reading mode begins. Nothing has arrived below yet, so
+    // there is nothing to offer and the control stays away.
+    for _ in 0..<3 { app.scrollViews.firstMatch.swipeDown() }
+    XCTAssertFalse(jump.exists)
+
+    app.buttons["typed-input"].tap()
+    let field = app.descendants(matching: .any).matching(identifier: "typed-input-field").firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    field.typeText("One more turn")
+    app.buttons["typed-input-send"].tap()
+
+    XCTAssertTrue(jump.waitForExistence(timeout: 10))
+    XCTAssertEqual(jump.label, "Jump to latest")
+    XCTAssertTrue(jump.isHittable)
+    XCTAssertGreaterThanOrEqual(jump.frame.width.rounded(), 44)
+    XCTAssertGreaterThanOrEqual(jump.frame.height.rounded(), 44)
+    // Bottom trailing of the transcript, and clear of the push-to-talk row underneath it.
+    XCTAssertGreaterThan(jump.frame.midX, app.frame.midX)
+    XCTAssertLessThan(jump.frame.maxY, app.buttons["Start Speaker A's turn"].frame.minY)
+    // The new turn did not drag the reader anywhere: they are still where they scrolled to.
+    XCTAssertFalse(bubble(app, containing: "One more turn").isHittable)
+
+    jump.tap()
+
+    XCTAssertTrue(waitForDisappearance(jump, timeout: 5))
+    XCTAssertTrue(bubble(app, containing: "One more turn").isHittable)
+  }
+
+  /// A chat bubble is one combined accessibility element, so a bubble is found by its identifier
+  /// and its text together rather than as a loose label.
+  private func bubble(_ app: XCUIApplication, containing text: String) -> XCUIElement {
+    app.descendants(matching: .any).matching(
+      NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "conversation-bubble", text)
+    ).firstMatch
+  }
+
+  private func newestBubble(_ app: XCUIApplication) -> XCUIElement {
+    bubble(app, containing: "Turn number 20.")
+  }
+
   private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed

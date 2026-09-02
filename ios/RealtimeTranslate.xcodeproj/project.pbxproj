@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0FC95749B3AF438F2CE6D039 /* ConversationFollow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AAECAAD96EF8C6E3325520C /* ConversationFollow.swift */; };
 		26600BD0758062479C63A689 /* FirstRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87040CCB7C778A88CA14D00 /* FirstRunModel.swift */; };
 		28EB34287B125AB2B5BD5034 /* FirstRunViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BFD8E6380B80BDCD63ED044 /* FirstRunViews.swift */; };
 		36C6FE670D3E40188E33C33E /* SessionComfort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780310E21D20068B1740AD73 /* SessionComfort.swift */; };
@@ -69,6 +70,7 @@
 		780310E21D20068B1740AD73 /* SessionComfort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionComfort.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8AAECAAD96EF8C6E3325520C /* ConversationFollow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationFollow.swift; sourceTree = "<group>"; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		99C10AF6EC90E7D03A1B420C /* LiveTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranslation.swift; sourceTree = "<group>"; };
 		B3AFC7D00DD330A1C60FC5CA /* TypedInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedInput.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 			children = (
 				F0E635E8688EF84DCA1C958E /* Assets.xcassets */,
 				BEAE3493413F94E95B7EE900 /* AudioInterruption.swift */,
+				8AAECAAD96EF8C6E3325520C /* ConversationFollow.swift */,
 				B87040CCB7C778A88CA14D00 /* FirstRunModel.swift */,
 				2BFD8E6380B80BDCD63ED044 /* FirstRunViews.swift */,
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
@@ -302,6 +305,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				443036F7CDB26D1AE6CFB6EE /* AudioInterruption.swift in Sources */,
+				0FC95749B3AF438F2CE6D039 /* ConversationFollow.swift in Sources */,
 				26600BD0758062479C63A689 /* FirstRunModel.swift in Sources */,
 				28EB34287B125AB2B5BD5034 /* FirstRunViews.swift in Sources */,
 				888B1D32E944556F19D52343 /* LanguagePreferences.swift in Sources */,

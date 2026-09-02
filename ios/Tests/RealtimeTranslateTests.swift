@@ -1767,6 +1767,142 @@ final class RealtimeTranslateTests: XCTestCase {
     await waitUntil { model.toasts.message == nil }
   }
 
+  // MARK: - Following the conversation
+
+  /// The default, and the promise the specification has been making all along: while the bottom is
+  /// pinned, every kind of content change scrolls to the newest bubble. The four kinds are one
+  /// event here, which is the whole fix: only the first of them used to move anything.
+  func testFollowModeScrollsOnEveryContentChange() {
+    var follow = ConversationFollow()
+
+    XCTAssertTrue(follow.isFollowing)
+    XCTAssertFalse(follow.showsJumpControl)
+    // A new bubble, a partial transcript growing, a provisional translation refreshing, a final
+    // landing: the transcript changed, so the bottom is re-pinned.
+    for _ in 0..<4 {
+      XCTAssertEqual(follow.contentChanged(isEmpty: false, isVoiceOverRunning: false),
+                     .scrollToLatest)
+    }
+    XCTAssertTrue(follow.isFollowing)
+    XCTAssertFalse(follow.showsJumpControl)
+  }
+
+  /// Scrolling up past one bubble's height is the whole of "leave me alone": nothing moves, and the
+  /// jump control appears only once there is something below worth jumping to.
+  func testScrollingUpEntersReadingModeAndTheJumpControlWaitsForNewContent() {
+    var follow = ConversationFollow()
+
+    follow.observe(distanceFromBottom: ConversationFollow.nearBottomThreshold + 1)
+
+    XCTAssertFalse(follow.isFollowing)
+    // Scrolled up, but nothing new has arrived yet, so there is nothing to offer.
+    XCTAssertFalse(follow.showsJumpControl)
+
+    XCTAssertEqual(follow.contentChanged(isEmpty: false, isVoiceOverRunning: false), .none)
+
+    XCTAssertTrue(follow.hasUnseenContent)
+    XCTAssertTrue(follow.showsJumpControl)
+    // Still nothing moves, however much arrives.
+    XCTAssertEqual(follow.contentChanged(isEmpty: false, isVoiceOverRunning: false), .none)
+    XCTAssertFalse(follow.isFollowing)
+  }
+
+  /// The threshold is a tolerance, not a boundary: at it and inside it the transcript is still
+  /// following, and a bounce past the end (a negative distance) certainly is.
+  func testTheNearBottomThresholdIsAboutOneBubbleTall() {
+    XCTAssertEqual(ConversationFollow.nearBottomThreshold, 120)
+
+    for distance in [-40, 0, 60, Int(ConversationFollow.nearBottomThreshold)] {
+      var follow = ConversationFollow()
+      follow.observe(distanceFromBottom: ConversationFollow.nearBottomThreshold + 1)
+      XCTAssertFalse(follow.isFollowing)
+
+      follow.observe(distanceFromBottom: CGFloat(distance))
+
+      XCTAssertTrue(follow.isFollowing, "\(distance) should count as the bottom")
+    }
+  }
+
+  /// Two ways back into follow mode, and both clear the unseen flag: pressing the control, and
+  /// simply scrolling back down to the bottom by hand.
+  func testBothTheJumpControlAndScrollingBackDownRestoreFollowMode() {
+    var tapped = ConversationFollow()
+    tapped.observe(distanceFromBottom: 400)
+    _ = tapped.contentChanged(isEmpty: false, isVoiceOverRunning: false)
+    XCTAssertTrue(tapped.showsJumpControl)
+
+    XCTAssertEqual(tapped.snapToLatest(), .scrollToLatest)
+
+    XCTAssertTrue(tapped.isFollowing)
+    XCTAssertFalse(tapped.showsJumpControl)
+    XCTAssertEqual(tapped.contentChanged(isEmpty: false, isVoiceOverRunning: false), .scrollToLatest)
+
+    var scrolled = ConversationFollow()
+    scrolled.observe(distanceFromBottom: 400)
+    _ = scrolled.contentChanged(isEmpty: false, isVoiceOverRunning: false)
+    XCTAssertTrue(scrolled.showsJumpControl)
+
+    scrolled.observe(distanceFromBottom: 0)
+
+    XCTAssertTrue(scrolled.isFollowing)
+    XCTAssertFalse(scrolled.showsJumpControl)
+  }
+
+  /// An emptied transcript has no bottom worth moving to, and the next turn has to start pinned
+  /// whatever the reader was doing when they cleared it.
+  func testClearingTheTranscriptResetsTheWholeDecision() {
+    var follow = ConversationFollow()
+    follow.observe(distanceFromBottom: 400)
+    _ = follow.contentChanged(isEmpty: false, isVoiceOverRunning: false)
+    XCTAssertTrue(follow.showsJumpControl)
+
+    XCTAssertEqual(follow.contentChanged(isEmpty: true, isVoiceOverRunning: false), .none)
+
+    XCTAssertEqual(follow, ConversationFollow())
+    XCTAssertTrue(follow.isFollowing)
+    XCTAssertFalse(follow.showsJumpControl)
+  }
+
+  /// The VoiceOver call, asserted rather than described in a comment. An automatic scroll is
+  /// suppressed, because moving the transcript under a reader who is part way through a sentence
+  /// loses their place; everything somebody pressed still scrolls.
+  func testVoiceOverSuppressesTheAutomaticScrollButNotTheDeliberateOne() {
+    var follow = ConversationFollow()
+
+    XCTAssertEqual(follow.contentChanged(isEmpty: false, isVoiceOverRunning: true), .none)
+    // And it is a suppressed scroll, not a drop into reading mode: the bottom is still pinned, so
+    // no jump control appears over a transcript that is already showing the newest bubble.
+    XCTAssertTrue(follow.isFollowing)
+    XCTAssertFalse(follow.showsJumpControl)
+
+    XCTAssertEqual(follow.snapToLatest(), .scrollToLatest)
+  }
+
+  /// The transitions that are always "now", and the one that emphatically is not: `ready` is where
+  /// every finished turn lands, so snapping on it would haul a reader back down on every
+  /// translation, which is the behaviour reading mode exists to prevent.
+  func testOnlyTurnBeginSessionStartAndSessionEndSnapToTheBottom() {
+    XCTAssertTrue(ConversationSnapMoment.shouldSnap(from: .ready, to: .listening(.a)))
+    XCTAssertTrue(ConversationSnapMoment.shouldSnap(from: .ready, to: .listening(.b)))
+    XCTAssertTrue(ConversationSnapMoment.shouldSnap(from: .loadingModel(1), to: .ready))
+    XCTAssertTrue(ConversationSnapMoment.shouldSnap(from: .ready, to: .setup))
+
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .translating(.a), to: .ready))
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .finalizing(.a), to: .translating(.a)))
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .listening(.a), to: .finalizing(.a)))
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .ready, to: .error(.runtime("no"))))
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .ready, to: .ready))
+    XCTAssertFalse(ConversationSnapMoment.shouldSnap(from: .listening(.a), to: .listening(.a)))
+  }
+
+  func testTheJumpControlNamesItselfInEnglish() {
+    XCTAssertEqual(ConversationFollowCopy.jumpToLatest, "Jump to latest")
+    XCTAssertEqual(ConversationFollowCopy.jumpToLatestHint,
+                   "Scrolls to the newest bubble and follows the conversation again.")
+    XCTAssertFalse(ConversationFollowCopy.jumpToLatest.contains("\u{2014}"))
+    XCTAssertFalse(ConversationFollowCopy.jumpToLatest.contains("\u{2013}"))
+  }
+
   // MARK: - Spoken translation
 
   /// Speech is on tap only. A delivered translation says nothing at all, and the same bubble's

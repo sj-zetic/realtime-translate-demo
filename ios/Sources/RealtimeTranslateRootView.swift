@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ZETIC minimal design tokens. White surfaces, near-black text, one teal accent.
 enum DesignToken {
@@ -232,7 +233,8 @@ struct RealtimeTranslateRootView: View {
         }
         // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
         // screen, so it never lands on top of the push-to-talk row or the session action.
-        ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy,
+        ConversationList(items: viewModel.items, state: viewModel.state, emptyHint: emptyHint,
+                         copy: conversationCopy.copy,
                          canReplay: viewModel.canReplay, replay: viewModel.replay,
                          canRetry: viewModel.canRetryTranslation, retry: viewModel.retryTranslation)
           .overlay(alignment: .bottom) {
@@ -570,6 +572,9 @@ private struct BannerButton: View {
 
 private struct ConversationList: View {
   let items: [ConversationItem]
+  /// Only for the transitions that snap the transcript back to the bottom. See
+  /// `ConversationSnapMoment`.
+  let state: SessionState
   /// Nil in the states where the banner above is already saying what is happening.
   let emptyHint: String?
   let copy: (ConversationItem) -> Void
@@ -579,32 +584,146 @@ private struct ConversationList: View {
   let canRetry: Bool
   let retry: (ConversationItem) -> Void
 
+  /// The follow/reading decision. A value, so everything it decides is a unit test; this view only
+  /// hands it numbers and performs the one effect it answers with.
+  @State private var follow = ConversationFollow()
+  /// The previous session state, because iOS 16's `onChange` reports only the new one and the
+  /// snap moments are transitions rather than states.
+  @State private var lastState: SessionState?
+
+  /// A one point sliver under the last bubble, and the thing every scroll actually targets. Scrolling
+  /// to the last item with a `.bottom` anchor lands short when that bubble is taller than the
+  /// viewport, which is exactly the case a long turn produces; an anchor below it always means the
+  /// end of the conversation. It sits outside the `LazyVStack` so it is a real, realized view rather
+  /// than one the lazy stack may not have built yet.
+  private static let bottomAnchor = "conversation-bottom"
+  private static let scrollSpace = "conversation-scroll"
+
   var body: some View {
-    ScrollViewReader { proxy in
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 12) {
-          if items.isEmpty, let emptyHint {
-            Text(emptyHint)
-              .font(.subheadline)
-              .foregroundStyle(DesignToken.textSecondary)
-              .fixedSize(horizontal: false, vertical: true)
-              .frame(maxWidth: .infinity, alignment: .leading)
+    GeometryReader { viewport in
+      ScrollViewReader { proxy in
+        ScrollView {
+          VStack(spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 12) {
+              if items.isEmpty, let emptyHint {
+                Text(emptyHint)
+                  .font(.subheadline)
+                  .foregroundStyle(DesignToken.textSecondary)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+              }
+              ForEach(items) { item in
+                ConversationBubble(item: item, copy: { copy(item) }, canReplay: canReplay,
+                                   replay: { replay(item) }, canRetry: canRetry,
+                                   retry: { retry(item) })
+                  .id(item.id)
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            Color.clear.frame(height: 1).id(Self.bottomAnchor)
           }
-          ForEach(items) { item in
-            ConversationBubble(item: item, copy: { copy(item) }, canReplay: canReplay,
-                               replay: { replay(item) }, canRetry: canRetry,
-                               retry: { retry(item) })
-              .id(item.id)
+          // The offset probe: one reading for the whole transcript, taken from a single
+          // `Color.clear` behind the content. Deliberately not a reading per bubble, because this
+          // path runs on every frame of a scroll and on every partial transcript; the viewport's
+          // own height comes from the one `GeometryReader` around the scroller, which measures once
+          // per layout rather than once per scroll.
+          //
+          // The reading is delivered by `onChange` rather than by a `PreferenceKey`. The
+          // preference is the tidier shape and was written that way first, but a preference
+          // published from inside a `ScrollView`'s content does not reach an `onPreferenceChange`
+          // on the scroller itself on this SDK: it arrives as the key's default value and never
+          // moves, so the transcript believed it was at the bottom forever and reading mode could
+          // not be entered. Verified against this same geometry read, which is correct.
+          .background(
+            GeometryReader { content in
+              let overflow = content.frame(in: .named(Self.scrollSpace)).maxY - viewport.size.height
+              Color.clear
+                .onAppear { adopt(distanceFromBottom: overflow) }
+                .onChange(of: overflow) { adopt(distanceFromBottom: $0) }
+            }
+          )
+        }
+        .coordinateSpace(name: Self.scrollSpace)
+        // Every content change, not only a new bubble: a partial transcript growing, the grey
+        // provisional translation being refreshed, and the final landing all make the last bubble
+        // taller without changing the count, and all three used to grow off the bottom of the screen.
+        .onChange(of: items) { newItems in
+          perform(follow.contentChanged(isEmpty: newItems.isEmpty,
+                                        isVoiceOverRunning: UIAccessibility.isVoiceOverRunning),
+                  with: proxy)
+        }
+        .onChange(of: state) { newState in
+          let previous = lastState
+          lastState = newState
+          guard let previous, ConversationSnapMoment.shouldSnap(from: previous, to: newState)
+          else { return }
+          perform(follow.snapToLatest(), with: proxy)
+        }
+        .onAppear {
+          lastState = state
+          // A live state restored with a conversation already in it opens at the newest bubble
+          // rather than at the top of the history. Deferred by one turn of the main queue, because
+          // the scroll view has not laid its content out at the moment `onAppear` fires and a
+          // `scrollTo` against an unmeasured content size does nothing.
+          DispatchQueue.main.async { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
+        }
+        .overlay(alignment: .bottomTrailing) {
+          if follow.showsJumpControl {
+            JumpToLatestButton { perform(follow.snapToLatest(), with: proxy) }
+              .padding(.trailing, 16)
+              .padding(.bottom, 16)
+              .transition(.opacity)
           }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-      }
-      .onChange(of: items.count) { _ in
-        guard let last = items.last else { return }
-        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        .animation(.easeInOut(duration: 0.2), value: follow.showsJumpControl)
       }
     }
+  }
+
+  /// Hands the probe's reading to the decision, and writes it back only when it changed anything.
+  /// This runs on every frame of a scroll, and `@State` invalidates on the write rather than on the
+  /// difference, so an unconditional assignment would re-evaluate the transcript on every one.
+  private func adopt(distanceFromBottom: CGFloat) {
+    var updated = follow
+    updated.observe(distanceFromBottom: distanceFromBottom)
+    if updated != follow { follow = updated }
+  }
+
+  /// The whole of the shell's side of the decision: one scroll, gently animated, or nothing at all.
+  private func perform(_ effect: ConversationFollow.Effect, with proxy: ScrollViewProxy) {
+    guard effect == .scrollToLatest else { return }
+    withAnimation { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
+  }
+}
+
+/// The way back to the newest bubble, and the only thing that appears when the transcript has
+/// deliberately stopped following the conversation.
+///
+/// A circled chevron rather than a labelled pill: it floats over the transcript it is offering to
+/// move, so it has to be small enough to sit on top of somebody's words without covering them, and a
+/// chevron pointing down over a scrolling list means one thing on every phone. It is drawn from the
+/// tokens the rest of the chrome uses, `surface` over `divider` with a `textSecondary` glyph, so it
+/// reads as a control on the surface rather than as a fifth colour, and it is a full `tapTarget` box
+/// whatever the glyph inside it measures.
+private struct JumpToLatestButton: View {
+  let jump: () -> Void
+
+  var body: some View {
+    Button(action: jump) {
+      Image(systemName: "chevron.down")
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(DesignToken.textSecondary)
+        .frame(width: Layout.tapTarget, height: Layout.tapTarget)
+        .background(DesignToken.surface)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(DesignToken.divider, lineWidth: 1))
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("jump-to-latest")
+    .accessibilityLabel(ConversationFollowCopy.jumpToLatest)
+    .accessibilityHint(ConversationFollowCopy.jumpToLatestHint)
   }
 }
 
