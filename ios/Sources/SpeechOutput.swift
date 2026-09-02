@@ -36,6 +36,19 @@ enum SpeechOutputCopy {
   }
 }
 
+/// The two sound glyphs, and the one that is deliberately not a sound glyph.
+///
+/// The mute toggle and the per-bubble replay used to be the same speaker face. One of them is a
+/// state ("this app is currently silent") and the other is an action ("say this sentence again"),
+/// and one drawing cannot be both: a screen with a crossed-out speaker in the status strip and a
+/// live speaker on every bubble is a screen making two contradictory claims about sound. The
+/// replay is an action, so it takes the platform's sign for an action that plays something.
+enum SpeechGlyph {
+  static let soundOn = "speaker.wave.2"
+  static let soundOff = "speaker.slash"
+  static let replay = "play.circle"
+}
+
 /// The mute preference lives in platform preferences under one key, written by the toolbar's
 /// `@AppStorage` and read by the view model when it seeds itself, so the very first frame after a
 /// launch already agrees with the toggle.

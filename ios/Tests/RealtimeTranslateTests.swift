@@ -1,4 +1,5 @@
 import AVFAudio
+import UIKit
 import XCTest
 import Speech
 import ZeticMLange
@@ -893,6 +894,9 @@ final class RealtimeTranslateTests: XCTestCase {
 
   func testDownloadProgressIsNamedOnlyWhileBytesAreActuallyMoving() {
     XCTAssertEqual(ModelPreparationStatus.status(for: nil).headline, "Preparing translation model")
+    // The status strip is driven from the same status, so the two lines cannot disagree.
+    XCTAssertEqual(SessionState.loadingModel(nil).title, "Preparing translation model")
+    XCTAssertEqual(SessionState.loadingModel(0.32).title, "Downloading translation model 32%")
     XCTAssertNil(ModelPreparationStatus.status(for: nil).progress)
     XCTAssertNil(ModelPreparationStatus.status(for: nil).detail)
     // 0 and 1 are the local-load bookends, not a download in flight.
@@ -902,11 +906,11 @@ final class RealtimeTranslateTests: XCTestCase {
     let downloading = ModelPreparationStatus.status(for: 0.32)
     XCTAssertTrue(downloading.isDownloading)
     XCTAssertEqual(downloading.headline, "Downloading translation model 32%")
-    XCTAssertEqual(downloading.detail, "0.6 of 1.9 GB")
-    XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "1.0 of 1.9 GB")
+    XCTAssertEqual(downloading.detail, "610.7 MB of 1.91 GB")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "954.3 MB of 1.91 GB")
     XCTAssertEqual(ModelPreparationStatus.status(for: 0.95).headline,
                    "Downloading translation model 95%")
-    XCTAssertEqual(ModelPreparationStatus.status(for: 0.95).detail, "1.8 of 1.9 GB")
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.95).detail, "1.81 GB of 1.91 GB")
   }
 
   func testLaunchArgumentsForceEachFirstRunStateAndResetTheFlags() throws {
@@ -989,18 +993,18 @@ final class RealtimeTranslateTests: XCTestCase {
       XCTAssertFalse(line.contains("\u{2013}"), line)
       XCTAssertFalse(line.isEmpty)
     }
-    XCTAssertEqual(FirstRunCopy.consentSize, "The translation model is about 1.9 GB.")
+    XCTAssertEqual(FirstRunCopy.consentSize, "The translation model is 1.91 GB.")
   }
 
   // MARK: - Session comfort
 
   func testScreenStaysAwakeExactlyWhileASessionIsLive() {
     let live: [SessionState] = [
-      .ready, .listening(.a), .listening(.b), .finalizing(.a), .translating(.b), .error("nope")
+      .ready, .listening(.a), .listening(.b), .finalizing(.a), .translating(.b), .error(.runtime("nope"))
     ]
     let idle: [SessionState] = [
       .permissionRequired, .setup, .loadingModel(nil), .loadingModel(0.5),
-      .modelLoadFailed("nope"), .endingSession, .ended
+      .modelLoadFailed("nope")
     ]
 
     for state in live {
@@ -1282,7 +1286,7 @@ final class RealtimeTranslateTests: XCTestCase {
   func testReplayingATranslatedBubbleSpeaksItAgainInItsOwnLanguage() {
     let speech = FakeSpeechOutput()
     let viewModel = RealtimeTranslateViewModel(
-      state: .ended, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
+      state: .setup, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
       translationRuntime: FakeTranslationRuntime(), speechOutput: speech, isMuted: false
     )
 
@@ -1322,8 +1326,7 @@ final class RealtimeTranslateTests: XCTestCase {
     // exactly why the translation can be read out the moment it lands.
     XCTAssertFalse(SessionState.translating(.a).isRecognizerLive)
     XCTAssertFalse(SessionState.ready.isRecognizerLive)
-    XCTAssertFalse(SessionState.ended.isRecognizerLive)
-    XCTAssertFalse(SessionState.setup.isRecognizerLive)
+        XCTAssertFalse(SessionState.setup.isRecognizerLive)
   }
 
   /// `speak` refuses while the recognizer owns the audio session, so a replay glyph left enabled
@@ -1608,7 +1611,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(runtime.prompts, [])
 
     // Nothing can be typed before the model is loaded, or after the session ends, either.
-    for state in [SessionState.setup, .ended, .loadingModel(0.5), .permissionRequired] {
+    for state in [SessionState.setup, .loadingModel(0.5), .permissionRequired] {
       let idle = RealtimeTranslateViewModel(state: state, speechRecognizer: FakeSpeechRecognizer(),
                                             translationRuntime: FakeTranslationRuntime())
       XCTAssertFalse(idle.canSubmitTypedTranscript, "\(state)")
@@ -1686,7 +1689,7 @@ final class RealtimeTranslateTests: XCTestCase {
   func testTypedInputCopyNamesBothLanguagesAndUsesNoEmDash() {
     let guidance = TypedInputCopy.guidance(speaker: .a, typing: .hyMT2Candidates[1],
                                            translatedTo: .hyMT2Candidates[9])
-    XCTAssertEqual(guidance, "Speaker A types in English. It is translated into Korean for B.")
+    XCTAssertEqual(guidance, "Speaker A types in English. It is translated into Korean for Speaker B.")
     XCTAssertEqual(TypedInputCopy.placeholder(for: .hyMT2Candidates[9]), "Type in Korean")
 
     let copy = [
@@ -2321,19 +2324,19 @@ final class RealtimeTranslateTests: XCTestCase {
   /// its own key. Each of these has an explicit key, so a missing or uncompiled catalog would make
   /// the assertion read `status.listening` instead of `A is speaking`.
   func testExplicitCatalogKeysResolveToTheirEnglishStrings() {
-    XCTAssertEqual(SessionState.listening(.a).title, "A is speaking")
-    XCTAssertEqual(SessionState.finalizing(.b).title, "Finalizing B's transcript")
-    XCTAssertEqual(SessionState.translating(.a).title, "Translating for B")
+    XCTAssertEqual(SessionState.listening(.a).title, "Speaker A is speaking")
+    XCTAssertEqual(SessionState.finalizing(.b).title, "Finalizing Speaker B's transcript")
+    XCTAssertEqual(SessionState.translating(.a).title, "Translating for Speaker B")
     XCTAssertEqual(ModelStorageCopy.onThisPhone("1.9 GB"), "1.9 GB on this phone")
     XCTAssertEqual(ModelStorageCopy.confirmationMessage("1.9 GB"),
                    "This frees 1.9 GB. The next session downloads the model again.")
-    XCTAssertEqual(ModelDownloadSize.approximate, "about 1.9 GB")
+    XCTAssertEqual(ModelDownloadSize.total, "1.91 GB")
     XCTAssertEqual(AppInfo(info: ["CFBundleShortVersionString": "1.2", "CFBundleVersion": "7"]).versionLine,
                    "Version 1.2 (7)")
     XCTAssertEqual(TypedInputCopy.placeholder(for: .hyMT2Candidates[9]), "Type in Korean")
     XCTAssertEqual(
       TranslationFailureCopy.message(for: TranslationRuntimeError.generationFailed(3)),
-      "The translation model failed with code 3."
+      "The translation did not finish."
     )
   }
 
@@ -2341,7 +2344,7 @@ final class RealtimeTranslateTests: XCTestCase {
   /// catalog would still pass these, so the explicit-key test above is the one that catches a
   /// missing catalog; this one catches a wording change that was made in only one of two places.
   func testCatalogBackedCopyStillReadsInEnglish() {
-    XCTAssertEqual(SessionState.ready.title, "Ready to Talk")
+    XCTAssertEqual(SessionState.ready.title, "Ready to talk")
     XCTAssertEqual(SettingsDrawerModel.clearConversationTitle, "Clear conversation")
     XCTAssertEqual(ModelStorageCopy.title, "Storage")
     XCTAssertEqual(SpeechOutputCopy.replayAction, "Play translation")
@@ -2362,7 +2365,7 @@ final class RealtimeTranslateTests: XCTestCase {
       PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: String]
     )
 
-    XCTAssertEqual(compiled["status.listening"], "%@ is speaking")
+    XCTAssertEqual(compiled["status.listening"], "Speaker %@ is speaking")
     XCTAssertEqual(compiled["storage.onThisPhone"], "%@ on this phone")
     XCTAssertFalse(compiled.isEmpty)
     for (key, value) in compiled {
@@ -2400,7 +2403,8 @@ final class RealtimeTranslateTests: XCTestCase {
     }
   }
 
-  /// French and Spanish are complete: 126 for 126, no key silently left to fall back to English.
+  /// French and Spanish are complete: every key for every key, none silently left to fall back to
+  /// English.
   /// A missing key is not a build error and not a crash, it is one English line in the middle of a
   /// translated screen, which is exactly the kind of thing only a count catches.
   func testFrenchAndSpanishCoverEveryKeyInTheCatalog() throws {
@@ -2467,19 +2471,19 @@ final class RealtimeTranslateTests: XCTestCase {
   /// shows up as a real failure.
   func testFrenchAndSpanishResolveThroughTheirBundleLocalizations() throws {
     let french = try Self.localizedBundle("fr")
-    XCTAssertEqual(french.localizedString(forKey: "Start Session", value: nil, table: nil),
+    XCTAssertEqual(french.localizedString(forKey: "Start session", value: nil, table: nil),
                    "D\u{e9}marrer la session")
     XCTAssertEqual(french.localizedString(forKey: "status.listening", value: nil, table: nil),
-                   "%@ parle")
+                   "L\u{2019}interlocuteur %@ parle")
     XCTAssertEqual(french.localizedString(forKey: "Storage", value: nil, table: nil), "Stockage")
     XCTAssertEqual(french.localizedString(forKey: "storage.onThisPhone", value: nil, table: nil),
                    "%@ sur ce t\u{e9}l\u{e9}phone")
 
     let spanish = try Self.localizedBundle("es")
-    XCTAssertEqual(spanish.localizedString(forKey: "Start Session", value: nil, table: nil),
+    XCTAssertEqual(spanish.localizedString(forKey: "Start session", value: nil, table: nil),
                    "Empezar sesi\u{f3}n")
     XCTAssertEqual(spanish.localizedString(forKey: "status.listening", value: nil, table: nil),
-                   "%@ est\u{e1} hablando")
+                   "El hablante %@ est\u{e1} hablando")
     XCTAssertEqual(spanish.localizedString(forKey: "Storage", value: nil, table: nil),
                    "Almacenamiento")
     XCTAssertEqual(spanish.localizedString(forKey: "storage.onThisPhone", value: nil, table: nil),
@@ -2554,6 +2558,242 @@ final class RealtimeTranslateTests: XCTestCase {
     try manager.createDirectory(at: root.appendingPathComponent("staging-locks", isDirectory: true),
                                 withIntermediateDirectories: true)
     return root
+  }
+
+  // MARK: - Designer review fixes
+
+  /// The empty transcript said "Choose the languages above, then start the session." at every
+  /// moment a session was not live, which during a 1.9 GB download pointed at locked chips and
+  /// told someone to start a session that had already started. It is a different sentence per
+  /// state now, and no sentence at all where the banner above is already explaining.
+  func testTheEmptyTranscriptHintIsPerStateAndSilentBehindABanner() {
+    XCTAssertEqual(ConversationEmptyHint.text(for: .setup),
+                   "Choose the languages above, then start the session.")
+    for live: SessionState in [.ready, .listening(.a), .finalizing(.b), .translating(.a)] {
+      XCTAssertEqual(ConversationEmptyHint.text(for: live),
+                     "Speaker A or B can begin speaking.", "\(live)")
+    }
+    for explained: SessionState in [.permissionRequired, .loadingModel(nil), .loadingModel(0.4),
+                                    .modelLoadFailed("nope"), .error(.runtime("nope"))] {
+      XCTAssertNil(ConversationEmptyHint.text(for: explained), "\(explained)")
+    }
+  }
+
+  /// One byte count, one formatter, one string. The consent card used to promise a hand-written
+  /// "about 1.9 GB" and the storage row then reported the measured bytes as something else.
+  func testTheConsentCardAndTheStorageRowNameTheSameSize() {
+    XCTAssertEqual(ModelDownloadSize.bytes, 1_908_528_832)
+    XCTAssertEqual(ModelDownloadSize.total, ModelStorageCopy.size(bytes: ModelDownloadSize.bytes))
+    XCTAssertEqual(ModelDownloadSize.total, "1.91 GB")
+    XCTAssertTrue(FirstRunCopy.consentSize.contains(ModelDownloadSize.total))
+    XCTAssertTrue(
+      ModelStorageRow.row(
+        footprint: LocalModelStore.Footprint(archiveBytes: ModelDownloadSize.bytes, moduleBytes: 0,
+                                             totalBytes: ModelDownloadSize.bytes),
+        hold: .free
+      ).subtitle.contains(ModelDownloadSize.total)
+    )
+    // And the progress line under the bar, so no two numbers on the download screen disagree.
+    XCTAssertEqual(ModelPreparationStatus.status(for: 0.5).detail, "954.3 MB of 1.91 GB")
+  }
+
+  /// A state toggle and an action cannot be the same drawing. The status strip's speaker says
+  /// whether the app is silent; a bubble's control says "read this one again".
+  func testTheReplayActionIsNotTheMuteStatesGlyph() {
+    XCTAssertEqual(SpeechGlyph.replay, "play.circle")
+    XCTAssertNotEqual(SpeechGlyph.replay, SpeechGlyph.soundOn)
+    XCTAssertNotEqual(SpeechGlyph.replay, SpeechGlyph.soundOff)
+    for glyph in [SpeechGlyph.replay, SpeechGlyph.soundOn, SpeechGlyph.soundOff,
+                  ZeticWordmarkGlyph.settings] {
+      XCTAssertNotNil(UIImage(systemName: glyph), "\(glyph) is not an SF Symbol on this platform")
+    }
+  }
+
+  /// `.endingSession` was never assigned and `.ended` was reachable only from a launch argument,
+  /// so both were dead: a status title, a banner branch, a hint, a disabled clause, and three
+  /// catalog entries kept alive for states the app could not enter.
+  func testTheDeadSessionStatesTookTheirCatalogEntriesWithThem() throws {
+    let catalog = try Self.stringCatalog()
+    for key in ["Closing Translation Session", "Closing translation session...", "Session Ended",
+                "Wait while the session ends."] {
+      XCTAssertNil(catalog.strings[key], "\(key) belongs to a state the app cannot enter")
+    }
+    // And the jargon the failure copy used to carry, plus the duplicated banner line.
+    for key in ["The Hy-MT2 translation model could not complete this request.",
+                "translationFailure.generationFailed", "modelSize.approximate",
+                "The Melange personal key is not configured in this app build.",
+                "Speaker controls unlock when the model is ready.",
+                "Start Session", "End Session"] {
+      XCTAssertNil(catalog.strings[key], "\(key) is no longer reachable from source")
+    }
+    XCTAssertNotNil(catalog.strings["Start session"])
+    XCTAssertNotNil(catalog.strings["End session"])
+    XCTAssertEqual(SessionActionCopy.start, "Start session")
+    XCTAssertEqual(SessionActionCopy.end, "End session")
+  }
+
+  /// A failed turn used to be the end of the road: the words were said, the transcript was on
+  /// screen, and nothing anywhere would send it again. The retry re-runs that bubble's own
+  /// transcript against that bubble's own reading language.
+  func testAFailedTranslationCanBeRunAgainFromItsOwnBubble() async {
+    let runtime = FakeTranslationRuntime(result: "Bonjour")
+    runtime.queuedTranslateErrors = [TranslationRuntimeError.generationFailed(3)]
+    let viewModel = readyViewModel(FakeSpeechRecognizer(), runtime: runtime)
+
+    viewModel.submitTypedTranscript("Hello", speaker: .a)
+    await waitUntil { viewModel.state == .ready }
+    let failed = try? XCTUnwrap(viewModel.items.first)
+    guard let failed else { return XCTFail("no bubble") }
+    XCTAssertEqual(failed.state, .translationFailed("The translation did not finish."))
+    XCTAssertTrue(viewModel.canRetryTranslation)
+
+    viewModel.retryTranslation(failed)
+
+    XCTAssertEqual(viewModel.state, .translating(.a))
+    XCTAssertEqual(viewModel.items.first?.state, .finalizing)
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.items.count, 1, "a retry re-runs the bubble, it does not add one")
+    XCTAssertEqual(viewModel.items.first?.translation, "Bonjour")
+    XCTAssertEqual(viewModel.items.first?.state, .translated)
+    // Same transcript, same reading language: the second request is the first one again.
+    XCTAssertEqual(runtime.prompts.count, 2)
+    XCTAssertEqual(runtime.prompts[0], runtime.prompts[1])
+  }
+
+  /// A retry is gated exactly like a new utterance, and a bubble that did not fail has nothing to
+  /// retry, so neither can land on top of someone who is mid-sentence.
+  func testARetryIsRefusedMidUtteranceAndOnABubbleThatDidNotFail() async {
+    let recognizer = FakeSpeechRecognizer()
+    let runtime = FakeTranslationRuntime(result: "Bonjour")
+    runtime.queuedTranslateErrors = [TranslationRuntimeError.emptyOutput]
+    let viewModel = readyViewModel(recognizer, runtime: runtime)
+
+    viewModel.submitTypedTranscript("Hello", speaker: .a)
+    await waitUntil { viewModel.state == .ready }
+    guard let failed = viewModel.items.first else { return XCTFail("no bubble") }
+
+    viewModel.beginTurn(.b)
+    XCTAssertFalse(viewModel.canRetryTranslation)
+    viewModel.retryTranslation(failed)
+    XCTAssertEqual(runtime.prompts.count, 1)
+    XCTAssertEqual(viewModel.state, .listening(.b))
+
+    // A translated bubble is not a failure, so it is not retryable either.
+    let translated = ConversationItem(id: UUID(), speaker: .a, transcript: "Hello",
+                                      targetLanguage: .hyMT2Candidates[2], translation: "Bonjour",
+                                      state: .translated)
+    let idle = readyViewModel(FakeSpeechRecognizer(), runtime: FakeTranslationRuntime(result: "x"))
+    idle.retryTranslation(translated)
+    XCTAssertEqual(idle.state, .ready)
+  }
+
+  /// The error banner's one button used to re-request the microphone whatever had gone wrong,
+  /// which for a runtime failure asked for a permission the app already held and dropped the live
+  /// session, and its loaded model's session, back to `setup` for nothing.
+  func testARuntimeErrorReturnsToTheLiveSessionAndOnlyAPermissionOneGoesBackToSetup() async {
+    let recognizer = FakeSpeechRecognizer(startError: PlatformSpeechError.unavailable("Busy."))
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    XCTAssertEqual(viewModel.state, .error(SessionFailure(message: "Busy.", cause: .runtime)))
+
+    viewModel.recoverFromError()
+
+    XCTAssertEqual(viewModel.state, .ready, "the model is still loaded, so the session comes back")
+
+    let refused = FakeSpeechRecognizer(startError: PlatformSpeechError.microphonePermissionRequired,
+                                       permission: .required)
+    let denied = readyViewModel(refused)
+    denied.beginTurn(.a)
+    guard case let .error(failure) = denied.state else { return XCTFail("expected an error") }
+    XCTAssertEqual(failure.cause, .permission)
+    XCTAssertEqual(failure.message, "Microphone permission is required.")
+
+    denied.recoverFromError()
+    await waitUntil { denied.state == .permissionRequired }
+  }
+
+  /// Cancelling a model preparation is the same path `End session` already took, under the name
+  /// it has while a model is being prepared. It has to work for a local load too, where there is
+  /// no transfer to stop and the load is simply abandoned.
+  func testAModelPreparationCanBeCancelledFromTheBottomBarInBothItsForms() async {
+    for delay: UInt64 in [2_000_000_000, 0] {
+      let runtime = FakeTranslationRuntime(result: "Bonjour", loadDelayNanoseconds: delay)
+      let viewModel = RealtimeTranslateViewModel(
+        state: .setup, speechRecognizer: FakeSpeechRecognizer(), translationRuntime: runtime
+      )
+
+      viewModel.startSession()
+      XCTAssertTrue(viewModel.canCancelModelPreparation)
+      XCTAssertFalse(viewModel.isSessionLive)
+
+      viewModel.endSession()
+
+      XCTAssertEqual(viewModel.state, .setup)
+      XCTAssertFalse(viewModel.canCancelModelPreparation)
+      XCTAssertTrue(viewModel.canStartSession)
+      XCTAssertEqual(runtime.cancelLoadCount, 1)
+    }
+    // Nothing else offers to cancel: the slot is Start, End, or Cancel, never two of them.
+    for state: SessionState in [.setup, .ready, .permissionRequired, .modelLoadFailed("nope")] {
+      let idle = RealtimeTranslateViewModel(state: state, speechRecognizer: FakeSpeechRecognizer(),
+                                            translationRuntime: FakeTranslationRuntime())
+      XCTAssertFalse(idle.canCancelModelPreparation, "\(state)")
+    }
+  }
+
+  /// Every one of the 38 reading languages has to have a name in every language this app ships,
+  /// and none of them may fall back to a raw code. `zh-Hant` is the one the language-code lookup
+  /// gets wrong on its own: it answers `Chinese`, which is already what `zh` is called.
+  func testEveryReadingLanguageIsNamedInEveryShippingLanguage() {
+    for identifier in ["en", "fr", "es"] {
+      let locale = Locale(identifier: identifier)
+      var seen: [String: String] = [:]
+      for language in TargetLanguage.hyMT2Candidates {
+        let name = try? XCTUnwrap(TargetLanguage.localizedName(for: language.code, in: locale),
+                                  "\(language.code) has no name in \(identifier)")
+        guard let name else { continue }
+        XCTAssertFalse(name.isEmpty)
+        XCTAssertNotEqual(name, language.code, "\(language.code) fell back to its raw code")
+        XCTAssertNil(seen[name], "\(identifier): \(name) names both \(seen[name] ?? "") and \(language.code)")
+        seen[name] = language.code
+      }
+      XCTAssertEqual(seen.count, 38)
+    }
+    XCTAssertEqual(TargetLanguage.localizedName(for: "zh-Hant", in: Locale(identifier: "en")),
+                   "Chinese, Traditional")
+    XCTAssertEqual(TargetLanguage.localizedName(for: "yue", in: Locale(identifier: "fr")),
+                   "cantonais")
+    // A code the platform cannot name keeps the English name rather than showing a raw code.
+    XCTAssertNil(TargetLanguage.localizedName(for: "zzz", in: Locale(identifier: "en")))
+    XCTAssertEqual(TargetLanguage(("zzz", "Nowherese")).displayName, "Nowherese")
+    // Mid-sentence as the locale spells it, standalone with only the first letter raised.
+    XCTAssertEqual(TargetLanguage.sentenceCased("chinois traditionnel"), "Chinois traditionnel")
+    XCTAssertEqual(TargetLanguage.hyMT2Candidates[1].menuName, "English")
+  }
+
+  /// Catalogue order put Ukrainian at number 33 of 38 in a menu with no search. The two languages
+  /// the conversation is using come first, then the phone's own, then the rest alphabetically by
+  /// the name on screen rather than by the English name nobody is reading.
+  func testTheReadingMenuPinsTheConversationsLanguagesThenSortsByTheNameOnScreen() {
+    let english = TargetLanguage.hyMT2Candidates[1]
+    let korean = TargetLanguage.hyMT2Candidates[9]
+    let order = TargetLanguage.menuOrder(pinning: [korean, english], deviceLanguageCode: "fr")
+
+    XCTAssertEqual(order.count, 38, "every language is still offered, exactly once")
+    XCTAssertEqual(Set(order), Set(TargetLanguage.hyMT2Candidates))
+    XCTAssertEqual(order.prefix(3).map(\.code), ["ko", "en", "fr"])
+
+    let rest = order.dropFirst(3)
+    XCTAssertEqual(rest.map(\.displayName),
+                   rest.map(\.displayName).sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+    // A device language already in the pinned pair is not offered twice.
+    let deduped = TargetLanguage.menuOrder(pinning: [english, korean], deviceLanguageCode: "en")
+    XCTAssertEqual(deduped.prefix(2).map(\.code), ["en", "ko"])
+    XCTAssertEqual(deduped.count, 38)
+    // A device language the model cannot read is simply not pinned.
+    XCTAssertEqual(TargetLanguage.menuOrder(pinning: [english], deviceLanguageCode: "sw").first?.code,
+                   "en")
   }
 
   private func readyViewModel(
@@ -2742,6 +2982,11 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   var permission: SpeechPermission = .granted
   var startError: Error?
 
+  init(startError: Error? = nil, permission: SpeechPermission = .granted) {
+    self.startError = startError
+    self.permission = permission
+  }
+
   func requestPermissions() async -> SpeechPermission { permission }
   func currentPermission() -> SpeechPermission { permission }
   func availableSourceLanguages() -> [SpeechSourceLanguage] { sourceLanguages }
@@ -2778,6 +3023,9 @@ private final class FakeTranslationRuntime: TranslationRuntime {
   private(set) var translateStarted = false
   private(set) var translateCancelled = false
   private(set) var prompts: [String] = []
+  /// Errors handed out one per call, ahead of `translateError`, so a retry test can fail the first
+  /// attempt and let the second one through.
+  var queuedTranslateErrors: [Error?] = []
   /// Mirrors the real runtime: set when a load installs a model, cleared only by `close`, and in
   /// particular not cleared by ending a session.
   private(set) var isModelResident = false
@@ -2812,6 +3060,7 @@ private final class FakeTranslationRuntime: TranslationRuntime {
   func translate(prompt: String) async throws -> String {
     prompts.append(prompt)
     translateStarted = true
+    let queued = queuedTranslateErrors.isEmpty ? nil : queuedTranslateErrors.removeFirst()
     if translateDelayNanoseconds > 0 {
       do {
         try await Task.sleep(nanoseconds: translateDelayNanoseconds)
@@ -2820,6 +3069,7 @@ private final class FakeTranslationRuntime: TranslationRuntime {
         throw error
       }
     }
+    if let queued { throw queued }
     if let translateError { throw translateError }
     return result
   }

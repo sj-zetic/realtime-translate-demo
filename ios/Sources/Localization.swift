@@ -130,6 +130,49 @@ enum AppLanguageCopy {
   }
 }
 
+// MARK: - The one session action
+
+/// The bottom bar's single slot, named once.
+///
+/// The name was `Start Session` in the app, `Start conversation` in the specification, and
+/// `Start session` in half the prose about both. It is one action, so it has one name, in the
+/// sentence case the rest of the interface uses.
+enum SessionActionCopy {
+  static var start: String {
+    String(localized: "Start session", comment: "Bottom bar action that starts a session")
+  }
+
+  static var end: String {
+    String(localized: "End session", comment: "Bottom bar action that ends a live session")
+  }
+
+  /// The same slot while the model is being prepared, which is the one moment the action is
+  /// neither starting nor ending but calling off something already under way. Bare `Cancel`,
+  /// because the banner directly above it is already naming what is being cancelled, and the two
+  /// things it can be, a 1.9 GB transfer and a local load, have no honest shared noun.
+  static var cancelPreparation: String {
+    String(localized: "Cancel",
+           comment: "Dismissal button: the typed input sheet, and the model preparation the bottom bar calls off")
+  }
+}
+
+// MARK: - The two ways back to a granted microphone
+
+/// The pair of buttons the permission banner offers, shared by the state that has never been
+/// granted and the session error that turns out to be a refused prompt: the same problem reached
+/// from two directions should not read as two different problems.
+enum PermissionCopy {
+  static var allowAccess: String {
+    String(localized: "Allow microphone access",
+           comment: "Session banner button that triggers the system prompts")
+  }
+
+  static var openSettings: String {
+    String(localized: "Open app settings",
+           comment: "Session banner button that opens this app's page in iOS Settings")
+  }
+}
+
 // MARK: - Error text from code that is not edited
 
 /// Turns a translation-runtime failure into text a person can read in their own language.
@@ -138,23 +181,38 @@ enum AppLanguageCopy {
 /// localized at the source. They are localized here instead, at the display site: the view model
 /// asks for this before putting a failure on screen, and anything it does not recognize keeps the
 /// system's own `localizedDescription` rather than losing detail to a generic line.
+///
+/// The wording is written for the person holding the phone, not for whoever will read the crash
+/// report. `Hy-MT2`, `Melange personal key`, and `failed with code 3` name things nobody in a
+/// conversation has ever heard of and offer them nothing to do; the engineering detail belongs in
+/// `NSLog` and in `TranslationRuntimeError`, which keeps its own precise descriptions.
 enum TranslationFailureCopy {
   static func message(for error: any Error) -> String {
     guard let runtimeError = error as? TranslationRuntimeError else { return error.localizedDescription }
     switch runtimeError {
     case .missingPersonalKey:
-      return String(localized: "The Melange personal key is not configured in this app build.",
-                    comment: "Model load failure: the build has no Melange credential")
+      return String(localized: "This build of the app cannot download the translation model.",
+                    comment: "Model load failure: the build has no download credential")
     case .modelNotLoaded:
-      return String(localized: "The translation model is not loaded.",
+      return String(localized: "Translation is not ready yet.",
                     comment: "Translation failure: a request arrived before the model was ready")
-    case let .generationFailed(code):
-      return String(localized: "translationFailure.generationFailed",
-                    defaultValue: "The translation model failed with code \(code).",
-                    comment: "Translation failure: %lld is a numeric code from the runtime")
+    case .generationFailed:
+      return String(localized: "The translation did not finish.",
+                    comment: "Translation failure: the model stopped part way through")
     case .emptyOutput:
-      return String(localized: "The translation model returned an empty result.",
+      return String(localized: "The translation came back empty.",
                     comment: "Translation failure: the model produced no text")
     }
+  }
+
+  /// The retry offered on a bubble whose translation failed, and on the session banner after a
+  /// runtime error. One string, so the two never drift apart.
+  static var retryAction: String {
+    String(localized: "Try again", comment: "Button that runs a failed piece of work again")
+  }
+
+  static var retryHint: String {
+    String(localized: "Translates this turn again.",
+           comment: "Accessibility hint for the retry button on a failed chat bubble")
   }
 }

@@ -8,13 +8,13 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
-1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A small chevron in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. Implemented on iOS; Android parity is pending.
-2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`. Choosing a reading language also re-aligns that speaker's spoken (recognition) language to the matching recognizer when one exists, so the chip is the single source of truth: a speaker shown as Korean is listened to in Korean. The spoken-language picker stays available as an explicit override until the reading language changes again.
+1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A three-line glyph in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. It is not a downward chevron: the drawer slides in from the trailing edge, and a chevron pointing down promises something that drops from where it stands. Implemented on iOS; Android parity is pending.
+2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`, in the interface's own language. The `Reading language` menu offers all 38, ordered for someone looking for one: the two languages this conversation is already using, then the phone's own language, then the remaining 35 alphabetically by the name on screen. Catalogue order is the order the model card happens to list them in, which put Ukrainian at number 33 of 38 behind a menu that does not search. Sorting is by the displayed name, not the English one, because a French menu sorted by English names is not sorted at all. Choosing a reading language also re-aligns that speaker's spoken (recognition) language to the matching recognizer when one exists, so the chip is the single source of truth: a speaker shown as Korean is listened to in Korean. The spoken-language picker stays available as an explicit override until the reading language changes again.
 3. **Sound toggle**: The trailing end of the status-strip row carries the one spoken-output control, a speaker glyph that crosses out when muted. See [spoken translation](#spoken-translation).
-4. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
+4. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
 5. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
 6. **Push-to-talk row**: The A and B controls side by side at the bottom, A on the left and B on the right. The controls carry the A/B identity; there are no separate speaker labels or chips down here.
-7. **Session action**: `Start conversation` before the model is loaded, `End session` while a session is live.
+7. **Session action**: one slot, three actions, because there is only ever one thing to do to a session from here. `Start session` before the model is loaded, `Cancel` while it is being prepared, and `End session` while a session is live. The cancel is the same path `End session` takes: it stops the transfer as well as the screen watching it, and a local load with no transfer to stop is abandoned the same way. Both land back on the idle screen.
 
 The bottom bar's contract is those two controls, the hint, and the session action. The hint row's empty trailing half carries the one [typed-input](#typed-input) affordance; nothing else is added down here.
 
@@ -27,23 +27,23 @@ The app icon is the ZETIC Z monogram, teal `color.accent` on a near-black field,
 ### Screen layout
 
 ```text
-Turn Translate                            ZETIC v
-Conversation ready                              ((*
+Turn Translate                            ZETIC =
+Ready to talk                                   ((*
 ------------------------------------
  [ A · English ]              [ B · Korean ]
 ------------------------------------
-[ inline banner: permission / model progress / failure + retry / error ]
+[ inline banner: permission / model progress + cancel / failure + retry / error ]
 ------------------------------------
  Speaker A
  Hello
  --------------
  To B - English
- Hello                                       ((*
+ Hello                                       (>)
                             Speaker B
                             Bonjour
                             --------------
                             To A - Korean
-                            Bonjour       ((*
+                            Bonjour       (>)
 ------------------------------------
  [ A - hold to talk  ]        [ B - hold to talk  ]
  Hold a button to talk, or tap once to start and again to stop.  [keyb]
@@ -51,8 +51,10 @@ Conversation ready                              ((*
 ```
 
 - A bubbles and the A chip and control create only A utterances; B bubbles and the B chip and control create only B utterances.
-- Alignment plus the `Speaker A` / `Speaker B` label carries the A/B distinction; the per-speaker tint (A teal `#E9F7F5`, B ink `#F0F0F0`) and the colored mini-label are redundant reinforcement, never the only signal.
+- Alignment plus the `Speaker A` / `Speaker B` label carries the A/B distinction; the per-speaker tint (A teal `#E9F7F5`, B ink `#E9E9E9`) and the colored mini-label are redundant reinforcement, never the only signal.
+- A bubble sizes to its content rather than filling the row, with at least `64 dp/pt` of empty gutter on its far side, so the lean of the shape is legible across a table. Two near-full-width blocks whose only difference is a 12 pt label and two tints a step apart are not two speakers at the distance this app is used at.
 - An A bubble identifies `To B - <B reading language>`; a B bubble identifies `To A - <A reading language>`.
+- An empty transcript carries one line, and it is a different line per state: `Choose the languages above, then start the session.` in `setup`, `Speaker A or B can begin speaking.` once the session is live, and nothing at all in `permissionRequired`, `modelLoading`, `modelLoadFailed`, and `error`, where the banner directly above is already explaining. Keyed on the state rather than on "is a session live", which is what made a 1.9 GB download tell someone to choose languages from chips it had just locked.
 - The active utterance's partial source text updates only its existing active bubble. Partial text is never translated.
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
 - Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and push-to-talk row avoid system bars and gesture areas.
@@ -80,7 +82,7 @@ The very first launch opens on a full-surface welcome before anything else, in t
 ```
 
 - The tagline and the privacy line are the whole message: what it does, and where it runs.
-- `Get started` is the only control. It is the accent-filled primary action, matching `Start conversation` on the main screen.
+- `Get started` is the only control. It is the accent-filled primary action, matching `Start session` on the main screen.
 - Shown exactly once per install. Leaving it also settles the priming step for a returning user whose permissions are already granted.
 
 ### 2. Permission priming
@@ -105,11 +107,11 @@ After the welcome, and before either system prompt fires, a full-surface priming
 
 ### 3. Model download consent
 
-Tapping `Start conversation` (or `Retry model load`) asks before it starts the one large transfer the app ever makes. The consent step is a card over the main screen, on the same `color.scrim` the settings drawer uses, because it interrupts one tap rather than the whole app.
+Tapping `Start session` (or `Retry model load`) asks before it starts the one large transfer the app ever makes. The consent step is a card over the main screen, on `color.scrimModal`, because the card's accent-filled `Download now` sits directly above the bottom bar's accent-filled `Start session` and the drawer's 16% veil left both reading as live primary actions on one screen.
 
 ```text
  Download the translation model
- The translation model is about 1.9 GB.
+ The translation model is 1.91 GB.
  It downloads once, then it stays on this phone.
  ------------------------------------
  You are not on Wi-Fi. A download this large is better on Wi-Fi.
@@ -119,10 +121,10 @@ Tapping `Start conversation` (or `Retry model load`) asks before it starts the o
 ```
 
 - Shown only when no complete local model exists. A complete extracted module or a complete archive for `SJ_zetic/Hy-MT2-1.8B` both mean the next start is a local load in seconds with no network at all, so consent is skipped entirely and the session starts on the tap.
-- `about 1.9 GB` is the measured size of the archive and is the only size wording used.
+- `1.91 GB` is the archive's measured 1,908,528,832 bytes put through the one byte-count formatter in the app, the same one the [storage row](#model-storage) uses. There is no second, hand-written size anywhere: a hedged `about 1.9 GB` on this card next to a measured `2.04 GB` in the drawer was one model introducing itself as two different downloads.
 - The Wi-Fi line appears only when the current network path is expensive or constrained (`NWPathMonitor` `isExpensive` / `isConstrained` on iOS). On an unrestricted path the card carries the size and the once-only line and nothing else.
 - `Download now` proceeds into `modelLoading`. `Not now` and a tap on the scrim both dismiss the card and leave the screen idle; nothing is downloaded and the declined start is dropped rather than queued.
-- Declining does not remember anything: the next `Start conversation` asks again, which is also how the Wi-Fi warning gets a second chance to appear.
+- Declining does not remember anything: the next `Start session` asks again, which is also how the Wi-Fi warning gets a second chance to appear.
 
 A build with no Melange personal key cannot download anything at all. The consent card is not shown there: offering `Download now` would promise a transfer that ends a frame later in the missing-key failure. The start runs instead, and that failure is reported where every other model failure is, in the session banner with its retry.
 
@@ -132,10 +134,14 @@ The loading banner distinguishes a genuine download from a local load, because t
 
 | Condition | Headline | Detail | Indicator |
 | --- | --- | --- | --- |
-| A progress callback reports a value strictly between 0 and 1 | `Downloading translation model <percent>%` | `<transferred> of 1.9 GB` | Determinate progress bar in `color.accent` |
+| A progress callback reports a value strictly between 0 and 1 | `Downloading translation model <percent>%` | `<transferred> of 1.91 GB` | Determinate progress bar in `color.accent` |
 | No progress reported, or exactly 0 or 1 | `Preparing translation model` | none | Indeterminate spinner in `color.accent` |
 
-The progress callback is the whole rule: the local load path never reports progress, so an indeterminate banner never promises bytes that will not move. The transferred amount is rounded to tenths of a gigabyte, so half of the archive reads as `1.0 of 1.9 GB`. Both variants keep the existing `Speaker controls unlock when the model is ready.` line.
+The progress callback is the whole rule: the local load path never reports progress, so an indeterminate banner never promises bytes that will not move. Both halves of the detail line go through the same formatter as every other size in the app, so half of the archive reads as `954.3 MB of 1.91 GB` rather than setting two precisions against each other.
+
+Neither variant repeats the bottom bar's hint. The banner used to carry `Speaker controls unlock when the model is ready.` directly above a hint line reading `Push-to-talk unlocks once the translation model is ready.`: one sentence, said twice, in two voices.
+
+The session action underneath is `Cancel` for as long as the preparation lasts, and it is enabled. A 1.9 GB transfer with no way to stop it is not a progress screen, it is a trap.
 
 ### Test hooks
 
@@ -146,7 +152,7 @@ The first-run states are forced through launch arguments so they can be exercise
 | `-resetFirstRun` | Clear both remembered flags |
 | `-firstRun fresh` | Clear both flags and report no local model: welcome, then priming, then consent |
 | `-firstRun returning` | Set both flags and report a local model present: no first-run surface at all |
-| `-firstRun consentNeeded` | Set both flags and report no local model: the next `Start conversation` shows the consent card |
+| `-firstRun consentNeeded` | Set both flags and report no local model: the next `Start session` shows the consent card |
 | `-firstRunCellular` | Report the current network path as expensive, so the Wi-Fi line appears |
 
 ## Settings drawer
@@ -166,7 +172,7 @@ The only secondary surface. It slides in from the trailing edge over the main sc
  System
 ------------------------------
  Storage                     ▤
- 1.9 GB on this phone
+ 1.91 GB on this phone
 ------------------------------
  Visit zetic.ai              ↗
 ------------------------------
@@ -194,7 +200,7 @@ Three behaviors that only matter once two people are actually using one phone to
 While a session is live, the display does not dim or lock. A turn can be seconds of silence while someone thinks, and both people are reading the same screen, so the normal idle timeout is wrong for exactly the states where the A/B controls are on screen.
 
 - The screen is held awake in exactly the states where push-to-talk is available: `ready`, `listeningA` / `listeningB`, `finalizingA` / `finalizingB`, `translatingA` / `translatingB`, and `error`. It is the same condition that decides whether the A/B controls and `End session` are shown, not a second rule that can drift from it.
-- Every other state, `permissionRequired`, `setup`, `modelLoading`, `modelLoadFailed`, `modelUnloading`, and `ended`, uses the platform's normal idle behavior. A long model download does not hold the screen awake.
+- Every other state, `permissionRequired`, `setup`, `modelLoading`, and `modelLoadFailed`, uses the platform's normal idle behavior. A long model download does not hold the screen awake.
 - Backgrounding the app releases the hold immediately, whatever the session state is, and so does leaving the screen. Returning to the foreground during a live session takes it again.
 - iOS applies this through `UIApplication.isIdleTimerDisabled`, driven from the view layer by scene phase plus session state.
 
@@ -311,12 +317,12 @@ A phone call, Siri, an alarm, or an unplugged headset takes the audio session aw
 
 ## Localization
 
-The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, all 126 keys translated in each. Android parity is pending.
+The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, every key translated in each. Android parity is pending.
 
 ### Shipped languages and their register
 
 - **French (`fr`), shipped.** Vouvoiement throughout, no tutoiement anywhere: the phone is handed to a stranger, so the second person on screen is not the person who installed the app, and French iOS system UI next to it is uniformly vouvoyée. Buttons stay infinitive (`Continuer`, `Réessayer`), which is address-neutral and the French Apple convention. French typography is carried in the catalog as real code points: no-break space (U+00A0) before `:` and `%`, narrow no-break space (U+202F) before `?`, U+2019 for every apostrophe, and guillemets where a control name is quoted.
-- **Spanish (`es`), shipped.** Tú throughout, which is what Apple's Spanish localizations use and what a two-people-one-phone consumer app calls for; controls stay infinitive (`Cancelar`, `Enviar`) per the same convention. Neutral international Spanish, so `mantén pulsado`, `Ajustes`, and `toca` rather than their regional alternatives. `Start Session` is `Empezar sesión`, never `Iniciar sesión`, which in Spanish means *log in*.
+- **Spanish (`es`), shipped.** Tú throughout, which is what Apple's Spanish localizations use and what a two-people-one-phone consumer app calls for; controls stay infinitive (`Cancelar`, `Enviar`) per the same convention. Neutral international Spanish, so `mantén pulsado`, `Ajustes`, and `toca` rather than their regional alternatives. `Start session` is `Empezar sesión`, never `Iniciar sesión`, which in Spanish means *log in*.
 
 ### Where the strings live
 
@@ -332,8 +338,8 @@ That split is the whole reason the language row promises what it promises. It is
 ### What is not translated
 
 - **The product name** `Turn Translate`, the brand `ZETIC`, the domain `zetic.ai`, the address `contact@zetic.ai`, and the model name `Hy-MT2`. These are held as plain constants so nothing can translate them by accident.
-- **The speaker labels** `A` and `B`, and size figures such as `1.9 GB`. Byte sizes are formatted by the platform, which localizes the unit on its own.
-- **The 38 Hy-MT2 reading-language names.** That name is not only a label: it is the argument the Hy-MT2 prompt is built from (`Translate the following text into French`), and the instruction has to stay English whatever the interface is in. Translating the picker therefore means a second, display-only name on each entry, which is a change to the model catalogue rather than to the localization plumbing. Until then a French interface names the reading languages in English. The spoken-language list is unaffected: those names come from the platform and are already localized.
+- **The speaker labels** `A` and `B`, and size figures such as `1.91 GB`. Byte sizes are formatted by the platform, which localizes the unit on its own.
+- **The English `name` on each of the 38 Hy-MT2 reading languages**, which is not a label at all: it is the argument the Hy-MT2 prompt is built from (`Translate the following text into French`), and that instruction stays English whatever the interface is in. It never reaches the screen. Everything a person reads goes through a second, display-only name instead, which the platform supplies in the interface's own language: `displayName` as the locale spells it, for use inside a sentence, and `menuName` with only its first letter raised, for a picker row or a chip. `zh-Hant` is looked up as an identifier rather than as a language code, because asking for its language code answers `Chinese`, which is already what `zh` is called; a code the platform cannot name at all keeps the English name rather than showing a raw code. The spoken-language list is unaffected: those names always came from the platform.
 - **Log lines, launch-argument names, accessibility identifiers, and URLs**, none of which a person reads.
 
 ### The `App language` row
@@ -357,14 +363,14 @@ That split is the whole reason the language row promises what it promises. It is
 
 The 1.9 GB translation model is the largest thing this app puts on a phone, and the settings drawer is where it can be given back. This is the app's only destructive action. Implemented on iOS; Android parity is pending.
 
-- **The row** reads `Storage` with the on-device footprint as its subtitle, for example `1.9 GB on this phone`. The number is what a delete would actually reclaim: the whole model directory in the SDK's cache, counted once.
+- **The row** reads `Storage` with the on-device footprint as its subtitle, for example `1.91 GB on this phone`. The number is what a delete would actually reclaim: the whole model directory in the SDK's cache, counted once.
 - **Nothing downloaded**: the subtitle reads `No model downloaded` and the row is disabled. It is disabled rather than hidden, so the row never moves.
 - **The model is held**: it is in memory, or being mapped into it, so the row is disabled and the subtitle says which. A live session appends `End the session first.`, because that is an action on the screen behind the drawer. Anything else holding it, the model loading and the model still resident after `End session`, appends `The app is using it right now.` instead: there is no session to end, and the model is released when the app's screen goes away. The accessibility label says the same thing in words.
 - **What "held" means** is the runtime's own answer, not the session state. The two are not the same question, and the states where they differ are exactly the ones where a delete does the most damage: `modelLoading` is the file being mapped as it is removed, and the state after `End session` is a model kept resident on purpose, where deleting the files leaves the app translating happily from memory and then silently downloading 1.9 GB again on the next launch.
-- **Deleting asks first.** The row never deletes; it opens a confirmation titled `Delete the downloaded model?` whose message names the size and the cost (`This frees 1.9 GB. The next session downloads the model again.`), with one destructive action `Delete downloaded model` and one way out, `Keep it`. It is the only confirmation in the app, because it is the only thing here that cannot be undone from inside it.
+- **Deleting asks first.** The row never deletes; it opens a confirmation titled `Delete the downloaded model?` whose message names the size and the cost (`This frees 1.91 GB. The next session downloads the model again.`), with one destructive action `Delete downloaded model` and one way out, `Keep it`. It is the only confirmation in the app, because it is the only thing here that cannot be undone from inside it. It is an alert, not an action sheet: a confirmation dialog is rendered as a popover in a regular-width presentation and the platform elides the cancel button from it, which left the app's only destructive action on screen alone, with the only "no" being a tap on the dimmed area outside it.
 - **What is deleted**: the model's own artifacts and nothing else. The archive and the extracted module, the directory holding them, and the cache-index records that name them. The SDK's backend-selection records and staging locks are never touched, and neither is any other model in the same cache. A cache whose index cannot be read is refused rather than swept, and a model key that is not a plain directory name inside the artifacts root is refused before any path is built from it. The index must also *name* this model: the guess that a cache holding exactly one model key must be holding ours is good enough to load with, where a wrong guess only costs a failed init, and not good enough to delete with, where it removes somebody else's model.
 - **Order**: the rewritten index is written first and its write is checked. A write that fails refuses the whole delete with the model still on disk, rather than leaving an index that promises a model that is no longer there and a toast confirming a delete that only half happened.
-- **Afterwards** the drawer stays open, the row reports `No model downloaded`, and the shared toast reads exactly `Model deleted`. The app is back in its pre-download state: the next `Start conversation` shows the [download consent](#3-model-download-consent) again, because there is genuinely a download to consent to.
+- **Afterwards** the drawer stays open, the row reports `No model downloaded`, and the shared toast reads exactly `Model deleted`. The app is back in its pre-download state: the next `Start session` shows the [download consent](#3-model-download-consent) again, because there is genuinely a download to consent to.
 
 ## Language selection on the main screen
 
@@ -389,20 +395,22 @@ The mute preference already persists under its own key and is not duplicated her
 
 ## Shared state transitions
 
-The `setup` and `ready` states now render on the same screen: `setup` is the idle main screen with push-to-talk locked and `Start conversation` offered, and `ready` is the live main screen with push-to-talk unlocked and `End session` offered. No state was removed or merged.
+The `setup` and `ready` states render on the same screen: `setup` is the idle main screen with push-to-talk locked and `Start session` offered, and `ready` is the live main screen with push-to-talk unlocked and `End session` offered.
+
+Two states that used to be in this table are gone, because nothing could enter them. `modelUnloading` was never assigned on either platform, and `ended` was reachable only from a test launch argument: ending a session goes straight back to `setup`. Each carried a status title, a banner branch, a hint, a disabled clause, and its own catalog entries, all of them describing a screen nobody could ever see. Do not reintroduce either without a transition that reaches it.
 
 | State | Display on the main screen | Allowed actions | Next state |
 | --- | --- | --- | --- |
 | `permissionRequired` | Permission banner; push-to-talk locked | Request permission, open settings, change languages | `setup`, `error` |
-| `setup` | Idle screen; `Start conversation`; push-to-talk locked | Start session, change language | `modelLoading`, `permissionRequired`, `error`; stays in `setup` while the [download consent card](#3-model-download-consent) is open and if it is declined |
-| `modelLoading` | Progress banner, [downloading or preparing](#model-preparation-progress); push-to-talk and chips locked | Wait | `ready`, `modelLoadFailed` |
-| `ready` | Live screen; A/B controls available; `End session` | Start A or B, end session, change language | `listeningA`, `listeningB`, `setup` |
+| `setup` | Idle screen; `Start session`; push-to-talk locked; status strip reads `Ready to start` | Start session, change language | `modelLoading`, `permissionRequired`, `error`; stays in `setup` while the [download consent card](#3-model-download-consent) is open and if it is declined |
+| `modelLoading` | Progress banner, [downloading or preparing](#model-preparation-progress); push-to-talk and chips locked; the session action is an enabled `Cancel` | Wait, cancel | `ready`, `modelLoadFailed`, `setup` |
+| `ready` | Live screen; A/B controls available; `End session`; status strip reads `Ready to talk` | Start A or B, end session, retry a failed bubble, change language | `listeningA`, `listeningB`, `translatingA`, `translatingB`, `setup` |
 | `listeningA` | `Speaker A is speaking`, active A bubble, accent-filled A control | Stop A | `finalizingA`, `error` |
 | `listeningB` | `Speaker B is speaking`, active B bubble, accent-filled B control | Stop B | `finalizingB`, `error` |
-| `finalizingA` / `finalizingB` | `Finalizing speaker A/B transcript` | Wait for completion | `translatingA`, `translatingB`, `error` |
-| `translatingA` / `translatingB` | `Translating for speaker B/A` | Wait for completion | `ready`, `error` |
+| `finalizingA` / `finalizingB` | `Finalizing Speaker A's transcript` / `Finalizing Speaker B's transcript` | Wait for completion | `translatingA`, `translatingB`, `error` |
+| `translatingA` / `translatingB` | `Translating for Speaker B` / `Translating for Speaker A` | Wait for completion | `ready`, `error` |
 | `modelLoadFailed` | Failure banner with `Retry model load` | Retry model load | `modelLoading` |
-| `error` | Error banner with the cause and a recovery action; existing bubbles remain | Retry, open settings, end session | `ready`, `setup`, `permissionRequired` |
+| `error` | Error banner with the cause and a recovery action; existing bubbles remain | Retry, open settings, end session | `ready` for a runtime cause, `permissionRequired` for a refused prompt, `setup` from `End session` |
 
 If platform STT reports a final result before the user stops an utterance, the app stores it only as the active bubble's pending transcript. The app leaves `listening*` for `finalizing*` and starts finalization and translation only after a button release or tap-toggle stop. A translation error leaves the finalized source bubble visible and shows an error state in the translation area.
 
@@ -412,11 +420,13 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 - The primary action is push-to-talk: recording lasts while the user holds a button and stops when it is released. [Typed input](#typed-input) is the fallback for the same turn, under the same gate.
 - The same control supports tap-to-start and tap-to-stop as an accessibility alternative. The current interaction is shown as text.
-- Accessibility labels include the current action and speaker, such as `Start speaker A` / `Start A Turn`, `Stop speaker A` / `End A Turn`, and the B equivalents.
-- A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while speaker A is active`. A control disabled because no model is loaded explains that instead.
+- Accessibility labels include the current action and speaker, such as `Start Speaker A's turn` and `End Speaker A's turn`, and the B equivalents.
+- One name for a speaker, everywhere: `Speaker A`, capitalized wherever it appears, because it is a label on two buttons rather than a common noun. The bare letter appears only where the letter itself is the drawing: the `A ·` chip prefix and the `A - hold to talk` control.
+- Sentence case throughout, including the status strip. It used to be Title Case for the fixed states and sentence case for the interpolated ones, which read as two different apps writing alternate lines of the same running commentary.
+- A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while Speaker A is active.` A control disabled because no model is loaded explains that instead.
 - Every language chip announces both selections for its speaker, such as `Speaker A languages: reads English, speaks Automatic`.
 - The main screen uses no icons. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
-- The header wordmark, the settings drawer, the two spoken-output controls, and the typed-input control are the exceptions, and only for chrome, for sound, and for the keyboard: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, the copy glyph on `Contact us`, the trash glyph on `Clear conversation`, the status strip's speaker toggle, a bubble's replay glyph, and the bottom bar's keyboard glyph. The drawer's glyphs each sit next to a text label that already says what the control does. The two speaker glyphs and the keyboard glyph are the only places a glyph stands alone, because a speaker and a keyboard are the two icons that mean sound and typing in every app on the phone; all three announce their meaning, and the toggle its state, in words.
+- The header wordmark, the settings drawer, the spoken-output controls, and the typed-input control are the exceptions, and only for chrome, for sound, and for the keyboard: the wordmark's settings glyph, the external-link glyph on `Visit zetic.ai`, the copy glyph on `Contact us`, the trash glyph on `Clear conversation`, the status strip's speaker toggle, a bubble's replay glyph, and the bottom bar's keyboard glyph. Every one of them is drawn to a `size.tapTarget` box whatever the glyph inside it measures. The drawer's glyphs each sit next to a text label that already says what the control does. The two speaker glyphs and the keyboard glyph are the only places a glyph stands alone, because a speaker and a keyboard are the two icons that mean sound and typing in every app on the phone; all three announce their meaning, and the toggle its state, in words.
 - The wordmark control announces `ZETIC, opens settings`; the drawer's rows announce their action and, for `Contact us`, the address being copied; the copy confirmation is posted as an accessibility announcement as well as shown.
 
 ## On-device STT prerequisites
@@ -434,6 +444,8 @@ If platform STT reports a final result before the user stops an utterance, the a
 - Translation runs only for finalized source text: A translates to B's reading language and B translates to A's reading language.
 - The translation request uses the documented flat one-user-message Hy-MT2 prompt, including its blank line and Hy control tokens. Melange accepts that rendered request as a `String`; the app manually renders the required flat template rather than passing a chat-message object. If inference fails, the app preserves the source bubble and shows an error and recovery action instead of an invented translation or an empty translation bubble.
 - Hy-MT2 requests are serial. A queued bubble displays the recipient and `Translation pending`.
+- A failed translation carries a `Try again` control inside its own bubble, gated exactly like a new utterance (an idle live session), which re-runs that bubble's own transcript against that bubble's own reading language. The bubble returns to `Translation pending` in place and lands in the same three outcomes. Without it a failed turn was the end of the road: the words had been said, the transcript was on screen, and nothing anywhere would send it again.
+- The failure text is written for the person holding the phone. `The Hy-MT2 translation model could not complete this request.`, `failed with code 3`, and `The Melange personal key is not configured in this app build.` name things nobody in a conversation has heard of and offer them nothing to do; the precise descriptions stay on `TranslationRuntimeError`, where the crash report reads them.
 - Changing a reading language never reloads or reinitializes the model; the next prompt simply renders the new target language.
 - Ending a session waits for the loaded model to clean up and close, clears the prior conversation, and returns the same screen to its idle state. View-model teardown also releases the model.
 - `MELANGE_PERSONAL_KEY` is supplied through the build environment and must not appear in source control or logs. Development builds embed it for SDK initialization; production distribution requires rotatable credential provisioning.
@@ -444,7 +456,7 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 
 | Token | Value | Usage |
 | --- | --- | --- |
-| `color.accent` | `#2DBDB2` | Brand accent, reserved for product-level emphasis: the `Start conversation` action, the model-load progress indicator, and the single primary action on each first-run surface |
+| `color.accent` | `#2DBDB2` | Brand accent, reserved for product-level emphasis: the `Start session` action, the model-load progress indicator, and the single primary action on each first-run surface |
 | `color.surface` | `#FFFFFF` | Default background, chips, and idle controls |
 | `color.surfaceSubtle` | `#F0F0F0` | Inline banners and disabled controls |
 | `color.divider` | `#E8E8E8` | Hairline dividers and neutral control borders |
@@ -456,8 +468,10 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 | `radius.control` | `20 dp/pt` | A/B PTT controls, language chips, session actions |
 | `type.body` | `16 sp/pt` | Source and translated text |
 | `type.meta` | `12 sp/pt` | Speaker, status, chip, and target-language text |
-| `logo.wordmark` | official ZETIC logo lockup, `16 dp/pt` tall | The ZETIC logo in the header, tappable, followed by a `color.textSecondary` chevron |
+| `logo.wordmark` | official ZETIC logo lockup, `16 dp/pt` tall | The ZETIC logo in the header, tappable, followed by a `color.textSecondary` three-line settings glyph |
+| `size.tapTarget` | `44 dp/pt` | The minimum edge of anything tappable, in both directions. Applies to every icon-only control: the sound toggle, a bubble's replay, the keyboard glyph, the drawer's close button |
 | `color.scrim` | `#000000` at 16% | Dim behind the settings drawer; tapping it closes the drawer |
+| `color.scrimModal` | `#000000` at 40% | Dim behind the download consent card. Deeper than the drawer's, because the card carries the surface's one accent action and the screen behind it carries another |
 
 ### Per-speaker identity families
 
@@ -467,14 +481,18 @@ Each speaker owns one muted family, both derived from the brand system. No hue o
 | --- | --- | --- | --- |
 | `color.accentX` | `#2DBDB2` | `#0A0A0A` | Fill of that speaker's PTT control while recording, with white label text |
 | `color.deepX` | `#17877D` | `#0A0A0A` | The `Speaker A` / `Speaker B` mini-label in a bubble, and the `A ·` / `B ·` prefix on the chip and idle PTT label |
-| `color.tintX` | `#E9F7F5` | `#F0F0F0` | Chat-bubble fill; bubbles carry no border |
-| `color.borderX` | `#BFE7E2` | `#E8E8E8` | Hairline border of that speaker's language chip and idle PTT control |
+| `color.tintX` | `#E9F7F5` | `#E9E9E9` | Chat-bubble fill; bubbles carry no border. B's tint is matched to A's lightness so both separate from the white page by the same amount |
+| `color.borderX` | `#BFE7E2` | `#D9D9D9` | Hairline border of that speaker's language chip and idle PTT control |
 
 The accent cap applies to the product chrome only, where the accent means "this is the way forward" and appears once per surface. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher: the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table.
 
 ### Appearance
 
-The app is locked to the light appearance, explicitly: iOS declares `UIUserInterfaceStyle = Light` in `Info.plist`. This is a decision, not an omission. The token set above is a flat list of literal colors used for roles that invert under a dark palette rather than translate into one: `color.surface` is the page background in some places and the text drawn on top of `color.textPrimary` or `color.accent` in others (the toast, the `Start conversation` label, a recording PTT control). Swapping the token values would make those pairings white-on-white rather than correct them, so a dark variant is a redesign of the pairings and not a palette edit. Until that redesign happens, declaring the light appearance is the honest option: someone whose phone is in dark mode gets the design as drawn, instead of a screen that is illegible in the places nobody checked. Do not add a theme switcher.
+The app is locked to the light appearance, explicitly: iOS declares `UIUserInterfaceStyle = Light` in `Info.plist`. This is a decision, not an omission. The token set above is a flat list of literal colors used for roles that invert under a dark palette rather than translate into one: `color.surface` is the page background in some places and the text drawn on top of `color.textPrimary` or `color.accent` in others (the toast, the `Start session` label, a recording PTT control). Swapping the token values would make those pairings white-on-white rather than correct them, so a dark variant is a redesign of the pairings and not a palette edit. Until that redesign happens, declaring the light appearance is the honest option: someone whose phone is in dark mode gets the design as drawn, instead of a screen that is illegible in the places nobody checked. Do not add a theme switcher.
+
+### Device support
+
+iPhone only, declared: `TARGETED_DEVICE_FAMILY` is `1` in both `ios/project.yml` and the generated project. This is the same kind of decision as the light appearance. The layout is one column with a bottom bar and a 280 pt drawer, drawn for a phone held in one hand, and the copy says `on this phone` throughout; shipping it as `1,2` put an undesigned iPad build in front of anyone who asked for it, stretched across up to thirteen inches. Raise it when there is an iPad layout to ship, not before.
 
 ### Dynamic Type
 
@@ -482,15 +500,20 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 
 - **Wrapping**: every status line, banner line, settings row title and subtitle, hint, and toast wraps to as many lines as it needs.
 - **Scrolling**: the settings drawer panel and the full-surface first-run steps scroll once their content outgrows the phone, and the consent card scrolls inside itself so its two actions are never pushed past the bottom edge. The first-run steps stay vertically centered while they fit and switch to scrolling only when they do not, so the default sizes look exactly as they did.
-- **The one exception**: the language chips, which share one row, are allowed two lines and a small shrink. A chip is the one place where unlimited wrapping would turn the language bar into four rows and push the transcript off the screen.
+- **The exceptions**: the language chips, which share one row, are allowed two lines and a small shrink; and the status strip, which is allowed three lines and a small shrink for the same reason, since it is one short line of commentary and the transcript is what the screen is for.
+- **Nothing overflows the column.** A vertical stack whose children do not fit overflows in *both* directions at once, which on the main screen meant the status line drawn straight through the navigation bar and the session action pushed off the bottom edge, with the transcript crushed between them. Three rules keep the column bounded on the main screen at every size:
+  - The status strip is a top safe-area inset, so it is placed under the navigation bar rather than laid out alongside it.
+  - The session banner scrolls inside a bounded box above `accessibility1`, and only when there is a banner to bound. At `AX5` the permission banner alone is taller than the phone.
+  - The bottom bar drops its hint line above `accessibility1`. Every sentence the hint says is already the accessibility hint on the control it is about, and at `AX5` it ran to five lines of a bar that is a safe-area inset and takes whatever height it asks for. The typed-input control stays: it is an affordance, not commentary.
+- **Push-to-talk never truncates.** The two controls the app is built around read `A - hold to talk` in full at every size, wrapping to as many lines as they need.
 
 ## Android/iOS parity criteria
 
 | Scenario | Same result on both platforms |
 | --- | --- |
 | Very first launch ever | iOS only for now: the welcome appears before anything else, `Get started` leads into the permission priming, and neither is ever shown again. Android parity is pending |
-| Cold start with permissions granted | No first-run surface appears; the top language bar shows one chip per speaker, A left and B right, plus a single `Start conversation` / `Start Session` action |
-| Start session with no local model | iOS only for now: the download consent card names `about 1.9 GB`, warns about Wi-Fi on an expensive path, and starts nothing until `Download now`. Android parity is pending |
+| Cold start with permissions granted | No first-run surface appears; the top language bar shows one chip per speaker, A left and B right, plus a single `Start session` action |
+| Start session with no local model | iOS only for now: the download consent card names `1.91 GB`, warns about Wi-Fi on an expensive path, and starts nothing until `Download now`. Android parity is pending |
 | Start session with the model already on disk | No consent step; the session loads locally and the banner shows `Preparing translation model` with an indeterminate spinner |
 | Start session | The banner reports model progress on the same screen; a real download names its percent and approximate transferred amount; PTT and chips stay locked until the model is ready |
 | Start A | A partial bubble on the left and active-A state; B control disabled with explanatory text |
@@ -502,7 +525,7 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Change a language during an utterance | Both speakers' chips are disabled until the utterance finishes translating |
 | STT unsupported or permission denied | Do not start; show cause and recovery action inline; do not switch to network recognition |
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
-| End session | Stop recognition, stop the work the session started, and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start conversation` / `Start Session` reaches `ready` without loading again |
+| End session | Stop recognition, stop the work the session started, and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start session` reaches `ready` without loading again |
 | End session while the model is downloading | The transfer stops, not just the screen watching it. Ending a session someone declined halfway through must not leave a 1.9 GB download running on their cellular connection with nothing on screen to say so. Any translation still in flight stops with it |
 | Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
 | Leave a live session idle on screen | iOS only for now: the display stays lit for as long as the A/B controls are on screen, and dims normally in every other state. Android parity is pending |
@@ -510,8 +533,8 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Hold and release a push-to-talk control | iOS only for now: a medium tap on press and a lighter one on release, with a soft tick when that turn's translation arrives. Android parity is pending |
 | Long-press a chat bubble | iOS only for now: one `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast. Android parity is pending |
 | Translation succeeds with sound on | iOS only for now: the translation is spoken once in the recipient's reading language, cutting off any translation still being spoken. Android parity is pending |
-| Translation succeeds with sound off | iOS only for now: nothing is spoken and every replay control is disabled; the bubble is unchanged. Android parity is pending |
-| Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation. Android parity is pending |
+| Translation succeeds with sound off | iOS only for now: nothing is spoken and no bubble carries a replay control at all; the bubble is otherwise unchanged. Android parity is pending |
+| Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation, and absent altogether while the app is muted. Android parity is pending |
 | Start a turn while a translation is being spoken | iOS only for now: speech stops immediately and the microphone opens; the audio session is never held by both. Android parity is pending |
 | Relaunch after changing a reading language | iOS only for now: both chips come back as they were left, with the spoken language derived from the restored reading language. Android parity is pending |
 | Relaunch after overriding a spoken language | iOS only for now: the override comes back; a stored recognizer the device no longer has re-derives from the reading chip instead. Android parity is pending |
@@ -519,10 +542,10 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Open typed input while an utterance is in flight | iOS only for now: the keyboard control is disabled under exactly the push-to-talk rule, with the same explanatory text. Android parity is pending |
 | Clear the conversation from the drawer | iOS only for now: the transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears. Android parity is pending |
 | A call arrives mid-utterance | iOS only for now: the in-flight bubble is discarded, the session returns to idle with the `Interrupted. Tap to talk again.` note, and the next push-to-talk records normally. Android parity is pending |
-| Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start conversation` shows the download consent again. Android parity is pending |
+| Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start session` shows the download consent again. Android parity is pending |
 | Open the drawer and read the `App language` row | iOS only for now: the row names the language in force, defaulting to `System`. Android parity is pending |
 | Choose an app language | iOS only for now: the choice is remembered, the toast says it applies fully after reopening the app, and the session, model, transcript, and both chips are untouched. Android parity is pending |
-| Run the app on a phone set to French or Spanish | iOS only for now: the interface falls back to English string by string, because those languages are declared but not yet populated. Android parity is pending |
+| Run the app on a phone set to French or Spanish | iOS only for now: the interface is in that language throughout, including the 38 reading-language names, which the platform names in the reader's own language. Android parity is pending |
 
 ## Verification
 
@@ -534,14 +557,14 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - Copying the contact address puts `contact@zetic.ai` on the system clipboard and shows the `Email address copied` toast, which disappears on its own.
 - The welcome and the consent card are fully navigable with a screen reader: every control carries a label, and each surface is announced as modal so the screen behind it is not reachable while it is up.
 - The welcome appears on a first-ever launch and never again after `Get started`, across a relaunch.
-- With no local model, the first `Start conversation` shows the consent card and downloads nothing until `Download now`; with a local model present no consent card appears at all.
+- With no local model, the first `Start session` shows the consent card and downloads nothing until `Download now`; with a local model present no consent card appears at all.
 - No user-facing string in the first-run flow or the session-comfort behaviors contains an em dash.
 - The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event, even though the idle timer and the Taptic Engine themselves are only verifiable on a device.
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
 - A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
 - No user-facing string in the spoken-output controls contains an em dash.
 - Choosing a reading language re-aligns that speaker's recognition language to the matching installed recognizer, on both platforms, at first resolution and on every later change; a reading language the device has no recognizer for leaves the recognition language as it was, and an explicit recognition choice stands until that speaker's reading language changes again. The matcher and the coupling are covered by unit tests on both platforms, including the variant preference (`fr` over `fr-BE`, `zh-Hant` over `zh-CN`).
-- Ending a session leaves the model resident on both platforms, so a second `Start conversation` / `Start Session` in the same launch loads nothing; the model is released only when the screen's owner goes away. Covered by unit tests on both platforms.
+- Ending a session leaves the model resident on both platforms, so a second `Start session` in the same launch loads nothing; the model is released only when the screen's owner goes away. Covered by unit tests on both platforms.
 - Both speakers' language selections come back after a relaunch. An explicit spoken-language override survives; a spoken language that was only ever the derived default, and a stored recognizer identifier the device no longer offers, both re-derive from the restored reading language. The restore rule is covered by unit tests case by case, including the stale-identifier case.
 - A typed message produces exactly the bubble, target language, Hy-MT2 request, and spoken translation the speech path produces for the same text; a unit test compares the two requests directly rather than trusting that they were written the same way. The typed control and the send action are locked under the same rule as push-to-talk.
 - The typed-input sheet is fully navigable with a screen reader: the speaker control, the guidance line, the field, `Cancel`, and `Send` each carry a label, and the sheet is announced as modal.

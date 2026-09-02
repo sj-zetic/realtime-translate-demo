@@ -25,7 +25,10 @@ targets:
         INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_NAME: RealtimeTranslate
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "1,2"
+        # iPhone only. "1,2" shipped an iPad build of a layout that was never drawn for one, with
+        # a bottom bar and a 280 point drawer stretched across a 13 inch screen and copy that says
+        # "on this phone" throughout. Raise it to "1,2" when there is an iPad layout to ship.
+        TARGETED_DEVICE_FAMILY: "1"
         # Sources/Localizable.xcstrings is the one catalog. Both flags together are what makes a
         # build extract literals and `String(localized:)` calls into it.
         LOCALIZATION_PREFERS_STRING_CATALOGS: YES
