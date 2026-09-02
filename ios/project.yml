@@ -5,6 +5,7 @@ packages:
     exactVersion: 1.10.0
 options:
   minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
 settings:
   base:
     SWIFT_VERSION: 5.0
@@ -25,6 +26,10 @@ targets:
         PRODUCT_NAME: RealtimeTranslate
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
+        # Sources/Localizable.xcstrings is the one catalog. Both flags together are what makes a
+        # build extract literals and `String(localized:)` calls into it.
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
     scheme:
       testTargets:
         - RealtimeTranslateTests

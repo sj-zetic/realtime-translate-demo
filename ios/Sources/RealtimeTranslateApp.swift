@@ -7,6 +7,11 @@ struct RealtimeTranslateApp: App {
   init() {
     FirstRunDefaults.applyLaunchArguments()
     LanguagePreferenceDefaults.applyLaunchArguments()
+    // `-resetAppLanguage` first, so a reset run cannot then re-apply the override it just cleared.
+    // `applyStored` keeps `AppleLanguages` in step with the remembered choice; iOS has already read
+    // that key for this launch, which is exactly why the row promises "after reopening the app".
+    AppLanguageDefaults.applyLaunchArguments()
+    AppLanguageDefaults.applyStored()
   }
 
   var body: some Scene {

@@ -97,7 +97,10 @@ enum AudioInterruptionPolicy {
 enum AudioInterruptionCopy {
   /// The whole message. It says what happened and what to do, and nothing about why, because the
   /// reason is already on screen: a call, an alarm, or Siri took over the phone.
-  static let notice = "Interrupted. Tap to talk again."
+  static var notice: String {
+    String(localized: "Interrupted. Tap to talk again.",
+           comment: "Session banner note after a call, alarm, or Siri took the audio session")
+  }
 }
 
 // MARK: - The observer

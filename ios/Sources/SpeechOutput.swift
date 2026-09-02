@@ -11,12 +11,29 @@ import Foundation
 // MARK: - Copy
 
 enum SpeechOutputCopy {
-  static let replayAction = "Play translation"
-  static let replayHint = "Speaks this translation again."
-  static let soundOnLabel = "Spoken translation on"
-  static let soundOffLabel = "Spoken translation off"
-  static let soundOnHint = "Turns spoken translation off."
-  static let soundOffHint = "Turns spoken translation on."
+  static var replayAction: String {
+    String(localized: "Play translation", comment: "Accessibility label for a bubble's replay control")
+  }
+  static var replayHint: String {
+    String(localized: "Speaks this translation again.",
+           comment: "Accessibility hint for a bubble's replay control")
+  }
+  static var soundOnLabel: String {
+    String(localized: "Spoken translation on",
+           comment: "Accessibility label for the sound toggle while it is unmuted")
+  }
+  static var soundOffLabel: String {
+    String(localized: "Spoken translation off",
+           comment: "Accessibility label for the sound toggle while it is muted")
+  }
+  static var soundOnHint: String {
+    String(localized: "Turns spoken translation off.",
+           comment: "Accessibility hint for the sound toggle while it is unmuted")
+  }
+  static var soundOffHint: String {
+    String(localized: "Turns spoken translation on.",
+           comment: "Accessibility hint for the sound toggle while it is muted")
+  }
 }
 
 /// The mute preference lives in platform preferences under one key, written by the toolbar's

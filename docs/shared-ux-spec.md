@@ -160,6 +160,9 @@ The only secondary surface. It slides in from the trailing edge over the main sc
  Clear conversation          🗑
  Keeps the session and the languages
 ------------------------------
+ App language                🌐
+ System
+------------------------------
  Storage                     ▤
  1.9 GB on this phone
 ------------------------------
@@ -175,7 +178,7 @@ The only secondary surface. It slides in from the trailing edge over the main sc
 ```
 
 1. **Header**: the title `Settings` and a close control.
-2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `Storage` reports what the downloaded model occupies and is the way to give that space back, see [model storage](#model-storage). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
+2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `App language` chooses the language the interface itself is in, see [localization](#localization). `Storage` reports what the downloaded model occupies and is the way to give that space back, see [model storage](#model-storage). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows.
 3. **About**: the app display name, version, and build read from the platform bundle, plus one privacy line: `Speech, translation, everything stays on this phone.`
 
 - **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
@@ -302,6 +305,50 @@ A phone call, Siri, an alarm, or an unplugged headset takes the audio session aw
 - **Route lost** (headphones unplugged, a Bluetooth headset disconnecting) is treated as an interruption, because to whoever is speaking it is one. A new device merely becoming available is not.
 - **The note**: one quiet line in the inline session banner reading exactly `Interrupted. Tap to talk again.`, in `color.textSecondary` with no error color and no button. It is not an error state. It clears itself the moment the next turn starts, by push-to-talk or by typing.
 - **The interruption ending never restarts anything.** The platform's "audio could resume now" hint is read and deliberately not acted on: resuming would mean opening the microphone with nobody holding a button, which is the one thing a push-to-talk app must never do. The next press starts a turn normally, because the recognizer claims and activates its own audio session on every start.
+
+## Localization
+
+The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, all 124 keys translated in each. Android parity is pending.
+
+### Shipped languages and their register
+
+- **French (`fr`), shipped.** Vouvoiement throughout, no tutoiement anywhere: the phone is handed to a stranger, so the second person on screen is not the person who installed the app, and French iOS system UI next to it is uniformly vouvoyée. Buttons stay infinitive (`Continuer`, `Réessayer`), which is address-neutral and the French Apple convention. French typography is carried in the catalog as real code points: no-break space (U+00A0) before `:` and `%`, narrow no-break space (U+202F) before `?`, U+2019 for every apostrophe, and guillemets where a control name is quoted.
+- **Spanish (`es`), shipped.** Tú throughout, which is what Apple's Spanish localizations use and what a two-people-one-phone consumer app calls for; controls stay infinitive (`Cancelar`, `Enviar`) per the same convention. Neutral international Spanish, so `mantén pulsado`, `Ajustes`, and `toca` rather than their regional alternatives. `Start Session` is `Empezar sesión`, never `Iniciar sesión`, which in Spanish means *log in*.
+
+### Where the strings live
+
+One String Catalog per platform holds every user-facing string. On iOS that is `ios/Sources/Localizable.xcstrings`, with `en` as the development language, `en`, `fr`, and `es` in the project's known regions and in `CFBundleLocalizations`, and the catalog compiled into the app bundle at build time. A build extracts the strings and `xcstringstool sync` merges them into the catalog, so the catalog is generated from the code rather than maintained beside it.
+
+Strings reach the catalog by one of two routes, and the difference is visible to the user:
+
+1. **Literals in views** (`Text("Settings")`) resolve against the environment locale. They repaint the moment the language changes.
+2. **Strings built in models and copy constants** (`String(localized:)`) resolve against the bundle and the process locale, which the platform settles at launch. They change when the app is next opened.
+
+That split is the whole reason the language row promises what it promises. It is not worked around: half the screen updating immediately and the rest updating on the next launch is standard platform behaviour, and pretending otherwise would mean rebuilding every model string on every locale change for no real gain.
+
+### What is not translated
+
+- **The product name** `Turn Translate`, the brand `ZETIC`, the domain `zetic.ai`, the address `contact@zetic.ai`, and the model name `Hy-MT2`. These are held as plain constants so nothing can translate them by accident.
+- **The speaker labels** `A` and `B`, and size figures such as `1.9 GB`. Byte sizes are formatted by the platform, which localizes the unit on its own.
+- **The 38 Hy-MT2 reading-language names.** That name is not only a label: it is the argument the Hy-MT2 prompt is built from (`Translate the following text into French`), and the instruction has to stay English whatever the interface is in. Translating the picker therefore means a second, display-only name on each entry, which is a change to the model catalogue rather than to the localization plumbing. Until then a French interface names the reading languages in English. The spoken-language list is unaffected: those names come from the platform and are already localized.
+- **Log lines, launch-argument names, accessibility identifiers, and URLs**, none of which a person reads.
+
+### The `App language` row
+
+- **What it shows**: the row title `App language` with the language currently in force as its subtitle. The value is the point of the row: someone who has put the app into a language they cannot read has to be able to find their way back out by recognizing it.
+- **The choices**: `System`, `English`, `Français`, `Español`. The three concrete languages are named in their own language, never translated; only `System` is.
+- **The default is `System`**, which follows the order set in the platform's own settings. Choosing `System` again removes the override rather than pinning whatever the phone currently is, so a phone that changes its language later is followed instead of frozen.
+- **Choosing a language** writes the platform's own language override (`AppleLanguages` on iOS) and confirms with the shared toast reading exactly `Language applies fully after reopening the app`. Everything the environment locale drives repaints immediately; the rest follows on the next launch. Choosing the language that is already selected changes nothing and shows no toast.
+- **The drawer stays open**, unlike the clear row: the thing worth seeing afterwards is this row showing the new value.
+- **Nothing else changes.** The session, the loaded model, the transcript, both language chips, and the sound toggle are untouched. The override is remembered across launches under its own key, alongside the other preferences.
+
+### Fallback rules
+
+- **A language with no translations falls back to the development language, string by string.** `fr` and `es` are populated, so this now covers only a language added to the project ahead of its pass: it gets an English interface, not a broken one, and gains its own strings when the pass lands, without any code change.
+- **A key missing from a language falls back to English**, so a partly finished pass never shows a blank or a raw key.
+- **A stored language this build no longer offers falls back to `System`**, the same tolerance the reading chips apply to a code that is no longer in the catalogue.
+- **Formatting follows the chosen language**: sizes, numbers, and dates come from the platform's formatters rather than from hand-built strings, so they are already right in a language whose strings are not translated yet.
+- **No user-facing string, in any language, contains an em dash or an en dash.** The rule is enforced across the whole catalog by a test that scans every value, not just the copy constants a person remembered to list.
 
 ## Model storage
 
@@ -466,6 +513,9 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Clear the conversation from the drawer | iOS only for now: the transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears. Android parity is pending |
 | A call arrives mid-utterance | iOS only for now: the in-flight bubble is discarded, the session returns to idle with the `Interrupted. Tap to talk again.` note, and the next push-to-talk records normally. Android parity is pending |
 | Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start conversation` shows the download consent again. Android parity is pending |
+| Open the drawer and read the `App language` row | iOS only for now: the row names the language in force, defaulting to `System`. Android parity is pending |
+| Choose an app language | iOS only for now: the choice is remembered, the toast says it applies fully after reopening the app, and the session, model, transcript, and both chips are untouched. Android parity is pending |
+| Run the app on a phone set to French or Spanish | iOS only for now: the interface falls back to English string by string, because those languages are declared but not yet populated. Android parity is pending |
 
 ## Verification
 
@@ -491,5 +541,9 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - An interruption arriving while recording or finalizing discards the in-flight bubble, leaves every earlier bubble and the loaded model alone, shows the note, and leaves the next push-to-talk working. An interruption while a translation is being spoken stops only the speech. An interruption ending never starts listening. The whole decision table is covered by unit tests state by state over an injected interruption seam, even though the interruption itself is only verifiable on a device.
 - The `Storage` row reports the model's footprint, is disabled with nothing downloaded and while a session holds the model, and deletes only behind its confirmation. The size reading, the deletion's containment rules (an unreadable index and a model key outside the artifacts root are both refused), the survival of the backend-selection records and staging locks, and the consent gate re-arming afterwards are covered by unit tests over a cache fixture.
 - No user-facing string in the interruption note or the storage row contains an em dash.
+- Every user-facing string comes out of the String Catalog: a test resolves a sample of explicitly keyed entries and fails if a lookup falls through to its own key, which is what a missing or uncompiled catalog looks like. A second test checks the compiled catalog is actually in the app bundle.
+- The whole catalog is scanned rather than sampled: every key and every value is free of em dashes and en dashes, every entry carries a translator comment, no entry is stale, and English is the only populated language until the French and Spanish passes land.
+- The app-language override writes both halves that have to agree, the remembered value and the platform's `AppleLanguages` key, and choosing `System` removes the override rather than pinning the current device language. A stored language this build no longer offers falls back to `System`. All of it is covered by unit tests against a throwaway preferences domain, so no test can leave an override behind for the next run.
+- UI tests force the app back to the device language on every launch, so the English strings they assert against are the ones that are actually rendered.
 - Every surface is checked at the largest accessibility text size: nothing truncates, nothing overlaps, no action falls off the bottom edge, and no content rides up over the status bar.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.
