@@ -255,12 +255,80 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["ZETIC, opens settings"].exists)
   }
 
+  // MARK: - Typed input and clearing
+
+  func testTypingAMessageProducesThatSpeakersBubble() {
+    let app = launch(state: "ready")
+    let typedInput = app.buttons["typed-input"]
+    XCTAssertTrue(typedInput.waitForExistence(timeout: 10))
+    XCTAssertTrue(typedInput.isHittable)
+    XCTAssertTrue(typedInput.isEnabled)
+    // On the hint row, clear of the push-to-talk controls and the session action.
+    XCTAssertGreaterThan(typedInput.frame.minY, app.buttons["Start A Turn"].frame.maxY)
+    XCTAssertLessThan(typedInput.frame.maxY, app.buttons["End Session"].frame.minY)
+
+    typedInput.tap()
+
+    // A vertically growing `TextField` surfaces as a text view on some releases and a text field
+    // on others, so the field is found by identifier rather than by element type.
+    let field = app.descendants(matching: .any).matching(identifier: "typed-input-field").firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["typed-input-cancel"].exists)
+    // Nothing typed yet, so there is no turn to send.
+    XCTAssertFalse(app.buttons["typed-input-send"].isEnabled)
+    XCTAssertTrue(contains(app, "Speaker A types in English"))
+
+    field.tap()
+    field.typeText("Good morning")
+    let send = app.buttons["typed-input-send"]
+    XCTAssertTrue(send.isEnabled)
+    send.tap()
+
+    XCTAssertTrue(waitForDisappearance(send, timeout: 5))
+    let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 5))
+    XCTAssertTrue(bubble.label.contains("Good morning"))
+    XCTAssertTrue(bubble.label.contains("Speaker A"))
+  }
+
+  func testTypedInputIsLockedBeforeTheModelIsReady() {
+    let app = launch(state: "ended")
+    let typedInput = app.buttons["typed-input"]
+    XCTAssertTrue(typedInput.waitForExistence(timeout: 10))
+    XCTAssertFalse(typedInput.isEnabled)
+  }
+
+  func testTheDrawersClearRowEmptiesTheTranscript() {
+    let app = launch(state: "ended", extra: ["-toastSeconds", "6"])
+    let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 10))
+
+    app.buttons["ZETIC, opens settings"].tap()
+    let clear = app.buttons["settings-clear-conversation"]
+    XCTAssertTrue(clear.waitForExistence(timeout: 5))
+    XCTAssertTrue(clear.isEnabled)
+
+    clear.tap()
+
+    let toast = app.staticTexts["Conversation cleared"]
+    XCTAssertTrue(toast.waitForExistence(timeout: 5))
+    XCTAssertTrue(waitForDisappearance(bubble, timeout: 5))
+    // The session action is untouched: clearing empties the transcript, it does not end anything.
+    XCTAssertTrue(app.buttons["Start Session"].exists)
+
+    // With nothing left to clear the row stays where it is and stops being tappable.
+    app.buttons["ZETIC, opens settings"].tap()
+    XCTAssertTrue(clear.waitForExistence(timeout: 5))
+    XCTAssertFalse(clear.isEnabled)
+  }
+
   /// Every existing scenario is a returning user: the first-run flags are forced closed so the
-  /// welcome never stands between the test and the screen it is checking.
+  /// welcome never stands between the test and the screen it is checking, and the remembered
+  /// languages are cleared so a run never inherits the previous one's chips.
   private func launch(state: String, firstRun: String = "returning",
                       extra: [String] = []) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchArguments = ["-uiState", state, "-firstRun", firstRun] + extra
+    app.launchArguments = ["-uiState", state, "-firstRun", firstRun, "-resetLanguages"] + extra
     app.launch()
     return app
   }

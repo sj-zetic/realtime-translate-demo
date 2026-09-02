@@ -5,12 +5,17 @@ import SwiftUI
 /// where it is.
 struct SettingsDrawerOverlay: View {
   @ObservedObject var model: SettingsDrawerModel
+  /// The one session action the drawer carries. Passed in rather than reached for, so the drawer
+  /// still knows nothing about the view model behind it.
+  let canClearConversation: Bool
+  let clearConversation: () -> Void
 
   var body: some View {
     ZStack(alignment: .trailing) {
       if model.isOpen {
         Scrim(close: model.close)
-        SettingsDrawerPanel(model: model)
+        SettingsDrawerPanel(model: model, canClearConversation: canClearConversation,
+                            clearConversation: clearConversation)
           .transition(.move(edge: .trailing))
       }
     }
@@ -38,6 +43,8 @@ private struct Scrim: View {
 
 private struct SettingsDrawerPanel: View {
   @ObservedObject var model: SettingsDrawerModel
+  let canClearConversation: Bool
+  let clearConversation: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -87,6 +94,20 @@ private struct SettingsDrawerPanel: View {
   /// here between the existing rows and keep the same divider rhythm.
   private var rows: some View {
     VStack(spacing: 0) {
+      // First, because it is the one row someone opens the drawer in order to use. Disabled
+      // rather than hidden on an empty transcript or mid-utterance, so the row never moves.
+      SettingsRow(
+        title: SettingsDrawerModel.clearConversationTitle,
+        subtitle: SettingsDrawerModel.clearConversationSubtitle,
+        symbol: "trash",
+        identifier: "settings-clear-conversation",
+        accessibilityLabel: canClearConversation
+          ? "\(SettingsDrawerModel.clearConversationTitle), keeps the session and the languages"
+          : "\(SettingsDrawerModel.clearConversationTitle), unavailable, there is nothing to clear",
+        isEnabled: canClearConversation,
+        action: { model.clearConversation(clearConversation) }
+      )
+      ThinDivider()
       SettingsRow(
         title: "Visit zetic.ai",
         subtitle: nil,
@@ -135,6 +156,7 @@ private struct SettingsRow: View {
   let symbol: String
   let identifier: String
   let accessibilityLabel: String
+  var isEnabled = true
   let action: () -> Void
 
   var body: some View {
@@ -143,7 +165,7 @@ private struct SettingsRow: View {
         VStack(alignment: .leading, spacing: 2) {
           Text(title)
             .font(.subheadline)
-            .foregroundStyle(DesignToken.textPrimary)
+            .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
           if let subtitle {
             Text(subtitle)
               .font(.caption)
@@ -161,6 +183,7 @@ private struct SettingsRow: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .disabled(!isEnabled)
     .accessibilityIdentifier(identifier)
     .accessibilityLabel(accessibilityLabel)
   }

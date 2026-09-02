@@ -69,6 +69,7 @@ struct RealtimeTranslateRootView: View {
   @StateObject private var settings = SettingsDrawerModel()
   @StateObject private var firstRun: FirstRunModel
   @StateObject private var conversationCopy = ConversationCopyModel()
+  @StateObject private var typedInput = TypedInputModel()
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
   /// The mute toggle's stored state. The view model seeds itself from the same key, so this is
@@ -87,7 +88,10 @@ struct RealtimeTranslateRootView: View {
 
   var body: some View {
     mainScreen
-      .overlay { SettingsDrawerOverlay(model: settings) }
+      .overlay {
+        SettingsDrawerOverlay(model: settings, canClearConversation: viewModel.canClearConversation,
+                              clearConversation: viewModel.clearConversation)
+      }
       .overlay { firstRunOverlay }
       .onAppear {
         viewModel.adoptExistingPermission()
@@ -178,7 +182,16 @@ struct RealtimeTranslateRootView: View {
         }
       }
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        BottomBar(viewModel: viewModel, startSession: startSession)
+        BottomBar(viewModel: viewModel, startSession: startSession, openTypedInput: typedInput.open)
+      }
+      // A sheet rather than an inline field: the keyboard covers the bottom bar either way, and a
+      // sheet is the surface VoiceOver already treats as modal.
+      .sheet(isPresented: $typedInput.isPresented) {
+        TypedInputSheet(model: typedInput, readingA: viewModel.targetLanguageA,
+                        readingB: viewModel.targetLanguageB,
+                        canSend: viewModel.canSubmitTypedTranscript,
+                        send: viewModel.submitTypedTranscript)
+          .presentationDetents([.medium])
       }
     }
     .tint(DesignToken.accent)
@@ -539,6 +552,7 @@ private struct ReplayButton: View {
 private struct BottomBar: View {
   @ObservedObject var viewModel: RealtimeTranslateViewModel
   let startSession: () -> Void
+  let openTypedInput: () -> Void
 
   var body: some View {
     VStack(spacing: 12) {
@@ -548,10 +562,16 @@ private struct BottomBar: View {
         PTTButton(speaker: .b, state: viewModel.state, begin: viewModel.beginTurn, end: viewModel.endTurn)
       }
       .padding(.horizontal, 16)
-      Text(hint)
-        .font(.caption).foregroundStyle(DesignToken.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
+      // The hint line is one short sentence with its trailing half empty, so the typed-input
+      // control lands there instead of becoming a third and fourth button in the row above.
+      HStack(spacing: 8) {
+        Text(hint)
+          .font(.caption).foregroundStyle(DesignToken.textSecondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        TypedInputButton(isEnabled: viewModel.canSubmitTypedTranscript, open: openTypedInput)
+      }
+      .padding(.leading, 16)
+      .padding(.trailing, 8)
       sessionButton
         .padding(.horizontal, 16)
         .padding(.bottom, 8)

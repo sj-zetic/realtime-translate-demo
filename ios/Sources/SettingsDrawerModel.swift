@@ -39,6 +39,9 @@ final class SettingsDrawerModel: ObservableObject {
   static let website = URL(string: "https://zetic.ai")!
   static let copyConfirmation = "Email address copied"
   static let privacyLine = "Speech, translation, everything stays on this phone."
+  static let clearConversationTitle = "Clear conversation"
+  static let clearConversationSubtitle = "Keeps the session and the languages"
+  static let clearConversationConfirmation = "Conversation cleared"
 
   @Published private(set) var isOpen = false
 
@@ -76,5 +79,14 @@ final class SettingsDrawerModel: ObservableObject {
   func copyContactEmail() {
     pasteboard.write(Self.contactEmail)
     toasts.show(Self.copyConfirmation)
+  }
+
+  /// Runs the caller's clear and confirms it the same way every other drawer action confirms.
+  /// The drawer closes first, because the whole point of the row is to look at the emptied
+  /// transcript; the toast lives outside the panel, so it survives the close.
+  func clearConversation(_ clear: () -> Void) {
+    clear()
+    close()
+    toasts.show(Self.clearConversationConfirmation)
   }
 }
