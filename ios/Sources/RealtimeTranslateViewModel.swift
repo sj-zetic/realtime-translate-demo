@@ -45,6 +45,14 @@ final class RealtimeTranslateViewModel: ObservableObject {
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
   private var sessionTask: Task<Void, Never>?
+  /// The one translation in flight. Held so ending a session can cancel it: a translation nobody
+  /// is waiting for is a model still generating tokens on a phone whose session is over.
+  private var translationTask: Task<Void, Never>?
+  /// Whether this view model started the recognizer and has not released it yet. A typed turn
+  /// travels the same finalized-transcript path without ever opening a microphone, so the release
+  /// at the end of that path has to know whether there is anything to release: stopping a
+  /// recognizer that never started tears down the audio session the spoken output is using.
+  private var isRecognizerRunning = false
   private(set) var mostRecentTranslationRequest: HyMT2Request?
 
   // Defaults let a first session start in one tap: automatic recognition for both speakers and two
@@ -92,6 +100,10 @@ final class RealtimeTranslateViewModel: ObservableObject {
     // notification center does not become the thing keeping a closed session alive.
     self.audioInterruptions = audioInterruptions ?? SystemAudioInterruptions()
     self.audioInterruptions.observe { [weak self] event in self?.handleAudioInterruption(event) }
+    // Seeded above from whatever the recognizer already knows, which on a cold launch is nothing:
+    // asking the platform costs about 280 ms and this runs before the first frame. The real list
+    // arrives from off the main actor and re-runs the chip coupling if it changed anything.
+    refreshAvailableLanguages()
   }
 
   /// The app's composition root, and the one place the persisting store is injected: everywhere
@@ -197,11 +209,13 @@ final class RealtimeTranslateViewModel: ObservableObject {
         onPartial: { [weak self] transcript in self?.receivePartial(transcript, speaker: speaker) },
         onFinal: { [weak self] transcript in self?.receiveFinal(transcript, speaker: speaker) }
       )
+      isRecognizerRunning = true
       state = .listening(speaker)
       haptics.play(.turnBegan)
     } catch {
       items.removeAll { $0.id == item.id }
       activeItemID = nil
+      isRecognizerRunning = false
       speechRecognizer.stop()
       state = .error(TranslationFailureCopy.message(for: error))
       haptics.play(.sessionError)
@@ -235,6 +249,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
     let transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard canSubmitTypedTranscript, !transcript.isEmpty else { return }
     notice = nil
+    // The same handoff a push-to-talk turn performs: nothing is left playing while a new utterance
+    // is taken. A typed turn never opens the microphone, so this is the whole of its audio work.
+    speechOutput.stop()
     let item = ConversationItem(
       id: UUID(), speaker: speaker, transcript: transcript,
       targetLanguage: targetLanguage(for: speaker.counterpart), translation: nil, state: .finalizing
@@ -262,16 +279,28 @@ final class RealtimeTranslateViewModel: ObservableObject {
     speechOutput.stop()
     items = []
     mostRecentTranslationRequest = nil
+    // The note belongs to the conversation that is going away, like every other entry point that
+    // starts something new. Leaving it would strand "Tap to talk again" over an empty transcript.
+    notice = nil
   }
 
   /// Ending a session clears the conversation but keeps the model resident, so the next
   /// `Start Session` reaches `.ready` without another load. The model unloads in `deinit`.
+  ///
+  /// It also stops the work the session started. Cancelling the task that was watching a load is
+  /// not the same as stopping the load: without the second call the 1.9 GB transfer someone just
+  /// declined keeps running on their cellular connection with nothing on screen to say so.
   func endSession() {
     sessionTask?.cancel()
+    sessionTask = nil
+    translationRuntime.cancelLoad()
     beginNewSession()
   }
 
   func beginNewSession() {
+    translationTask?.cancel()
+    translationTask = nil
+    isRecognizerRunning = false
     speechRecognizer.stop()
     speechOutput.stop()
     activeItemID = nil
@@ -308,6 +337,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// Only the utterance dies. The model stays loaded, the languages stay chosen, and every earlier
   /// bubble stays where it is.
   private func abandonUtterance(_ note: String) {
+    isRecognizerRunning = false
     speechRecognizer.stop()
     speechOutput.stop()
     if let id = activeItemID { items.removeAll { $0.id == id } }
@@ -330,6 +360,29 @@ final class RealtimeTranslateViewModel: ObservableObject {
   /// The model is loaded, so the A/B controls and `End Session` belong on screen. The same flag
   /// decides whether the display stays awake (see `ScreenAwakePolicy`).
   var isSessionLive: Bool { state.isSessionLive }
+
+  /// Whether the model is in memory or on its way there, which is the only thing that makes
+  /// deleting it from disk unsafe. Deliberately not `isSessionLive`: that answers a different
+  /// question, and its two blind spots are the two states where a delete does the most damage.
+  /// `loadingModel` is the file being mapped as it is removed, and the state after `End Session`
+  /// is a model kept resident on purpose, where a delete would leave the app translating happily
+  /// from memory and silently downloading 1.9 GB again on the next launch.
+  var isModelHeld: Bool {
+    if case .loadingModel = state { return true }
+    return translationRuntime.isModelResident
+  }
+
+  /// What the settings drawer's storage row is allowed to offer, from the two facts only this view
+  /// model has: whether a session is on screen to end, and whether the model is in memory.
+  var modelHold: ModelStorageRow.Hold {
+    if isSessionLive { return .session }
+    return isModelHeld ? .memory : .free
+  }
+
+  /// Whether a bubble's replay glyph does anything if it is tapped. Muted it plays nothing, and
+  /// while the recognizer holds the microphone `speak` refuses, so the control is disabled rather
+  /// than left looking live and doing nothing.
+  var canReplay: Bool { !isMuted && !state.isRecognizerLive }
 
   /// A single tap can start the first session once permissions are granted.
   var canStartSession: Bool {
@@ -406,8 +459,26 @@ final class RealtimeTranslateViewModel: ObservableObject {
     speaker == .a ? targetLanguageA : targetLanguageB
   }
 
+  /// Asks the platform for its recognition locales off the main actor and adopts the answer.
+  /// Cheap to call again: the platform recognizer caches the list for the launch, so the second
+  /// caller pays a hop rather than another enumeration.
   private func refreshAvailableLanguages() {
-    availableSourceLanguages = [SpeechSourceLanguage.automatic] + speechRecognizer.availableSourceLanguages()
+    let recognizer = speechRecognizer
+    Task { [weak self] in
+      let languages = await recognizer.loadAvailableSourceLanguages()
+      self?.adoptAvailableLanguages(languages)
+    }
+  }
+
+  /// Applies a freshly read locale list. A list that says what this view model already believed
+  /// changes nothing, and a speaker whose spoken language has since been chosen by hand keeps it:
+  /// only a chip still on `Automatic` re-derives from its reading language.
+  private func adoptAvailableLanguages(_ languages: [SpeechSourceLanguage]) {
+    let supported = [SpeechSourceLanguage.automatic] + languages
+    guard supported != availableSourceLanguages else { return }
+    availableSourceLanguages = supported
+    if sourceLanguageA == .automatic { alignSpokenLanguage(with: targetLanguageA, for: .a) }
+    if sourceLanguageB == .automatic { alignSpokenLanguage(with: targetLanguageB, for: .b) }
   }
 
   private func receivePartial(_ transcript: String, speaker: Speaker) {
@@ -418,9 +489,20 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
   }
 
+  /// The recognizer's last word on an utterance, which is sometimes that there were none.
+  ///
+  /// An empty final is realistic and not an error: a silent turn produces one, and the platform
+  /// recognizer synthesizes one for any recognition failure that is not a cancellation. While the
+  /// turn is still recording it means nothing yet, so it is dropped. Once the button is released
+  /// it is the only answer that will ever come, and dropping it there leaves `finalizing` with no
+  /// exit: every control blocked, and the only way out the one that wipes the conversation. So it
+  /// ends the utterance the way an interruption does, with the bubble discarded and a quiet note.
   private func receiveFinal(_ transcript: String, speaker: Speaker) {
     guard state == .listening(speaker) || state == .finalizing(speaker) else { return }
-    guard !transcript.isEmpty else { return }
+    guard !transcript.isEmpty else {
+      if state == .finalizing(speaker) { abandonUtterance(EmptyTurnCopy.notice) }
+      return
+    }
     pendingFinalTranscript = transcript
     guard state == .finalizing(speaker) else { return }
     completeTurn(transcript, speaker: speaker)
@@ -437,17 +519,22 @@ final class RealtimeTranslateViewModel: ObservableObject {
                        targetLanguage: target, translation: nil, state: .finalizing)
     }
     state = .translating(speaker)
-    speechRecognizer.stop()
+    // Only when there is one to release. A typed turn reaches here with the microphone closed, and
+    // stopping the recognizer would deactivate the audio session out from under the spoken output.
+    if isRecognizerRunning {
+      isRecognizerRunning = false
+      speechRecognizer.stop()
+    }
     let request = HyMT2Request(sourceText: transcript, targetLanguage: target)
     mostRecentTranslationRequest = request
     let itemID = activeItemID
     activeItemID = nil
     pendingFinalTranscript = nil
-    Task { [weak self] in
+    translationTask = Task { [weak self] in
       guard let self else { return }
       do {
         let translation = try await translationRuntime.translate(prompt: request.flatPrompt)
-        guard state == .translating(speaker), let itemID else { return }
+        guard !Task.isCancelled, state == .translating(speaker), let itemID else { return }
         updateItem(id: itemID) { item in
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: translation, state: .translated)
@@ -457,14 +544,14 @@ final class RealtimeTranslateViewModel: ObservableObject {
         // one stops mattering: a conversation must not build a backlog of sentences to play.
         if let delivered = items.first(where: { $0.id == itemID }) { speak(delivered) }
       } catch {
-        guard state == .translating(speaker), let itemID else { return }
+        guard !Task.isCancelled, state == .translating(speaker), let itemID else { return }
         updateItem(id: itemID) { item in
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: nil,
                            state: .translationFailed(TranslationFailureCopy.message(for: error)))
         }
       }
-      guard state == .translating(speaker) else { return }
+      guard !Task.isCancelled, state == .translating(speaker) else { return }
       state = .ready
     }
   }
@@ -486,6 +573,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   deinit {
     sessionTask?.cancel()
+    translationTask?.cancel()
     Task { [translationRuntime] in await translationRuntime.close() }
   }
 

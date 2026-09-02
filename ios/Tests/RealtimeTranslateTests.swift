@@ -1,6 +1,7 @@
 import AVFAudio
 import XCTest
 import Speech
+import ZeticMLange
 @testable import RealtimeTranslate
 
 @MainActor
@@ -350,6 +351,81 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(runtime.closeCount, 0)
   }
 
+  // MARK: - A turn that recognizes nothing
+
+  /// `finalizing` has exactly one exit, and it is a finalized transcript. An empty final is what
+  /// the platform recognizer synthesizes for every recognition failure that is not a cancellation,
+  /// and a silent turn produces one on its own, so dropping it there leaves the session stranded:
+  /// every control blocked, and the only way out the one that wipes the conversation.
+  func testATurnThatRecognizesNothingReturnsToReadyWithANoteRatherThanStranding() {
+    let recognizer = FakeSpeechRecognizer()
+    let earlier = previewTranslatedItem
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [earlier], speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: FakeAudioInterruptions()
+    )
+
+    // While the microphone is still open an empty final means nothing yet, so it is dropped.
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("")
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertNil(viewModel.notice)
+
+    viewModel.endTurn(.a)
+    XCTAssertEqual(viewModel.state, .finalizing(.a))
+
+    // Released, the same empty final is the only answer that will ever come.
+    recognizer.sendFinal("")
+
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertTrue(viewModel.isSessionLive)
+    XCTAssertEqual(viewModel.notice, "No speech was recognized. Tap to talk again.")
+    XCTAssertFalse(EmptyTurnCopy.notice.contains("\u{2014}"))
+    // The bubble that was going to hold the utterance goes; every earlier one stays.
+    XCTAssertEqual(viewModel.items.map(\.id), [earlier.id])
+
+    // And the next turn works, which is the whole point of not stranding.
+    viewModel.beginTurn(.b)
+    XCTAssertEqual(viewModel.state, .listening(.b))
+    XCTAssertNil(viewModel.notice)
+  }
+
+  // MARK: - Ending a session
+
+  /// Cancelling the task that was watching a load is not the same as stopping the load, and a
+  /// translation nobody is waiting for is a model still generating tokens after the session that
+  /// asked for it is over.
+  func testEndingASessionStopsTheLoadAndTheTranslationItStarted() async {
+    let recognizer = FakeSpeechRecognizer()
+    let loading = FakeTranslationRuntime(result: "Bonjour", loadDelayNanoseconds: 2_000_000_000)
+    let viewModel = RealtimeTranslateViewModel(
+      state: .setup, speechRecognizer: recognizer, translationRuntime: loading
+    )
+
+    viewModel.startSession()
+    XCTAssertEqual(viewModel.state, .loadingModel(nil))
+    viewModel.endSession()
+
+    XCTAssertEqual(loading.cancelLoadCount, 1)
+    XCTAssertEqual(viewModel.state, .setup)
+    await waitUntil { loading.loadCancelled }
+    XCTAssertFalse(loading.isModelResident)
+
+    let translating = FakeTranslationRuntime(result: "Bonjour", translateDelayNanoseconds: 2_000_000_000)
+    let live = readyViewModel(recognizer, runtime: translating)
+    live.beginTurn(.a)
+    recognizer.sendFinal("Good morning")
+    live.endTurn(.a)
+    await waitUntil { translating.translateStarted }
+
+    live.endSession()
+
+    await waitUntil { translating.translateCancelled }
+    XCTAssertEqual(live.state, .setup)
+    XCTAssertTrue(live.items.isEmpty)
+  }
+
   func testActiveSpeakerReportsTheUtteranceOwnerForBlockedControlText() {
     XCTAssertEqual(SessionState.listening(.a).activeSpeaker, .a)
     XCTAssertEqual(SessionState.finalizing(.b).activeSpeaker, .b)
@@ -406,19 +482,260 @@ final class RealtimeTranslateTests: XCTestCase {
     }
     let swept = models.appendingPathComponent("llmTargetModel-0123456789abcdef")
     try manager.createDirectory(at: swept, withIntermediateDirectories: true)
-    let temporary = root.appendingPathComponent("scratch", isDirectory: true)
+    let temporary = root.appendingPathComponent("tmp", isDirectory: true)
     try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
     let partial = temporary.appendingPathComponent("CFNetworkDownload_ab12cd.tmp")
     let unrelated = temporary.appendingPathComponent("keep-me.tmp")
     try Data([0]).write(to: partial)
     try Data([0]).write(to: unrelated)
 
-    LocalModelStore.sweepOrphans(cacheRoot: root, temporaryDirectory: temporary)
+    LocalModelStore.sweepOrphans(cacheRoot: root)
 
     XCTAssertFalse(manager.fileExists(atPath: swept.path))
     XCTAssertFalse(manager.fileExists(atPath: partial.path))
     XCTAssertTrue(manager.fileExists(atPath: unrelated.path))
     for directory in kept { XCTAssertTrue(manager.fileExists(atPath: directory.path), directory.lastPathComponent) }
+  }
+
+  /// The app's temporary directory is `URLSession`'s too, and a `CFNetworkDownload_*.tmp` sitting
+  /// in it is as likely to be the resumable remains of this model's own 1.9 GB transfer as it is
+  /// to be an abandoned one. The sweep runs at the top of every load, so deleting from there turns
+  /// a download that could resume into one that starts again at zero.
+  func testSweepOrphansLeavesPartialDownloadsOutsideTheCacheRootAlone() throws {
+    let root = try makeCacheFixture()
+    let manager = FileManager.default
+    // The real shared directory, because that is the one the sweep used to reach into. The name
+    // is this test's own, and it is removed however the test ends.
+    let sharedPartial = manager.temporaryDirectory
+      .appendingPathComponent("CFNetworkDownload_\(UUID().uuidString).tmp")
+    try Data([0]).write(to: sharedPartial)
+    addTeardownBlock { try? manager.removeItem(at: sharedPartial) }
+    let ownPartial = root.appendingPathComponent("tmp/CFNetworkDownload_ef34ab.tmp")
+    try manager.createDirectory(at: ownPartial.deletingLastPathComponent(),
+                                withIntermediateDirectories: true)
+    try Data([0]).write(to: ownPartial)
+
+    LocalModelStore.sweepOrphans(cacheRoot: root)
+
+    XCTAssertTrue(manager.fileExists(atPath: sharedPartial.path))
+    XCTAssertFalse(manager.fileExists(atPath: ownPartial.path))
+  }
+
+  /// The two index readings are two views of one file. An artifact whose only stored file is the
+  /// extracted `.gguf` is absent from the `.ztc` reading, and counting only that reading makes the
+  /// live model's own directory look like an id nobody claims.
+  func testSweepOrphansCountsAnArtifactKnownOnlyToTheModuleIndexAsKnown() throws {
+    let root = try makeCacheFixture(moduleByteCount: 16)
+    let manager = FileManager.default
+    let directory = root.appendingPathComponent("artifacts/aaaa/llmTargetModel-c488c23ffebf7fd0")
+    // An artifact the SDK has extracted and tidied up after: its index record names the `.gguf`
+    // and nothing else, so the archive reading of the same file does not know the id at all.
+    let indexURL = root.appendingPathComponent("cache-index.json")
+    var index = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any]
+    )
+    var artifacts = try XCTUnwrap(index["artifacts"] as? [[String: Any]])
+    artifacts[0]["storedFiles"] = (artifacts[0]["storedFiles"] as? [[String: Any]])?
+      .filter { ($0["relativePath"] as? String)?.hasSuffix(".gguf") == true }
+    index["artifacts"] = artifacts
+    try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
+    XCTAssertNotNil(LocalModelStore.discoverExtractedModule(forModelName: "SJ_zetic/Hy-MT2-1.8B",
+                                                            cacheRoot: root))
+    // The sweep only removes empty directories, so the live artifact is emptied but kept: this is
+    // the shape a mid-extraction cache has, and the id is the only thing telling them apart.
+    for file in try manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+      try manager.removeItem(at: file)
+    }
+
+    LocalModelStore.sweepOrphans(cacheRoot: root)
+
+    XCTAssertTrue(manager.fileExists(atPath: directory.path))
+  }
+
+  // MARK: - Translation runtime lifecycle
+
+  /// The interleaving: `load` starts and reaches the SDK init, `close` runs while the model is
+  /// still being built, and only then does the init return. The memoized task wrote its model back
+  /// unconditionally, so the close freed nothing and 1.9 GB landed in a runtime nobody wanted.
+  func testClosingDuringALoadReleasesTheModelInsteadOfInstallingItIntoAClosedRuntime() async {
+    let model = SpyLanguageModel(output: "Bonjour")
+    let building = AsyncGate()
+    let finish = AsyncGate()
+    let runtime = MelangeTranslationRuntime(personalKey: "test-key", modelFactory: { _ in
+      await building.open()
+      await finish.wait()
+      return model
+    })
+
+    let load = Task { try await runtime.load { _ in } }
+    await building.wait()
+    await runtime.close()
+    await finish.open()
+    _ = try? await load.value
+
+    XCTAssertEqual(model.closeCount, 1)
+    XCTAssertFalse(runtime.isModelResident)
+    do {
+      _ = try await runtime.translate(prompt: "anything")
+      XCTFail("a closed runtime has no model to translate with")
+    } catch {
+      XCTAssertEqual(error as? TranslationRuntimeError, .modelNotLoaded)
+    }
+  }
+
+  /// The other half of the same race: the finished memo. A load task left in place after a close
+  /// makes the next `load` return success immediately with no model behind it, so the session
+  /// reaches `ready` and the first translation throws `modelNotLoaded`.
+  func testALoadAbandonedByACloseLeavesNoMemoThatFakesTheNextOne() async throws {
+    let abandoned = SpyLanguageModel(output: "first")
+    let adopted = SpyLanguageModel(output: "Bonjour")
+    let finish = AsyncGate()
+    let building = AsyncGate()
+    let attempts = Counter()
+    let runtime = MelangeTranslationRuntime(personalKey: "test-key", modelFactory: { _ in
+      guard attempts.increment() == 1 else { return adopted }
+      await building.open()
+      await finish.wait()
+      return abandoned
+    })
+
+    let load = Task { try await runtime.load { _ in } }
+    await building.wait()
+    await runtime.close()
+    await finish.open()
+    _ = try? await load.value
+
+    try await runtime.load { _ in }
+
+    XCTAssertTrue(runtime.isModelResident)
+    let translation = try await runtime.translate(prompt: "Good morning")
+    XCTAssertEqual(translation, "Bonjour")
+    XCTAssertEqual(abandoned.closeCount, 1)
+    XCTAssertEqual(adopted.closeCount, 0)
+  }
+
+  /// Cancelling a load stops the transfer and forgets it, and leaves the runtime able to load
+  /// again: someone who ends a session mid-download and starts another one gets a real load.
+  func testCancellingALoadForgetsItSoTheNextStartLoadsForReal() async throws {
+    let model = SpyLanguageModel(output: "Bonjour")
+    let finish = AsyncGate()
+    let building = AsyncGate()
+    let attempts = Counter()
+    let runtime = MelangeTranslationRuntime(personalKey: "test-key", modelFactory: { _ in
+      if attempts.increment() == 1 {
+        await building.open()
+        await finish.wait()
+      }
+      return model
+    })
+
+    let load = Task { try await runtime.load { _ in } }
+    await building.wait()
+    runtime.cancelLoad()
+    await finish.open()
+    _ = try? await load.value
+    XCTAssertFalse(runtime.isModelResident)
+
+    try await runtime.load { _ in }
+
+    XCTAssertEqual(attempts.value, 2)
+    XCTAssertTrue(runtime.isModelResident)
+  }
+
+  /// `deinit` runs exactly when the last strong reference goes away, which can be inside a block
+  /// running on the runtime's own queue. Waiting for that queue from inside `deinit` is a deadlock,
+  /// so the release is handed over and never waited on. The busy queue here is what a load looks
+  /// like: occupied for seconds at a time.
+  func testReleasingAModelHandsItToTheQueueRatherThanWaitingForIt() {
+    let queue = DispatchQueue(label: "ai.zetic.turntranslate.tests.release")
+    let model = SpyLanguageModel(output: "Bonjour")
+    let released = expectation(description: "the model is released once the queue drains")
+    model.onClose = { released.fulfill() }
+    let busy = DispatchSemaphore(value: 0)
+    queue.async { busy.wait() }
+
+    let started = Date()
+    MelangeTranslationRuntime.release(model, on: queue)
+    let elapsed = Date().timeIntervalSince(started)
+
+    XCTAssertLessThan(elapsed, 0.5, "the release waited for the queue")
+    XCTAssertEqual(model.closeCount, 0)
+    busy.signal()
+    wait(for: [released], timeout: 2)
+    XCTAssertEqual(model.cleanUpCount, 1)
+    XCTAssertEqual(model.closeCount, 1)
+  }
+
+  // MARK: - Recognition locales
+
+  /// About 280 ms of `SFSpeechRecognizer` work that used to run on the main actor inside a view
+  /// model's `init`, before the first frame, and again after a permission grant. It cannot change
+  /// while the app is running, so it is read once and reused.
+  func testTheRecognitionLocaleListIsComputedOnceAndReusedAfterwards() {
+    let cache = SourceLanguageCache()
+    let french = SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    var computations = 0
+
+    XCTAssertTrue(cache.current.isEmpty)
+    XCTAssertEqual(cache.fill { computations += 1; return [french] }, [french])
+    XCTAssertEqual(cache.fill { computations += 1; return [] }, [french])
+    XCTAssertEqual(cache.current, [french])
+    XCTAssertEqual(computations, 1)
+  }
+
+  /// The list arrives after `init` rather than during it, and adopting it re-runs the chip
+  /// coupling that could not run while nothing was known. A speaker whose spoken language has
+  /// since been chosen by hand keeps it.
+  func testTheLocaleListArrivesAfterInitAndStillAlignsTheChips() async {
+    let recognizer = FakeSpeechRecognizer()
+    let french = SpeechSourceLanguage(identifier: "fr-FR", name: "French (France)")
+    let korean = SpeechSourceLanguage(identifier: "ko-KR", name: "Korean")
+    // Known only to the reader that runs off the main actor, which is what a cold launch looks
+    // like: nothing has asked the platform yet, so `init` has nothing to seed from.
+    recognizer.deferredSourceLanguages = [french, korean]
+
+    let viewModel = RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer)
+
+    // The first frame is not waiting for any of it.
+    XCTAssertEqual(viewModel.availableSourceLanguages, [.automatic])
+    XCTAssertEqual(viewModel.sourceLanguageB, .automatic)
+
+    await waitUntil { viewModel.availableSourceLanguages.count == 3 }
+    XCTAssertEqual(viewModel.availableSourceLanguages, [.automatic, french, korean])
+    // B reads Korean and was still automatic, so it follows its chip. A reads English, which no
+    // recognizer here offers, so it stays automatic rather than guessing.
+    XCTAssertEqual(viewModel.sourceLanguageB, korean)
+    XCTAssertEqual(viewModel.sourceLanguageA, .automatic)
+  }
+
+  // MARK: - Root view construction
+
+  /// SwiftUI rebuilds a root view struct freely and keeps only the first `StateObject` it is
+  /// given. An eagerly evaluated default argument makes every one of those rebuilds construct a
+  /// recognizer, a translation runtime, a set of notification registrations and an `NWPathMonitor`
+  /// and then throw them away.
+  @MainActor
+  func testTheRootViewBuildsNeitherCollaboratorUntilSwiftUIInstallsIt() {
+    let built = Counter()
+    let firstRunBuilt = Counter()
+
+    _ = RealtimeTranslateRootView(
+      viewModel: Self.countedViewModel(built),
+      firstRun: Self.countedFirstRun(firstRunBuilt)
+    )
+
+    XCTAssertEqual(built.value, 0)
+    XCTAssertEqual(firstRunBuilt.value, 0)
+  }
+
+  private static func countedViewModel(_ counter: Counter) -> RealtimeTranslateViewModel {
+    _ = counter.increment()
+    return RealtimeTranslateViewModel(state: .setup, speechRecognizer: FakeSpeechRecognizer())
+  }
+
+  private static func countedFirstRun(_ counter: Counter) -> FirstRunModel {
+    _ = counter.increment()
+    return FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { true })
   }
 
   func testSettingsDrawerOpensFromTheWordmarkAndCloses() {
@@ -518,7 +835,10 @@ final class RealtimeTranslateTests: XCTestCase {
 
   func testSessionStartHoldsForConsentAndRunsOnlyWhenAccepted() {
     var starts = 0
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false })
+    // The key is stated rather than read: a simulator build carries no Melange personal key, and a
+    // build that cannot download at all is a different decision (see the test further down).
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false },
+                                 hasPersonalKey: { true })
 
     firstRun.requestSessionStart { starts += 1 }
     XCTAssertEqual(starts, 0)
@@ -529,9 +849,36 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertNil(firstRun.consent)
   }
 
+  /// A build with no Melange personal key cannot download anything. Offering `Download now`
+  /// promises a 1.9 GB transfer that ends a frame later in the missing-key failure, so the start
+  /// runs instead and that failure is reported where every other model failure is: the banner.
+  func testConsentIsNotOfferedOnABuildThatCannotDownloadAnything() {
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .unrestricted, hasPersonalKey: false),
+      .startImmediately
+    )
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive, hasPersonalKey: false),
+      .startImmediately
+    )
+    XCTAssertEqual(
+      ModelDownloadConsent.decision(hasLocalModel: false, cost: .expensive, hasPersonalKey: true),
+      .ask(cellularWarning: true)
+    )
+
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.expensive), hasLocalModel: { false },
+                                 hasPersonalKey: { false })
+    var started = 0
+    firstRun.requestSessionStart { started += 1 }
+
+    XCTAssertEqual(started, 1)
+    XCTAssertNil(firstRun.consent)
+  }
+
   func testDecliningConsentDismissesTheStepWithoutStartingTheDownload() {
     var starts = 0
-    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { false })
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: { false },
+                                 hasPersonalKey: { true })
 
     firstRun.requestSessionStart { starts += 1 }
     XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
@@ -979,6 +1326,35 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertFalse(SessionState.setup.isRecognizerLive)
   }
 
+  /// `speak` refuses while the recognizer owns the audio session, so a replay glyph left enabled
+  /// there answers a tap with nothing at all, which reads as a broken control rather than a busy
+  /// one. Muting already disabled it; this is the other half of the same rule.
+  func testTheReplayControlIsDisabledWhileTheRecognizerHoldsTheMicrophone() {
+    let recognizer = FakeSpeechRecognizer()
+    let speech = FakeSpeechOutput()
+    let viewModel = readyViewModel(recognizer, speechOutput: speech)
+
+    XCTAssertTrue(viewModel.canReplay)
+
+    viewModel.beginTurn(.a)
+    XCTAssertFalse(viewModel.canReplay)
+    viewModel.replay(previewTranslatedItem)
+    XCTAssertTrue(speech.spoken.isEmpty)
+
+    // Still the recognizer's session while the transcript finalizes.
+    viewModel.endTurn(.a)
+    XCTAssertEqual(viewModel.state, .finalizing(.a))
+    XCTAssertFalse(viewModel.canReplay)
+
+    // Translating is not: the microphone was handed back before the request went out.
+    recognizer.sendFinal("hello")
+    XCTAssertEqual(viewModel.state, .translating(.a))
+    XCTAssertTrue(viewModel.canReplay)
+
+    viewModel.setMuted(true)
+    XCTAssertFalse(viewModel.canReplay)
+  }
+
   func testVoiceMatchingPrefersTheExactCodeThenTheImpliedVariantThenAnyVoice() {
     let installed = ["en-US", "en-GB", "ko-KR", "zh-CN", "zh-TW", "fr-CA", "fr-FR", "pt-BR"]
 
@@ -1273,6 +1649,40 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(model.text, "")
   }
 
+  /// A typed turn takes the audio handoff seriously in both directions: it stops whatever is being
+  /// spoken before it takes the turn, the way a push-to-talk press does, and it never stops a
+  /// recognizer it did not start. That second stop deactivates the audio session, which on a typed
+  /// turn is the session the spoken output is about to use.
+  func testATypedTurnStopsSpokenOutputAndLeavesTheIdleRecognizerAlone() async {
+    let recognizer = FakeSpeechRecognizer()
+    let speech = FakeSpeechOutput()
+    let viewModel = readyViewModel(recognizer, speechOutput: speech)
+
+    viewModel.submitTypedTranscript("Good morning", speaker: .a)
+
+    XCTAssertEqual(speech.events.first, .stop)
+    XCTAssertEqual(recognizer.stopCount, 0)
+    XCTAssertEqual(recognizer.finishCount, 0)
+
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(recognizer.stopCount, 0)
+    XCTAssertEqual(speech.spoken.count, 1)
+    XCTAssertEqual(viewModel.items.last?.translation, "Translated")
+  }
+
+  /// A spoken turn still releases its recognizer, which is the half the guard must not break.
+  func testASpokenTurnStillReleasesItsRecognizerWhenTheTranslationStarts() async {
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = readyViewModel(recognizer)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("Good morning")
+    viewModel.endTurn(.a)
+
+    XCTAssertEqual(recognizer.stopCount, 1)
+    await waitUntil { viewModel.state == .ready }
+  }
+
   func testTypedInputCopyNamesBothLanguagesAndUsesNoEmDash() {
     let guidance = TypedInputCopy.guidance(speaker: .a, typing: .hyMT2Candidates[1],
                                            translatedTo: .hyMT2Candidates[9])
@@ -1315,6 +1725,31 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertFalse(viewModel.canClearConversation)
     viewModel.clearConversation()
     XCTAssertEqual(speechOutput.stopCount, 1)
+  }
+
+  /// The note belongs to the conversation, not to the session: every other entry point that starts
+  /// something new clears it, and leaving it behind strands `Tap to talk again` over an empty
+  /// transcript that has nothing to do with the interruption that wrote it.
+  func testClearingTheConversationAlsoClearsTheNote() {
+    let recognizer = FakeSpeechRecognizer()
+    let interruptions = FakeAudioInterruptions()
+    let earlier = previewTranslatedItem
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [earlier], speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: interruptions
+    )
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Half a sen")
+
+    interruptions.send(.began)
+    XCTAssertNotNil(viewModel.notice)
+    XCTAssertEqual(viewModel.items.map(\.id), [earlier.id])
+
+    viewModel.clearConversation()
+
+    XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertNil(viewModel.notice)
   }
 
   func testClearingIsUnavailableWhileAnUtteranceIsInFlight() {
@@ -1613,30 +2048,109 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: nil), .refused)
   }
 
+  /// The index is rewritten before anything is removed, and the write is checked. A cache root
+  /// that cannot be written to stands in for the disk-full case: without the check, the model
+  /// directory is already gone by the time the write fails, leaving an index that promises a model
+  /// that is not there and a drawer confirming a delete that only half happened.
+  func testADeleteWhoseIndexWriteFailsRefusesAndLeavesTheModelWhereItWas() throws {
+    let root = try makeCacheFixture(moduleByteCount: 16)
+    let manager = FileManager.default
+    let directory = root.appendingPathComponent("artifacts/aaaa")
+    try manager.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+    addTeardownBlock {
+      try? manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+    }
+
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
+                   .refused)
+
+    XCTAssertTrue(manager.fileExists(atPath: directory.path))
+    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+    XCTAssertFalse(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root).isEmpty)
+  }
+
+  /// The sole-key guess is good enough to load with: the worst a wrong one costs is an init that
+  /// fails and a remote load that runs instead. It is not good enough to delete with, where the
+  /// same guess removes whatever single model a shared cache happens to hold.
+  func testDeletingRefusesACacheWhoseIndexDoesNotNameThisModel() throws {
+    let root = try makeCacheFixture()
+    let manager = FileManager.default
+    let indexURL = root.appendingPathComponent("cache-index.json")
+    var index = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any]
+    )
+    index["resolvedModels"] = [[String: Any]]()
+    try JSONSerialization.data(withJSONObject: index).write(to: indexURL)
+
+    // Loading still takes the guess, which is what keeps a cold launch off the network.
+    XCTAssertNotNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
+                   .refused)
+    XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("artifacts/aaaa").path))
+  }
+
+  /// The row locks on what is holding the model, not on what is on screen. The states this covers
+  /// are the two `isSessionLive` misses, and both are produced by a real view model rather than
+  /// passed in as a boolean: the model being mapped during a load, and the model deliberately kept
+  /// resident after `End Session` so the next start is instant.
+  func testTheStorageRowLocksOnWhatHoldsTheModelRatherThanOnWhatIsOnScreen() async {
+    let footprint = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 8, totalBytes: 16)
+    let runtime = FakeTranslationRuntime(result: "Translated")
+    let viewModel = RealtimeTranslateViewModel(
+      state: .setup, speechRecognizer: FakeSpeechRecognizer(), translationRuntime: runtime
+    )
+
+    XCTAssertEqual(viewModel.modelHold, .free)
+    XCTAssertTrue(ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold).isEnabled)
+
+    // Loading: the file is being mapped, and `isSessionLive` is false for all of it.
+    viewModel.startSession()
+    XCTAssertFalse(viewModel.isSessionLive)
+    XCTAssertEqual(viewModel.modelHold, .memory)
+    XCTAssertFalse(ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold).isEnabled)
+
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(viewModel.modelHold, .session)
+
+    // Ended: no session on screen, and 1.9 GB still mapped. Deleting here is the repro, the next
+    // start short-circuits on the resident model and the app translates from a model it has
+    // already thrown away.
+    viewModel.endSession()
+    XCTAssertFalse(viewModel.isSessionLive)
+    XCTAssertTrue(runtime.isModelResident)
+    XCTAssertEqual(viewModel.modelHold, .memory)
+    let row = ModelStorageRow.row(footprint: footprint, hold: viewModel.modelHold)
+    XCTAssertFalse(row.isEnabled)
+    XCTAssertTrue(row.subtitle.contains(ModelStorageCopy.modelInMemory))
+  }
+
   func testTheStorageRowNamesTheSizeAndLocksWhileASessionHoldsTheModel() {
     let footprint = LocalModelStore.Footprint(archiveBytes: 1_000_000_000, moduleBytes: 1_000_000_000,
                                               totalBytes: 2_000_000_000)
     let size = ModelStorageCopy.size(bytes: 2_000_000_000)
 
-    let idle = ModelStorageRow.row(footprint: footprint, isSessionLive: false)
+    let idle = ModelStorageRow.row(footprint: footprint, hold: .free)
     XCTAssertTrue(idle.isEnabled)
     XCTAssertEqual(idle.subtitle, "\(size) on this phone")
     XCTAssertTrue(idle.accessibilityLabel.contains(ModelStorageCopy.deleteAction))
 
     // A loaded model cannot be deleted from under the session that is using it.
-    let live = ModelStorageRow.row(footprint: footprint, isSessionLive: true)
+    let live = ModelStorageRow.row(footprint: footprint, hold: .session)
     XCTAssertFalse(live.isEnabled)
     XCTAssertTrue(live.subtitle.contains(size))
     XCTAssertTrue(live.subtitle.contains("End the session first"))
 
-    let empty = ModelStorageRow.row(footprint: .none, isSessionLive: false)
+    let empty = ModelStorageRow.row(footprint: .none, hold: .free)
     XCTAssertFalse(empty.isEnabled)
     XCTAssertEqual(empty.subtitle, "No model downloaded")
 
     for line in [ModelStorageCopy.title, ModelStorageCopy.empty, ModelStorageCopy.deleteAction,
                  ModelStorageCopy.keepAction, ModelStorageCopy.confirmationTitle,
-                 ModelStorageCopy.sessionLive, ModelStorageCopy.deleted,
-                 ModelStorageCopy.confirmationMessage(size), idle.subtitle, live.subtitle] {
+                 ModelStorageCopy.sessionLive, ModelStorageCopy.modelInMemory,
+                 ModelStorageCopy.deleted, ModelStorageCopy.confirmationMessage(size),
+                 idle.subtitle, live.subtitle,
+                 ModelStorageRow.row(footprint: footprint, hold: .memory).subtitle] {
       XCTAssertFalse(line.contains("\u{2014}"), line)
       XCTAssertFalse(line.isEmpty)
     }
@@ -1654,7 +2168,7 @@ final class RealtimeTranslateTests: XCTestCase {
     // Opening is what reads the disk, so a download that finished since the last look is seen.
     model.open()
     XCTAssertEqual(model.storage, stored)
-    XCTAssertTrue(model.storageRow(isSessionLive: false).isEnabled)
+    XCTAssertTrue(model.storageRow(hold: .free).isEnabled)
     XCTAssertFalse(model.isConfirmingDelete)
 
     // The row asks. It does not delete.
@@ -1667,7 +2181,7 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertFalse(model.isConfirmingDelete)
     XCTAssertEqual(storage.deletions, 1)
     XCTAssertTrue(model.storage.isEmpty)
-    XCTAssertEqual(model.storageRow(isSessionLive: false).subtitle, "No model downloaded")
+    XCTAssertEqual(model.storageRow(hold: .free).subtitle, "No model downloaded")
     XCTAssertEqual(model.toast, "Model deleted")
     XCTAssertEqual(announcements, ["Model deleted"])
     // The drawer stays open on purpose: the row itself is the confirmation.
@@ -1697,7 +2211,7 @@ final class RealtimeTranslateTests: XCTestCase {
     let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: {
       LocalModelStore.discoverExtractedModule(forModelName: name, cacheRoot: root) != nil
         || LocalModelStore.discoverArchive(forModelName: name, cacheRoot: root) != nil
-    })
+    }, hasPersonalKey: { true })
 
     // With the model on disk the start runs straight through, exactly as it does today.
     var started = 0
@@ -1886,7 +2400,7 @@ final class RealtimeTranslateTests: XCTestCase {
     }
   }
 
-  /// French and Spanish are complete: 124 for 124, no key silently left to fall back to English.
+  /// French and Spanish are complete: 126 for 126, no key silently left to fall back to English.
   /// A missing key is not a build error and not a crash, it is one English line in the middle of a
   /// translated screen, which is exactly the kind of thing only a count catches.
   func testFrenchAndSpanishCoverEveryKeyInTheCatalog() throws {
@@ -2218,6 +2732,9 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   private var onPartial: ((String) -> Void)?
   private var onFinal: ((String) -> Void)?
   var sourceLanguages: [SpeechSourceLanguage] = []
+  /// What only the off-the-main-actor reader knows, standing in for a launch that has not asked
+  /// the platform yet. Absent, both readers answer with `sourceLanguages`.
+  var deferredSourceLanguages: [SpeechSourceLanguage]?
   private(set) var startedSources: [SpeechSourceLanguage] = []
   private(set) var finishCount = 0
   private(set) var stopCount = 0
@@ -2228,6 +2745,9 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   func requestPermissions() async -> SpeechPermission { permission }
   func currentPermission() -> SpeechPermission { permission }
   func availableSourceLanguages() -> [SpeechSourceLanguage] { sourceLanguages }
+  nonisolated func loadAvailableSourceLanguages() async -> [SpeechSourceLanguage] {
+    await MainActor.run { deferredSourceLanguages ?? sourceLanguages }
+  }
   func start(source: SpeechSourceLanguage, onPartial: @escaping (String) -> Void,
              onFinal: @escaping (String) -> Void) throws {
     if let startError { throw startError }
@@ -2241,38 +2761,170 @@ private final class FakeSpeechRecognizer: SpeechRecognizing {
   func sendFinal(_ transcript: String) { onFinal?(transcript) }
 }
 
+/// The runtime seam, with enough of the real one's lifecycle to be worth asserting against: a
+/// model that becomes resident when a load finishes and stays resident until it is closed, a load
+/// that can be cancelled, and a translation slow enough to still be in flight when a session ends.
 private final class FakeTranslationRuntime: TranslationRuntime {
   let result: String
   let loadError: Error?
   let translateError: Error?
   let closeDelayNanoseconds: UInt64
+  let loadDelayNanoseconds: UInt64
+  let translateDelayNanoseconds: UInt64
   private(set) var loadCount = 0
   private(set) var closeCount = 0
+  private(set) var cancelLoadCount = 0
+  private(set) var loadCancelled = false
+  private(set) var translateStarted = false
+  private(set) var translateCancelled = false
   private(set) var prompts: [String] = []
+  /// Mirrors the real runtime: set when a load installs a model, cleared only by `close`, and in
+  /// particular not cleared by ending a session.
+  private(set) var isModelResident = false
 
   init(result: String = "", loadError: Error? = nil, translateError: Error? = nil,
-       closeDelayNanoseconds: UInt64 = 0) {
+       closeDelayNanoseconds: UInt64 = 0, loadDelayNanoseconds: UInt64 = 0,
+       translateDelayNanoseconds: UInt64 = 0) {
     self.result = result
     self.loadError = loadError
     self.translateError = translateError
     self.closeDelayNanoseconds = closeDelayNanoseconds
+    self.loadDelayNanoseconds = loadDelayNanoseconds
+    self.translateDelayNanoseconds = translateDelayNanoseconds
   }
 
   func load(onProgress: @escaping @Sendable (Double) -> Void) async throws {
     loadCount += 1
     onProgress(0.5)
+    if loadDelayNanoseconds > 0 {
+      do {
+        try await Task.sleep(nanoseconds: loadDelayNanoseconds)
+      } catch {
+        loadCancelled = true
+        throw error
+      }
+    }
     if let loadError { throw loadError }
     onProgress(1)
+    isModelResident = true
   }
 
   func translate(prompt: String) async throws -> String {
     prompts.append(prompt)
+    translateStarted = true
+    if translateDelayNanoseconds > 0 {
+      do {
+        try await Task.sleep(nanoseconds: translateDelayNanoseconds)
+      } catch {
+        translateCancelled = true
+        throw error
+      }
+    }
     if let translateError { throw translateError }
     return result
   }
 
+  func cancelLoad() { cancelLoadCount += 1 }
+
   func close() async {
     if closeDelayNanoseconds > 0 { try? await Task.sleep(nanoseconds: closeDelayNanoseconds) }
     closeCount += 1
+    isModelResident = false
+  }
+}
+
+/// A counter shared with `@Sendable` closures, so a test can watch how many times something was
+/// built or attempted without capturing `inout` state.
+private final class Counter: @unchecked Sendable {
+  private let lock = NSLock()
+  private var count = 0
+
+  var value: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return count
+  }
+
+  @discardableResult
+  func increment() -> Int {
+    lock.lock()
+    defer { lock.unlock() }
+    count += 1
+    return count
+  }
+}
+
+/// A one-way gate, so a test can hold a model build open across a `close` and let it finish
+/// afterwards. This is the only way to express the close-during-load interleaving: the race is
+/// between an SDK init that takes minutes and a session that ends in the middle of it.
+private actor AsyncGate {
+  private var isOpen = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+
+  func open() {
+    guard !isOpen else { return }
+    isOpen = true
+    let resuming = waiters
+    waiters = []
+    for waiter in resuming { waiter.resume() }
+  }
+
+  func wait() async {
+    guard !isOpen else { return }
+    await withCheckedContinuation { waiters.append($0) }
+  }
+}
+
+/// A loaded model that records what the runtime did to it. Enough of the real surface to be run
+/// through `translate`: one token, then finished.
+private final class SpyLanguageModel: LoadedLanguageModel, @unchecked Sendable {
+  var onClose: (() -> Void)?
+
+  private let output: String
+  private let lock = NSLock()
+  private var tokensDelivered = 0
+  private var cleanUps = 0
+  private var closes = 0
+
+  init(output: String) { self.output = output }
+
+  var cleanUpCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return cleanUps
+  }
+
+  var closeCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return closes
+  }
+
+  func run(_ text: String) throws {
+    lock.lock()
+    tokensDelivered = 0
+    lock.unlock()
+  }
+
+  func waitForNextToken() -> LLMNextTokenResult {
+    lock.lock()
+    tokensDelivered += 1
+    let first = tokensDelivered == 1
+    lock.unlock()
+    return LLMNextTokenResult(token: first ? output : "", generatedTokens: first ? 1 : 0,
+                              code: 0, isFinal: true)
+  }
+
+  func cleanUp() throws {
+    lock.lock()
+    cleanUps += 1
+    lock.unlock()
+  }
+
+  func close() {
+    lock.lock()
+    closes += 1
+    lock.unlock()
+    onClose?()
   }
 }

@@ -732,6 +732,23 @@
         }
       }
     },
+    "No speech was recognized. Tap to talk again." : {
+      "comment" : "Session banner note after a turn the recognizer heard nothing in",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se reconoció ninguna voz. Toca para hablar de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune parole n’a été reconnue. Touchez pour reprendre."
+          }
+        }
+      }
+    },
     "Not now" : {
       "comment" : "Secondary button that dismisses a first run step",
       "localizations" : {
@@ -1272,6 +1289,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Touchez « Démarrer la session » pour commencer à traduire."
+          }
+        }
+      }
+    },
+    "The app is using it right now" : {
+      "comment" : "Storage row subtitle while the model is in memory outside a live session",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La aplicación lo está usando ahora"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’application l’utilise en ce moment"
           }
         }
       }

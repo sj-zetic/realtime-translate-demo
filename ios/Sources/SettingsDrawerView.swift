@@ -9,8 +9,10 @@ struct SettingsDrawerOverlay: View {
   /// still knows nothing about the view model behind it.
   let canClearConversation: Bool
   let clearConversation: () -> Void
-  /// The model is in memory, so deleting it from disk is not something the drawer can offer yet.
-  let isSessionLive: Bool
+  /// What is holding the model, so the drawer knows whether deleting it from disk is something it
+  /// can offer at all. Not the same question as whether a session is on screen: the model outlives
+  /// the session that loaded it.
+  let modelHold: ModelStorageRow.Hold
   /// The app-language override, owned by the root view's `@AppStorage` so the environment locale
   /// and the row can never disagree, and handed down here the same way the clear action is.
   let appLanguage: AppLanguage
@@ -21,7 +23,7 @@ struct SettingsDrawerOverlay: View {
       if model.isOpen {
         Scrim(close: model.close)
         SettingsDrawerPanel(model: model, canClearConversation: canClearConversation,
-                            clearConversation: clearConversation, isSessionLive: isSessionLive,
+                            clearConversation: clearConversation, modelHold: modelHold,
                             appLanguage: appLanguage, selectAppLanguage: selectAppLanguage)
           .transition(.move(edge: .trailing))
       }
@@ -53,7 +55,7 @@ private struct SettingsDrawerPanel: View {
   @ObservedObject var model: SettingsDrawerModel
   let canClearConversation: Bool
   let clearConversation: () -> Void
-  let isSessionLive: Bool
+  let modelHold: ModelStorageRow.Hold
   let appLanguage: AppLanguage
   let selectAppLanguage: (AppLanguage) -> Void
 
@@ -158,7 +160,7 @@ private struct SettingsDrawerPanel: View {
   /// The model's footprint, and the app's only destructive action behind the app's only
   /// `confirmationDialog`. The row itself never deletes: it asks.
   private var storageRow: some View {
-    let row = model.storageRow(isSessionLive: isSessionLive)
+    let row = model.storageRow(hold: modelHold)
     return SettingsRow(
       title: ModelStorageCopy.title,
       subtitle: row.subtitle,

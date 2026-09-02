@@ -54,7 +54,13 @@ protocol SpeechRecognizing: AnyObject {
   func requestPermissions() async -> SpeechPermission
   /// The permission the system already holds, read without prompting for anything.
   func currentPermission() -> SpeechPermission
+  /// The recognition locales already known, answered without asking the platform anything. On a
+  /// launch that has not read them yet this is empty rather than slow.
   func availableSourceLanguages() -> [SpeechSourceLanguage]
+  /// Reads them from the platform, off the main actor, and remembers the answer for the launch.
+  /// `SFSpeechRecognizer` charges about 280 ms for the enumeration, which is a frame budget the
+  /// screen this view model builds does not have.
+  nonisolated func loadAvailableSourceLanguages() async -> [SpeechSourceLanguage]
   func start(
     source: SpeechSourceLanguage,
     onPartial: @escaping (String) -> Void,
@@ -64,8 +70,42 @@ protocol SpeechRecognizing: AnyObject {
   func stop()
 }
 
+/// The recognition locale list, read once per launch and shared by every reader afterwards.
+///
+/// It cannot change while the app is running (a locale is downloaded through Settings, which means
+/// leaving), and it costs about 280 ms to produce, so a second reading is a second stall for an
+/// answer that is already known. Lock guarded rather than actor isolated because the seed happens
+/// during a view model's `init`, where there is nothing to await with.
+final class SourceLanguageCache: @unchecked Sendable {
+  private let lock = NSLock()
+  private var languages: [SpeechSourceLanguage] = []
+
+  var current: [SpeechSourceLanguage] {
+    lock.lock()
+    defer { lock.unlock() }
+    return languages
+  }
+
+  /// The cached list, computing it exactly once. `compute` is not run at all once there is an
+  /// answer, which is what keeps a permission grant from paying the enumeration a second time.
+  @discardableResult
+  func fill(_ compute: () -> [SpeechSourceLanguage]) -> [SpeechSourceLanguage] {
+    let known = current
+    guard known.isEmpty else { return known }
+    let computed = compute()
+    lock.lock()
+    languages = computed
+    lock.unlock()
+    return computed
+  }
+}
+
 @MainActor
 final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
+  /// Shared by every recognizer this launch builds, because the answer is the device's, not any
+  /// one recognizer's.
+  static let languageCache = SourceLanguageCache()
+
   private var audioEngine: AVAudioEngine?
   private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   private var recognitionTask: SFSpeechRecognitionTask?
@@ -89,8 +129,18 @@ final class PlatformSpeechRecognizer: NSObject, SpeechRecognizing {
     return microphoneGranted && speechGranted ? .granted : .required
   }
 
-  func availableSourceLanguages() -> [SpeechSourceLanguage] {
-    Self.sourceLanguages(
+  func availableSourceLanguages() -> [SpeechSourceLanguage] { Self.languageCache.current }
+
+  nonisolated func loadAvailableSourceLanguages() async -> [SpeechSourceLanguage] {
+    await Task.detached(priority: .userInitiated) {
+      Self.languageCache.fill(Self.platformSourceLanguages)
+    }.value
+  }
+
+  /// The expensive part: one `SFSpeechRecognizer` per supported locale, each asked whether it can
+  /// run on device. Never called on the main actor.
+  private static func platformSourceLanguages() -> [SpeechSourceLanguage] {
+    sourceLanguages(
       locales: Array(SFSpeechRecognizer.supportedLocales()),
       supportsOnDeviceRecognition: { locale in
         SFSpeechRecognizer(locale: locale)?.supportsOnDeviceRecognition == true

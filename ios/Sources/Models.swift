@@ -68,6 +68,19 @@ enum SessionState: Equatable {
   }
 }
 
+/// The note a turn that produced no words leaves behind.
+///
+/// A silent turn is not a failure and not an interruption, so it borrows the interruption note's
+/// shape rather than the error banner's: one quiet line, no color, no button, cleared by the next
+/// turn. It has to exist at all because `finalizing` has exactly one exit, and a recognizer that
+/// returns nothing would otherwise never take it.
+enum EmptyTurnCopy {
+  static var notice: String {
+    String(localized: "No speech was recognized. Tap to talk again.",
+           comment: "Session banner note after a turn the recognizer heard nothing in")
+  }
+}
+
 struct SpeechSourceLanguage: Identifiable, Hashable {
   static let automatic = SpeechSourceLanguage(
     identifier: "automatic",

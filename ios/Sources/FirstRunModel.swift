@@ -142,8 +142,13 @@ enum ModelDownloadConsent {
     case ask(cellularWarning: Bool)
   }
 
-  static func decision(hasLocalModel: Bool, cost: NetworkPathCost) -> Decision {
-    guard !hasLocalModel else { return .startImmediately }
+  /// A build with no Melange personal key cannot download anything, so offering `Download now`
+  /// promises a transfer that ends a frame later in `The Melange personal key is not configured in
+  /// this app build.` The start runs instead, and the load reports that failure where every other
+  /// model failure is reported: the session banner, with its retry.
+  static func decision(hasLocalModel: Bool, cost: NetworkPathCost,
+                       hasPersonalKey: Bool = true) -> Decision {
+    guard !hasLocalModel, hasPersonalKey else { return .startImmediately }
     return .ask(cellularWarning: cost.isCostly)
   }
 }
@@ -283,28 +288,40 @@ final class FirstRunModel: ObservableObject {
 
   private let path: any NetworkPathReporting
   private let hasLocalModel: () -> Bool
+  private let hasPersonalKey: () -> Bool
   private var pendingStart: (() -> Void)?
 
   /// Nonisolated so it can be a SwiftUI view's default argument, which is always evaluated outside
-  /// the actor. It only stores its two collaborators; nothing here touches published state.
+  /// the actor. It only stores its collaborators; nothing here touches published state.
   nonisolated init(path: any NetworkPathReporting = NetworkPathObserver(),
-                   hasLocalModel: @escaping () -> Bool = FirstRunModel.localModelExists) {
+                   hasLocalModel: @escaping () -> Bool = FirstRunModel.localModelExists,
+                   hasPersonalKey: @escaping () -> Bool = FirstRunModel.personalKeyConfigured) {
     self.path = path
     self.hasLocalModel = hasLocalModel
+    self.hasPersonalKey = hasPersonalKey
   }
 
   nonisolated static func fromLaunchArguments(
     _ arguments: [String] = ProcessInfo.processInfo.arguments
   ) -> FirstRunModel {
     let localModel: () -> Bool
+    // A forced first-run state also forces the key: `-firstRun` exists so a UI test can drive the
+    // consent card, and a test build that happens to carry no key would otherwise skip it.
+    var personalKey = FirstRunModel.personalKeyConfigured
     switch FirstRunDefaults.value(named: "-firstRun", in: arguments) {
-    case "fresh", "consentNeeded": localModel = { false }
-    case "returning": localModel = { true }
+    case "fresh", "consentNeeded": localModel = { false }; personalKey = { true }
+    case "returning": localModel = { true }; personalKey = { true }
     default: localModel = FirstRunModel.localModelExists
     }
     let path: any NetworkPathReporting = arguments.contains("-firstRunCellular")
       ? FixedNetworkPath(.expensive) : NetworkPathObserver()
-    return FirstRunModel(path: path, hasLocalModel: localModel)
+    return FirstRunModel(path: path, hasLocalModel: localModel, hasPersonalKey: personalKey)
+  }
+
+  /// Whether this build can download anything at all. The same reading the runtime does, so the
+  /// consent card and the load can never disagree about whether a download is possible.
+  nonisolated static func personalKeyConfigured() -> Bool {
+    !MelangeCredential.value(from: Bundle.main.infoDictionary ?? [:]).isEmpty
   }
 
   /// A complete extracted module or a complete archive both mean the next start is a local load.
@@ -316,7 +333,8 @@ final class FirstRunModel: ObservableObject {
   /// Gates a session start. With the model already on disk the start runs straight through, so a
   /// returning user never sees a download step for a download that will not happen.
   func requestSessionStart(_ start: @escaping () -> Void) {
-    switch ModelDownloadConsent.decision(hasLocalModel: hasLocalModel(), cost: path.currentCost) {
+    switch ModelDownloadConsent.decision(hasLocalModel: hasLocalModel(), cost: path.currentCost,
+                                        hasPersonalKey: hasPersonalKey()) {
     case .startImmediately:
       start()
     case let .ask(cellularWarning):

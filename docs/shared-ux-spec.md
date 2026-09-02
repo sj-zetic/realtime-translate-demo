@@ -124,6 +124,8 @@ Tapping `Start conversation` (or `Retry model load`) asks before it starts the o
 - `Download now` proceeds into `modelLoading`. `Not now` and a tap on the scrim both dismiss the card and leave the screen idle; nothing is downloaded and the declined start is dropped rather than queued.
 - Declining does not remember anything: the next `Start conversation` asks again, which is also how the Wi-Fi warning gets a second chance to appear.
 
+A build with no Melange personal key cannot download anything at all. The consent card is not shown there: offering `Download now` would promise a transfer that ends a frame later in the missing-key failure. The start runs instead, and that failure is reported where every other model failure is, in the session banner with its retry.
+
 ### Model preparation progress
 
 The loading banner distinguishes a genuine download from a local load, because they feel completely different and only one of them has a size.
@@ -235,6 +237,7 @@ A translation that arrives is read aloud, so the person it is for can listen ins
 Every bubble with a finished translation carries a small speaker glyph in the bottom trailing corner of its translation region. Tapping it speaks that translation again, under the same rules as the automatic announcement, cutting off anything already being spoken.
 
 - The control is absent, not disabled, on a bubble that is still recognizing, still translating, or whose translation failed: there is nothing there to play.
+- It is present but disabled while sound is off, and while the recognizer holds the microphone (`listening*`, `finalizing*`), because nothing can be spoken over an open microphone. A control that answers a tap with silence reads as broken rather than busy.
 - It carries the accessibility label `Play translation` and is a separate element from the bubble, so the bubble's combined label and its `Copy` long press are unchanged.
 
 ### The sound toggle
@@ -290,7 +293,7 @@ One action, in the settings drawer's row list, that empties the transcript witho
 - The row reads `Clear conversation` with the subtitle `Keeps the session and the languages` and a quiet trash glyph. It is the first row, because it is the one row someone opens the drawer in order to use.
 - No confirmation. Nothing was ever stored, so there is nothing to lose that a next turn does not replace.
 - Disabled, not hidden, when the transcript is empty or an utterance is recording, finalizing, or translating, so the row never moves and never strands a bubble a translation is about to land in. Its accessibility label says which of the two it is.
-- Clearing stops whatever is being spoken, because that sentence belongs to a bubble that is going away.
+- Clearing stops whatever is being spoken, because that sentence belongs to a bubble that is going away, and clears the session note with it: a `Tap to talk again.` line left standing over an empty transcript belongs to a conversation that is no longer there.
 - The confirmation is the shared toast, reading exactly `Conversation cleared`, posted as an accessibility announcement as well as shown. The drawer closes first, so the emptied transcript is what the toast lands over.
 - One obvious place only: the drawer row. There is no duplicate on the transcript, on the bottom bar, or in a bubble's context menu.
 
@@ -308,7 +311,7 @@ A phone call, Siri, an alarm, or an unplugged headset takes the audio session aw
 
 ## Localization
 
-The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, all 124 keys translated in each. Android parity is pending.
+The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, all 126 keys translated in each. Android parity is pending.
 
 ### Shipped languages and their register
 
@@ -356,9 +359,11 @@ The 1.9 GB translation model is the largest thing this app puts on a phone, and 
 
 - **The row** reads `Storage` with the on-device footprint as its subtitle, for example `1.9 GB on this phone`. The number is what a delete would actually reclaim: the whole model directory in the SDK's cache, counted once.
 - **Nothing downloaded**: the subtitle reads `No model downloaded` and the row is disabled. It is disabled rather than hidden, so the row never moves.
-- **A live session**: the model is in memory, so the subtitle appends `End the session first.` and the row is disabled. The accessibility label says the same thing in words.
+- **The model is held**: it is in memory, or being mapped into it, so the row is disabled and the subtitle says which. A live session appends `End the session first.`, because that is an action on the screen behind the drawer. Anything else holding it, the model loading and the model still resident after `End session`, appends `The app is using it right now.` instead: there is no session to end, and the model is released when the app's screen goes away. The accessibility label says the same thing in words.
+- **What "held" means** is the runtime's own answer, not the session state. The two are not the same question, and the states where they differ are exactly the ones where a delete does the most damage: `modelLoading` is the file being mapped as it is removed, and the state after `End session` is a model kept resident on purpose, where deleting the files leaves the app translating happily from memory and then silently downloading 1.9 GB again on the next launch.
 - **Deleting asks first.** The row never deletes; it opens a confirmation titled `Delete the downloaded model?` whose message names the size and the cost (`This frees 1.9 GB. The next session downloads the model again.`), with one destructive action `Delete downloaded model` and one way out, `Keep it`. It is the only confirmation in the app, because it is the only thing here that cannot be undone from inside it.
-- **What is deleted**: the model's own artifacts and nothing else. The archive and the extracted module, the directory holding them, and the cache-index records that name them. The SDK's backend-selection records and staging locks are never touched, and neither is any other model in the same cache. A cache whose index cannot be read is refused rather than swept, and a model key that is not a plain directory name inside the artifacts root is refused before any path is built from it.
+- **What is deleted**: the model's own artifacts and nothing else. The archive and the extracted module, the directory holding them, and the cache-index records that name them. The SDK's backend-selection records and staging locks are never touched, and neither is any other model in the same cache. A cache whose index cannot be read is refused rather than swept, and a model key that is not a plain directory name inside the artifacts root is refused before any path is built from it. The index must also *name* this model: the guess that a cache holding exactly one model key must be holding ours is good enough to load with, where a wrong guess only costs a failed init, and not good enough to delete with, where it removes somebody else's model.
+- **Order**: the rewritten index is written first and its write is checked. A write that fails refuses the whole delete with the model still on disk, rather than leaving an index that promises a model that is no longer there and a toast confirming a delete that only half happened.
 - **Afterwards** the drawer stays open, the row reports `No model downloaded`, and the shared toast reads exactly `Model deleted`. The app is back in its pre-download state: the next `Start conversation` shows the [download consent](#3-model-download-consent) again, because there is genuinely a download to consent to.
 
 ## Language selection on the main screen
@@ -399,7 +404,9 @@ The `setup` and `ready` states now render on the same screen: `setup` is the idl
 | `modelLoadFailed` | Failure banner with `Retry model load` | Retry model load | `modelLoading` |
 | `error` | Error banner with the cause and a recovery action; existing bubbles remain | Retry, open settings, end session | `ready`, `setup`, `permissionRequired` |
 
-If platform STT reports a final result before the user stops an utterance, the app stores it only as the active bubble's pending transcript. The app leaves `listening*` for `finalizing*` and starts finalization and translation only after a button release or tap-toggle stop. If there is no finalized source text, no bubble completes and the app returns to `ready`. A translation error leaves the finalized source bubble visible and shows an error state in the translation area.
+If platform STT reports a final result before the user stops an utterance, the app stores it only as the active bubble's pending transcript. The app leaves `listening*` for `finalizing*` and starts finalization and translation only after a button release or tap-toggle stop. A translation error leaves the finalized source bubble visible and shows an error state in the translation area.
+
+**A turn that recognizes nothing.** An empty final result is a real answer, not a missing one: a silent turn produces one, and the platform recognizer synthesizes one for any recognition failure that is not a cancellation. While the utterance is still recording it means nothing yet and is ignored. Once the control is released it is the only answer that will ever come, so the app takes the same exit an interruption takes: the recognizer is released, the bubble that was going to hold the utterance is discarded, the session returns to `ready`, and one quiet line reads exactly `No speech was recognized. Tap to talk again.` in the inline session banner. The model stays loaded, both chips stay as they are, every earlier bubble stays where it is, and the next push-to-talk clears the note. `finalizing*` has exactly one other exit, so without this a silent turn locks every control on the screen except the one that ends the session and wipes the conversation.
 
 ## A/B input and accessibility
 
@@ -495,7 +502,8 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Change a language during an utterance | Both speakers' chips are disabled until the utterance finishes translating |
 | STT unsupported or permission denied | Do not start; show cause and recovery action inline; do not switch to network recognition |
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
-| End session | Stop recognition and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start conversation` / `Start Session` reaches `ready` without loading again |
+| End session | Stop recognition, stop the work the session started, and clear the prior conversation, then return the same screen to its idle state. The model stays resident, so the next `Start conversation` / `Start Session` reaches `ready` without loading again |
+| End session while the model is downloading | The transfer stops, not just the screen watching it. Ending a session someone declined halfway through must not leave a 1.9 GB download running on their cellular connection with nothing on screen to say so. Any translation still in flight stops with it |
 | Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
 | Leave a live session idle on screen | iOS only for now: the display stays lit for as long as the A/B controls are on screen, and dims normally in every other state. Android parity is pending |
 | Background the app mid-session | iOS only for now: the screen hold is released immediately and taken again on return. Android parity is pending |
@@ -541,7 +549,10 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - No user-facing string in the typed-input sheet or the clear action contains an em dash.
 - An interruption arriving while recording or finalizing discards the in-flight bubble, leaves every earlier bubble and the loaded model alone, shows the note, and leaves the next push-to-talk working. An interruption while a translation is being spoken stops only the speech. An interruption ending never starts listening. The whole decision table is covered by unit tests state by state over an injected interruption seam, even though the interruption itself is only verifiable on a device.
 - The `Storage` row reports the model's footprint, is disabled with nothing downloaded and while a session holds the model, and deletes only behind its confirmation. The size reading, the deletion's containment rules (an unreadable index and a model key outside the artifacts root are both refused), the survival of the backend-selection records and staging locks, and the consent gate re-arming afterwards are covered by unit tests over a cache fixture.
-- No user-facing string in the interruption note or the storage row contains an em dash.
+- A turn the recognizer heard nothing in returns the session to `ready` with the `No speech was recognized. Tap to talk again.` note rather than leaving `finalizing*` with no exit, and the next push-to-talk works. Covered by a unit test that sends the empty final the platform recognizer synthesizes, both before and after the control is released.
+- The `Storage` row is disabled in every state that holds the model, including the two a session-liveness flag misses: the model loading, and the model still resident after `End session`. Covered by a unit test that reads the row's state out of a real view model rather than passing the predicate in.
+- Ending a session mid-download stops the transfer and any translation in flight, and a close arriving while the model is still being built releases that model rather than installing it into a runtime nobody wants. The close-during-load interleaving is covered by a unit test over an injected model factory; the deinit's non-blocking release is covered by a test that occupies the runtime's queue the way a load does.
+- No user-facing string in the interruption note, the empty-turn note, or the storage row contains an em dash.
 - Every user-facing string comes out of the String Catalog: a test resolves a sample of explicitly keyed entries and fails if a lookup falls through to its own key, which is what a missing or uncompiled catalog looks like. A second test checks the compiled catalog is actually in the app bundle.
 - The whole catalog is scanned rather than sampled: every key and every value is free of em dashes and en dashes, every entry carries a translator comment, no entry is stale, and English is the only populated language until the French and Spanish passes land.
 - The app-language override writes both halves that have to agree, the remembered value and the platform's `AppleLanguages` key, and choosing `System` removes the override rather than pinning the current device language. A stored language this build no longer offers falls back to `System`. All of it is covered by unit tests against a throwaway preferences domain, so no test can leave an override behind for the next run.

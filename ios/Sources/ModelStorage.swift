@@ -31,6 +31,13 @@ enum ModelStorageCopy {
     String(localized: "End the session first",
            comment: "Storage row subtitle while a session holds the model in memory")
   }
+  /// The other way the model is held: loaded, or being loaded, with no session on screen to end.
+  /// It stays in memory after `End Session` so the next start is instant, and deleting the files
+  /// under it is exactly the state that leaves the app translating from a model it no longer has.
+  static var modelInMemory: String {
+    String(localized: "The app is using it right now",
+           comment: "Storage row subtitle while the model is in memory outside a live session")
+  }
   static var deleted: String {
     String(localized: "Model deleted", comment: "Toast after the model is removed from disk")
   }
@@ -57,9 +64,9 @@ enum ModelStorageCopy {
 
   /// The disabled row's accessibility label. The only one of the three that contains fixed words
   /// of its own; the other two are commas between pieces that are already translated.
-  static func lockedAccessibilityLabel(occupies: String) -> String {
+  static func lockedAccessibilityLabel(occupies: String, reason: String) -> String {
     String(localized: "storage.accessibility.locked",
-           defaultValue: "\(title), \(occupies), unavailable, \(sessionLive)",
+           defaultValue: "\(title), \(occupies), unavailable, \(reason)",
            comment: "Locked Storage row accessibility label. %1$@ row title, %2$@ size, %3$@ reason")
   }
 }
@@ -69,14 +76,26 @@ enum ModelStorageCopy {
 /// What the storage row shows and whether it can be tapped. A pure function of two facts, so the
 /// three states (nothing downloaded, downloaded but in use, downloaded and idle) are a test table.
 struct ModelStorageRow: Equatable {
+  /// What is holding the model, which is the only thing that decides whether it can be deleted.
+  ///
+  /// Two held states rather than one, because they have different remedies and only one of them
+  /// is a session. `session` is a live session the person can end from the screen behind the
+  /// drawer. `memory` is the model loading, or still resident after `End Session`, where there is
+  /// nothing on screen to end and the row can only say that the app is still holding it.
+  enum Hold: Equatable {
+    case free
+    case session
+    case memory
+  }
+
   let subtitle: String
   let isEnabled: Bool
   let accessibilityLabel: String
 
-  /// A model on disk with no session holding it in memory is the only state that can be deleted.
-  /// The other two keep the row exactly where it is and say why, rather than hiding it: a row that
-  /// comes and goes is a row nobody can find twice.
-  static func row(footprint: LocalModelStore.Footprint, isSessionLive: Bool) -> ModelStorageRow {
+  /// A model on disk that nothing is holding is the only state that can be deleted. The others
+  /// keep the row exactly where it is and say why, rather than hiding it: a row that comes and
+  /// goes is a row nobody can find twice.
+  static func row(footprint: LocalModelStore.Footprint, hold: Hold) -> ModelStorageRow {
     guard !footprint.isEmpty else {
       return ModelStorageRow(
         subtitle: ModelStorageCopy.empty, isEnabled: false,
@@ -84,16 +103,19 @@ struct ModelStorageRow: Equatable {
       )
     }
     let occupies = ModelStorageCopy.onThisPhone(ModelStorageCopy.size(bytes: footprint.totalBytes))
-    guard !isSessionLive else {
+    switch hold {
+    case .free:
       return ModelStorageRow(
-        subtitle: "\(occupies). \(ModelStorageCopy.sessionLive).", isEnabled: false,
-        accessibilityLabel: ModelStorageCopy.lockedAccessibilityLabel(occupies: occupies)
+        subtitle: occupies, isEnabled: true,
+        accessibilityLabel: "\(ModelStorageCopy.title), \(occupies), \(ModelStorageCopy.deleteAction)"
+      )
+    case .session, .memory:
+      let reason = hold == .session ? ModelStorageCopy.sessionLive : ModelStorageCopy.modelInMemory
+      return ModelStorageRow(
+        subtitle: "\(occupies). \(reason).", isEnabled: false,
+        accessibilityLabel: ModelStorageCopy.lockedAccessibilityLabel(occupies: occupies, reason: reason)
       )
     }
-    return ModelStorageRow(
-      subtitle: occupies, isEnabled: true,
-      accessibilityLabel: "\(ModelStorageCopy.title), \(occupies), \(ModelStorageCopy.deleteAction)"
-    )
   }
 }
 

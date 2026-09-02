@@ -134,8 +134,8 @@ final class SettingsDrawerModel: ObservableObject {
 
   func refreshStorage() { storage = modelStorage.footprint() }
 
-  func storageRow(isSessionLive: Bool) -> ModelStorageRow {
-    ModelStorageRow.row(footprint: storage, isSessionLive: isSessionLive)
+  func storageRow(hold: ModelStorageRow.Hold) -> ModelStorageRow {
+    ModelStorageRow.row(footprint: storage, hold: hold)
   }
 
   /// The row does not delete. It asks, and the dialog deletes: this is the only destructive action
