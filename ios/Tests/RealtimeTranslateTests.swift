@@ -715,7 +715,8 @@ final class RealtimeTranslateTests: XCTestCase {
     let recognizer = FakeSpeechRecognizer()
     let viewModel = RealtimeTranslateViewModel(
       state: .ready, speechRecognizer: recognizer,
-      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), haptics: haptics
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), haptics: haptics,
+      speechOutput: FakeSpeechOutput()
     )
 
     viewModel.beginTurn(.a)
@@ -737,7 +738,8 @@ final class RealtimeTranslateTests: XCTestCase {
     let recognizer = FakeSpeechRecognizer()
     let failing = RealtimeTranslateViewModel(
       state: .ready, speechRecognizer: recognizer,
-      translationRuntime: FakeTranslationRuntime(translateError: TestError.failed), haptics: quiet
+      translationRuntime: FakeTranslationRuntime(translateError: TestError.failed), haptics: quiet,
+      speechOutput: FakeSpeechOutput()
     )
 
     failing.beginTurn(.b)
@@ -811,6 +813,244 @@ final class RealtimeTranslateTests: XCTestCase {
     await waitUntil { model.toasts.message == nil }
   }
 
+  // MARK: - Spoken translation
+
+  func testAFinishedTranslationIsSpokenOnceInTheTargetLanguage() async {
+    let speech = FakeSpeechOutput()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "\u{c548}\u{b155}."), speechOutput: speech,
+      isMuted: false
+    )
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("Hello.")
+    viewModel.endTurn(.a)
+    await waitUntil { viewModel.state == .ready }
+
+    // Korean is speaker B's reading language, so an A turn is read in Korean.
+    XCTAssertEqual(speech.spoken.map(\.text), ["\u{c548}\u{b155}."])
+    XCTAssertEqual(speech.spoken.map(\.languageCode), ["ko"])
+  }
+
+  func testAFailedTranslationSpeaksNothing() async {
+    let speech = FakeSpeechOutput()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(translateError: TestError.failed), speechOutput: speech
+    )
+
+    viewModel.beginTurn(.b)
+    recognizer.sendFinal("Hello.")
+    viewModel.endTurn(.b)
+    await waitUntil { viewModel.state == .ready }
+
+    XCTAssertTrue(speech.spoken.isEmpty)
+  }
+
+  func testTheNewestTranslationCancelsTheOneBeingSpoken() async {
+    let speech = FakeSpeechOutput()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), speechOutput: speech,
+      isMuted: false
+    )
+    viewModel.targetLanguageB = .hyMT2Candidates[2]
+
+    for _ in 0 ..< 2 {
+      viewModel.beginTurn(.a)
+      recognizer.sendFinal("Hello.")
+      viewModel.endTurn(.a)
+      await waitUntil { viewModel.state == .ready }
+    }
+
+    XCTAssertEqual(speech.spoken.count, 2)
+    // Each utterance is preceded by a stop, so a conversation never queues a backlog: one stop
+    // for the turn that begins, one for the translation that replaces the previous sentence.
+    XCTAssertEqual(speech.stopCount, 4)
+    XCTAssertEqual(speech.events.last, .speak)
+  }
+
+  func testMutingSuppressesTheAnnouncementAndTheReplayAndStopsWhatIsPlaying() async {
+    let speech = FakeSpeechOutput()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Bonjour."), speechOutput: speech,
+      isMuted: false
+    )
+
+    viewModel.setMuted(true)
+    XCTAssertTrue(viewModel.isMuted)
+    // Reaching for the toggle is how someone makes the phone stop talking mid-sentence.
+    XCTAssertEqual(speech.stopCount, 1)
+
+    viewModel.beginTurn(.a)
+    recognizer.sendFinal("Hello.")
+    viewModel.endTurn(.a)
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertTrue(speech.spoken.isEmpty)
+
+    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
+    XCTAssertTrue(speech.spoken.isEmpty)
+
+    viewModel.setMuted(false)
+    viewModel.replay(viewModel.items.last ?? previewTranslatedItem)
+    XCTAssertEqual(speech.spoken.map(\.text), ["Bonjour."])
+  }
+
+  func testBeginningATurnStopsSpeechBeforeTheRecognizerStarts() {
+    let speech = FakeSpeechOutput()
+    let recognizer = FakeSpeechRecognizer()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: recognizer, translationRuntime: FakeTranslationRuntime(),
+      speechOutput: speech
+    )
+
+    viewModel.beginTurn(.a)
+
+    XCTAssertEqual(speech.stopCount, 1)
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    // Nothing is spoken over an open microphone, replay included.
+    viewModel.replay(previewTranslatedItem)
+    XCTAssertTrue(speech.spoken.isEmpty)
+  }
+
+  func testEndingASessionStopsSpeech() {
+    let speech = FakeSpeechOutput()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speech
+    )
+
+    viewModel.endSession()
+
+    XCTAssertEqual(speech.stopCount, 1)
+  }
+
+  func testReplayingATranslatedBubbleSpeaksItAgainInItsOwnLanguage() {
+    let speech = FakeSpeechOutput()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ended, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speech, isMuted: false
+    )
+
+    viewModel.replay(previewTranslatedItem)
+    viewModel.replay(previewTranslatedItem)
+
+    XCTAssertEqual(speech.spoken.map(\.text), ["Bonjour.", "Bonjour."])
+    XCTAssertEqual(speech.spoken.map(\.languageCode), ["fr", "fr"])
+  }
+
+  func testOnlyAFinishedTranslationCanBeSpokenOrOfferAReplayControl() {
+    let language = TargetLanguage.hyMT2Candidates[2]
+    func item(_ translation: String?, _ state: ConversationItem.DeliveryState) -> ConversationItem {
+      ConversationItem(id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: language,
+                       translation: translation, state: state)
+    }
+
+    XCTAssertEqual(item("Bonjour.", .translated).speakableTranslation, "Bonjour.")
+    XCTAssertNil(item(nil, .partial).speakableTranslation)
+    XCTAssertNil(item(nil, .finalizing).speakableTranslation)
+    XCTAssertNil(item(nil, .translationFailed("nope")).speakableTranslation)
+    XCTAssertNil(item(nil, .translated).speakableTranslation)
+    // Whitespace is not a sentence, so it neither speaks nor earns a control.
+    XCTAssertNil(item("  \n ", .translated).speakableTranslation)
+
+    XCTAssertEqual(SpokenTranslation.decision(for: item("Bonjour.", .translated), isMuted: false),
+                   .speak(text: "Bonjour.", languageCode: "fr"))
+    XCTAssertEqual(SpokenTranslation.decision(for: item("Bonjour.", .translated), isMuted: true),
+                   .silent)
+    XCTAssertEqual(SpokenTranslation.decision(for: item(nil, .finalizing), isMuted: false), .silent)
+  }
+
+  func testNothingIsSpokenWhileTheRecognizerHoldsTheMicrophone() {
+    XCTAssertTrue(SessionState.listening(.a).isRecognizerLive)
+    XCTAssertTrue(SessionState.finalizing(.b).isRecognizerLive)
+    // Translating is not one of them: the recognizer has already been stopped by then, which is
+    // exactly why the translation can be read out the moment it lands.
+    XCTAssertFalse(SessionState.translating(.a).isRecognizerLive)
+    XCTAssertFalse(SessionState.ready.isRecognizerLive)
+    XCTAssertFalse(SessionState.ended.isRecognizerLive)
+    XCTAssertFalse(SessionState.setup.isRecognizerLive)
+  }
+
+  func testVoiceMatchingPrefersTheExactCodeThenTheImpliedVariantThenAnyVoice() {
+    let installed = ["en-US", "en-GB", "ko-KR", "zh-CN", "zh-TW", "fr-CA", "fr-FR", "pt-BR"]
+
+    XCTAssertEqual(SpeechVoice.match(for: "ko", in: installed), "ko-KR")
+    XCTAssertEqual(SpeechVoice.match(for: "en", in: installed), "en-US")
+    XCTAssertEqual(SpeechVoice.match(for: "fr", in: installed), "fr-FR")
+    XCTAssertEqual(SpeechVoice.match(for: "zh", in: installed), "zh-CN")
+    XCTAssertEqual(SpeechVoice.match(for: "zh-Hant", in: installed), "zh-TW")
+    // An exact code wins over any resolution.
+    XCTAssertEqual(SpeechVoice.match(for: "pt-BR", in: installed), "pt-BR")
+    // One voice for the language is the language-only fallback: the region is not checked.
+    XCTAssertEqual(SpeechVoice.match(for: "pt", in: installed), "pt-BR")
+    // No voice at all means silence, never the wrong language.
+    XCTAssertNil(SpeechVoice.match(for: "bo", in: installed))
+    XCTAssertNil(SpeechVoice.match(for: "ko", in: []))
+  }
+
+  func testSpeakingClaimsThePlaybackSessionOnceAndHandsItBackOnce() {
+    let session = FakeSpeechAudioSession()
+    let coordinator = SpeechAudioCoordinator(session: session)
+
+    XCTAssertTrue(coordinator.beginPlayback())
+    // A translation that replaces another must not tear the session down and rebuild it.
+    XCTAssertTrue(coordinator.beginPlayback())
+    XCTAssertEqual(session.events, [.activate])
+
+    coordinator.endPlayback()
+    XCTAssertEqual(session.events, [.activate, .deactivate])
+    // The delegate callback for the cancelled utterance arrives after the recognizer may already
+    // hold the session; ending twice must never deactivate a session speech no longer owns.
+    coordinator.endPlayback()
+    XCTAssertEqual(session.events, [.activate, .deactivate])
+    XCTAssertFalse(coordinator.isPlaybackActive)
+  }
+
+  func testASessionThatRefusesToActivateSpeaksNothingAndRetriesNextTime() {
+    let session = FakeSpeechAudioSession()
+    session.activationError = TestError.failed
+    let coordinator = SpeechAudioCoordinator(session: session)
+
+    XCTAssertFalse(coordinator.beginPlayback())
+    XCTAssertFalse(coordinator.isPlaybackActive)
+    // Nothing was claimed, so nothing is handed back.
+    coordinator.endPlayback()
+    XCTAssertEqual(session.events, [.activate])
+
+    session.activationError = nil
+    XCTAssertTrue(coordinator.beginPlayback())
+    XCTAssertEqual(session.events, [.activate, .activate])
+  }
+
+  func testSpokenOutputCopyUsesNoEmDash() {
+    let copy = [
+      SpeechOutputCopy.replayAction, SpeechOutputCopy.replayHint, SpeechOutputCopy.soundOnLabel,
+      SpeechOutputCopy.soundOffLabel, SpeechOutputCopy.soundOnHint, SpeechOutputCopy.soundOffHint
+    ]
+
+    for line in copy {
+      XCTAssertFalse(line.contains("\u{2014}"), line)
+      XCTAssertFalse(line.contains("\u{2013}"), line)
+      XCTAssertFalse(line.isEmpty)
+    }
+    XCTAssertEqual(SpeechOutputCopy.replayAction, "Play translation")
+    XCTAssertNotEqual(SpeechOutputCopy.soundOnLabel, SpeechOutputCopy.soundOffLabel)
+  }
+
+  private var previewTranslatedItem: ConversationItem {
+    ConversationItem(
+      id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
+      translation: "Bonjour.", state: .translated
+    )
+  }
+
   /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
   private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
     let manager = FileManager.default
@@ -845,7 +1085,10 @@ final class RealtimeTranslateTests: XCTestCase {
   private func readyViewModel(
     _ recognizer: FakeSpeechRecognizer, runtime: FakeTranslationRuntime = FakeTranslationRuntime(result: "Translated")
   ) -> RealtimeTranslateViewModel {
-    RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer, translationRuntime: runtime)
+    // Spoken output is faked everywhere a translation completes, so the suite never claims the
+    // host's audio session on its way past a delivered turn.
+    RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer,
+                               translationRuntime: runtime, speechOutput: FakeSpeechOutput())
   }
 
   private func waitUntil(_ condition: @escaping () -> Bool) async {
@@ -872,6 +1115,42 @@ private final class FakeIdleTimer: IdleTimerControlling {
 private final class FakeHaptics: HapticSink {
   private(set) var played: [HapticEvent] = []
   func play(_ event: HapticEvent) { played.append(event) }
+}
+
+@MainActor
+private final class FakeSpeechOutput: SpeechOutput {
+  enum Event: Equatable { case speak, stop }
+
+  private(set) var spoken: [(text: String, languageCode: String)] = []
+  private(set) var stopCount = 0
+  private(set) var events: [Event] = []
+  var isSpeaking = false
+
+  func speak(text: String, languageCode: String) {
+    spoken.append((text: text, languageCode: languageCode))
+    events.append(.speak)
+    isSpeaking = true
+  }
+
+  func stop() {
+    stopCount += 1
+    events.append(.stop)
+    isSpeaking = false
+  }
+}
+
+private final class FakeSpeechAudioSession: SpeechAudioSession {
+  enum Event: Equatable { case activate, deactivate }
+
+  private(set) var events: [Event] = []
+  var activationError: Error?
+
+  func activatePlayback() throws {
+    events.append(.activate)
+    if let activationError { throw activationError }
+  }
+
+  func deactivate() { events.append(.deactivate) }
 }
 
 @MainActor

@@ -84,7 +84,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   }
 
   func testLongPressingABubbleCopiesItAndShowsTheCopiedToast() {
-    let app = launch(state: "ended")
+    let app = launch(state: "ended", extra: ["-toastSeconds", "6"])
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 5))
 
@@ -106,6 +106,40 @@ final class RealtimeTranslateUITests: XCTestCase {
       XCTAssertGreaterThan(toast.frame.minY, app.frame.midY)
     }
     XCTAssertTrue(waitForDisappearance(toast, timeout: 8))
+  }
+
+  func testTheMuteToggleSitsInTheStatusStripAndFlipsItsState() {
+    let app = launch(state: "ready")
+    let toggle = app.buttons["speech-mute"]
+    XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+    XCTAssertTrue(toggle.isHittable)
+    // Near the status strip, above the language chips, and clear of the wordmark button.
+    XCTAssertLessThan(toggle.frame.maxY, app.buttons["languages-A"].frame.minY)
+    XCTAssertGreaterThan(toggle.frame.minY, app.buttons["ZETIC, opens settings"].frame.maxY)
+
+    let soundOn = toggle.label
+    XCTAssertEqual(soundOn, "Spoken translation on")
+    toggle.tap()
+    XCTAssertTrue(app.buttons["Spoken translation off"].waitForExistence(timeout: 3))
+
+    // Left as it was found, so the stored preference does not leak into the next test.
+    app.buttons["Spoken translation off"].tap()
+    XCTAssertTrue(app.buttons[soundOn].waitForExistence(timeout: 3))
+  }
+
+  func testATranslatedBubbleCarriesAReplayControl() {
+    let app = launch(state: "ended")
+    let replay = app.buttons["replay-translation"]
+    XCTAssertTrue(replay.waitForExistence(timeout: 5))
+    XCTAssertEqual(replay.label, "Play translation")
+    XCTAssertTrue(replay.isHittable)
+    replay.tap()
+
+    // A failed translation has nothing to play, so the control is absent rather than disabled.
+    app.terminate()
+    let failed = launch(state: "translationError")
+    XCTAssertTrue(failed.staticTexts["Session status: Ready to Talk"].waitForExistence(timeout: 5))
+    XCTAssertFalse(failed.buttons["replay-translation"].exists)
   }
 
   private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
