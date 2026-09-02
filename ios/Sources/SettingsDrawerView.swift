@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The right-side settings drawer and its scrim, with the shared copy-confirmation toast layered
-/// over it. Presented as a full-screen overlay above the main screen so the wordmark button stays
+/// over it. Presented as a full-screen overlay above the main screen so the menu button stays
 /// where it is.
 struct SettingsDrawerOverlay: View {
   @ObservedObject var model: SettingsDrawerModel
@@ -84,7 +84,10 @@ private struct SettingsDrawerPanel: View {
 
   private var header: some View {
     HStack(spacing: 8) {
-      Text("Settings", comment: "Settings drawer panel heading")
+      // One key, two places: the panel heading here and the navigation bar button that opens it,
+      // which is the same word for the same thing and must not drift apart in translation.
+      Text("Settings",
+           comment: "Settings drawer panel heading, and the accessibility label for the navigation bar button that opens it")
         .font(.headline)
         .foregroundStyle(DesignToken.textPrimary)
       Spacer(minLength: 8)

@@ -72,15 +72,40 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Start Speaker A's turn"].isEnabled)
   }
 
-  func testHeaderCarriesTheZeticWordmarkAsTheSettingsButton() {
+  /// Three things in one bar, in one order: the wordmark on the leading edge, the title in the
+  /// middle, the menu button on the trailing edge. The wordmark is decoration and nothing else,
+  /// so the assertion that it is not in `app.buttons` is the point of this test rather than a
+  /// detail of it: it went back to being a logo, and a logo that is still tappable is the old
+  /// design wearing the new one's layout.
+  func testHeaderPutsTheWordmarkLeadingAndTheMenuButtonTrailing() {
     let app = launch(state: "ready")
-    XCTAssertTrue(app.buttons["ZETIC, opens settings"].exists)
-    XCTAssertTrue(app.buttons["ZETIC, opens settings"].isHittable)
+
+    let wordmark = app.images["zetic-wordmark"]
+    let menu = app.buttons["Settings"]
+    XCTAssertTrue(wordmark.waitForExistence(timeout: 10))
+    XCTAssertEqual(wordmark.label, "ZETIC")
+    XCTAssertFalse(app.buttons["zetic-wordmark"].exists)
+    XCTAssertTrue(menu.exists)
+    XCTAssertTrue(menu.isHittable)
+
+    XCTAssertLessThan(wordmark.frame.maxX, menu.frame.minX)
+    XCTAssertLessThan(wordmark.frame.minX, app.frame.midX)
+    XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)
+    // A finger's worth of button in both directions, whatever the glyph inside it measures.
+    // Rounded, because a 44 pt frame comes back through the accessibility bridge as
+    // 43.99999999999999 and a literal comparison fails a button that is exactly the right size.
+    XCTAssertGreaterThanOrEqual(menu.frame.width.rounded(), 44)
+    XCTAssertGreaterThanOrEqual(menu.frame.height.rounded(), 44)
+    // The title sits between them rather than being pushed off one side.
+    let title = app.staticTexts["Turn Translate"].firstMatch
+    XCTAssertTrue(title.exists)
+    XCTAssertGreaterThan(title.frame.minX, wordmark.frame.maxX)
+    XCTAssertLessThan(title.frame.maxX, menu.frame.minX)
   }
 
-  func testWordmarkOpensTheSettingsDrawerAndTheScrimClosesIt() {
+  func testTheMenuButtonOpensTheSettingsDrawerAndTheScrimClosesIt() {
     let app = launch(state: "ready")
-    app.buttons["ZETIC, opens settings"].tap()
+    app.buttons["Settings"].tap()
 
     let visit = app.buttons["settings-visit-zetic"]
     let contact = app.buttons["settings-contact-us"]
@@ -98,7 +123,7 @@ final class RealtimeTranslateUITests: XCTestCase {
 
   func testContactRowShowsTheCopyToast() {
     let app = launch(state: "ready")
-    app.buttons["ZETIC, opens settings"].tap()
+    app.buttons["Settings"].tap()
     let contact = app.buttons["settings-contact-us"]
     XCTAssertTrue(contact.waitForExistence(timeout: 2))
     XCTAssertTrue(contact.label.contains("contact@zetic.ai"))
@@ -277,7 +302,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["welcome-get-started"].exists)
     XCTAssertFalse(app.buttons["priming-continue"].exists)
     XCTAssertFalse(app.buttons["consent-download"].exists)
-    XCTAssertTrue(app.buttons["ZETIC, opens settings"].exists)
+    XCTAssertTrue(app.buttons["Settings"].exists)
   }
 
   // MARK: - Typed input and clearing
@@ -328,7 +353,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
     XCTAssertTrue(bubble.waitForExistence(timeout: 10))
 
-    app.buttons["ZETIC, opens settings"].tap()
+    app.buttons["Settings"].tap()
     let clear = app.buttons["settings-clear-conversation"]
     XCTAssertTrue(clear.waitForExistence(timeout: 5))
     XCTAssertTrue(clear.isEnabled)
@@ -342,7 +367,7 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Start session"].exists)
 
     // With nothing left to clear the row stays where it is and stops being tappable.
-    app.buttons["ZETIC, opens settings"].tap()
+    app.buttons["Settings"].tap()
     XCTAssertTrue(clear.waitForExistence(timeout: 5))
     XCTAssertFalse(clear.isEnabled)
   }
@@ -354,7 +379,7 @@ final class RealtimeTranslateUITests: XCTestCase {
   /// override written here would outlive the test and be read by the next launch.
   func testTheDrawerNamesTheAppLanguageAndDefaultsToTheSystemOne() {
     let app = launch(state: "ready")
-    app.buttons["ZETIC, opens settings"].tap()
+    app.buttons["Settings"].tap()
 
     let row = app.buttons["settings-app-language"]
     XCTAssertTrue(row.waitForExistence(timeout: 10))
