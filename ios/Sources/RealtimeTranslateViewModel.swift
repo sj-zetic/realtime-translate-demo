@@ -126,22 +126,11 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
   }
 
+  /// Ending a session clears the conversation but keeps the model resident, so the next
+  /// `Start Session` reaches `.ready` without another load. The model unloads in `deinit`.
   func endSession() {
-    speechRecognizer.stop()
-    activeItemID = nil
-    pendingFinalTranscript = nil
-    mostRecentTranslationRequest = nil
     sessionTask?.cancel()
-    state = .endingSession
-    sessionTask = Task { [weak self, translationRuntime] in
-      await translationRuntime.close()
-      guard let self, state == .endingSession else { return }
-      items = []
-      activeItemID = nil
-      pendingFinalTranscript = nil
-      mostRecentTranslationRequest = nil
-      state = .setup
-    }
+    beginNewSession()
   }
 
   func beginNewSession() {

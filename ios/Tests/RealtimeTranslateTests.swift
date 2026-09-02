@@ -285,9 +285,9 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(runtime.loadCount, 1)
   }
 
-  func testEndSessionClosesRuntimeAndReturnsToTheIdleMainScreen() async {
+  func testEndSessionKeepsTheModelLoadedAndReturnsToTheIdleMainScreen() async {
     let recognizer = FakeSpeechRecognizer()
-    let runtime = FakeTranslationRuntime(result: "Translated", closeDelayNanoseconds: 30_000_000)
+    let runtime = FakeTranslationRuntime(result: "Translated")
     let item = ConversationItem(
       id: UUID(), speaker: .a, transcript: "Hello", targetLanguage: .hyMT2Candidates[1],
       translation: "Hello", state: .translated
@@ -297,15 +297,16 @@ final class RealtimeTranslateTests: XCTestCase {
     )
 
     viewModel.endSession()
-    XCTAssertEqual(viewModel.state, .endingSession)
-    XCTAssertEqual(viewModel.items, [item])
-    await waitUntil { runtime.closeCount == 1 }
-    await waitUntil { viewModel.state == .setup }
     XCTAssertEqual(viewModel.state, .setup)
+    XCTAssertEqual(runtime.closeCount, 0)
     XCTAssertTrue(viewModel.items.isEmpty)
     XCTAssertFalse(viewModel.isSessionLive)
     XCTAssertTrue(viewModel.canStartSession)
     XCTAssertTrue(viewModel.canEditLanguages)
+
+    viewModel.startSession()
+    await waitUntil { viewModel.state == .ready }
+    XCTAssertEqual(runtime.closeCount, 0)
   }
 
   func testActiveSpeakerReportsTheUtteranceOwnerForBlockedControlText() {
@@ -314,6 +315,100 @@ final class RealtimeTranslateTests: XCTestCase {
     XCTAssertEqual(SessionState.translating(.a).activeSpeaker, .a)
     XCTAssertNil(SessionState.ready.activeSpeaker)
     XCTAssertNil(SessionState.setup.activeSpeaker)
+  }
+
+  func testDiscoverArchiveReturnsTheCompleteArchiveNamedByTheCacheIndex() throws {
+    let root = try makeCacheFixture()
+
+    let archive = LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root)
+
+    XCTAssertEqual(archive?.artifactID, "llmTargetModel-c488c23ffebf7fd0")
+    XCTAssertEqual(archive?.modelKey, "aaaa")
+    XCTAssertEqual(archive?.url.lastPathComponent, "Hy_MT2_1.ztc")
+  }
+
+  func testDiscoverArchiveSkipsAnArchiveShorterThanTheIndexedByteCount() throws {
+    let root = try makeCacheFixture(archiveByteCount: 4, indexedByteCount: 8)
+
+    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+  }
+
+  func testDiscoverArchiveReturnsNilForAnUnrecognisedIndexInsteadOfFailing() throws {
+    let root = try makeCacheFixture()
+    try "{\"schemaVersion\":99,\"artifacts\":\"unexpected\"}"
+      .write(to: root.appendingPathComponent("cache-index.json"), atomically: true, encoding: .utf8)
+
+    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root.appendingPathComponent("missing")))
+  }
+
+  func testSecretKeyHexComesFromTheBackendSelectionRecordForThatArtifact() throws {
+    let root = try makeCacheFixture()
+
+    XCTAssertEqual(LocalModelStore.secretKeyHex(forArtifactID: "llmTargetModel-c488c23ffebf7fd0", cacheRoot: root),
+                   String(repeating: "0", count: 64))
+    XCTAssertNil(LocalModelStore.secretKeyHex(forArtifactID: "llmTargetModel-0000000000000000", cacheRoot: root))
+  }
+
+  func testSweepOrphansRemovesOnlyPartialDownloadsAndEmptyUnindexedArtifactDirectories() throws {
+    let root = try makeCacheFixture()
+    let manager = FileManager.default
+    let models = root.appendingPathComponent("artifacts/aaaa", isDirectory: true)
+    let kept = [
+      models.appendingPathComponent("llmTargetModel-c488c23ffebf7fd0"),
+      models.appendingPathComponent("llmTargetModel-ABCDEF0123456789"),
+      models.appendingPathComponent("llmTargetModel-short"),
+      root.appendingPathComponent("staging-locks")
+    ]
+    for directory in kept.dropFirst() {
+      try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+    let swept = models.appendingPathComponent("llmTargetModel-0123456789abcdef")
+    try manager.createDirectory(at: swept, withIntermediateDirectories: true)
+    let temporary = root.appendingPathComponent("scratch", isDirectory: true)
+    try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+    let partial = temporary.appendingPathComponent("CFNetworkDownload_ab12cd.tmp")
+    let unrelated = temporary.appendingPathComponent("keep-me.tmp")
+    try Data([0]).write(to: partial)
+    try Data([0]).write(to: unrelated)
+
+    LocalModelStore.sweepOrphans(cacheRoot: root, temporaryDirectory: temporary)
+
+    XCTAssertFalse(manager.fileExists(atPath: swept.path))
+    XCTAssertFalse(manager.fileExists(atPath: partial.path))
+    XCTAssertTrue(manager.fileExists(atPath: unrelated.path))
+    for directory in kept { XCTAssertTrue(manager.fileExists(atPath: directory.path), directory.lastPathComponent) }
+  }
+
+  /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
+  private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
+    let manager = FileManager.default
+    let container = manager.temporaryDirectory.appendingPathComponent("LocalModelStore-\(UUID().uuidString)")
+    let root = container.appendingPathComponent("ZeticMLangeCache", isDirectory: true)
+    addTeardownBlock { try? manager.removeItem(at: container) }
+    let relativePath = "artifacts/aaaa/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.ztc"
+    let archive = root.appendingPathComponent(relativePath)
+    try manager.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(repeating: 0, count: archiveByteCount).write(to: archive)
+    let index = """
+      {"schemaVersion":1,"artifacts":[{"createdAt":809969480.2,"id":"llmTargetModel-c488c23ffebf7fd0",\
+      "kind":"llmTargetModel","modelKey":"aaaa","ownedArtifactIDs":[],"primaryRelativePath":"\(relativePath)",\
+      "selector":{"apType":"GPU","llmTarget":"LLAMA_CPP"},"storedFiles":[{"byteCount":\(indexedByteCount),\
+      "checksum":"00000000000000000000000000000000","relativePath":"\(relativePath)",\
+      "validationState":"checksumValidated"}],"updatedAt":809969480.2}],\
+      "resolvedModels":[{"logicalRef":{"kind":"llm","name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"aaaa",\
+      "updatedAt":809969926.4}]}
+      """
+    try index.write(to: root.appendingPathComponent("cache-index.json"), atomically: true, encoding: .utf8)
+    let records = root.appendingPathComponent("backend-selection-last-known-good", isDirectory: true)
+    try manager.createDirectory(at: records, withIntermediateDirectories: true)
+    let record = """
+      {"candidate_artifact_id":"llmTargetModel-c488c23ffebf7fd0","schema_version":1,\
+      "response":{"candidate":{"checksum":"00000000000000000000000000000000",\
+      "secret_key":"\(String(repeating: "0", count: 64))"},"model_key":"aaaa"}}
+      """
+    try record.write(to: records.appendingPathComponent("dummy.json"), atomically: true, encoding: .utf8)
+    return root
   }
 
   private func readyViewModel(

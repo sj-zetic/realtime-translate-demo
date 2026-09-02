@@ -323,7 +323,7 @@ private struct BottomBar: View {
     case .endingSession:
       return "Wait while the session ends."
     case .setup, .ended:
-      return "Tap Start Session to load the translation model."
+      return "Tap Start Session to begin translating."
     default:
       break
     }
