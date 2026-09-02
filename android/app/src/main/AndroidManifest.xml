@@ -1,13 +1,44 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <application android:allowBackup="false" android:label="Turn Translate" android:theme="@style/Theme.RealtimeTranslate">
-        <activity android:name=".MainActivity" android:exported="true">
+    <!-- The app reads translations aloud with the phone's own synthesizer, and on
+         Android 11 and later a package has to declare that it talks to one. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        android:theme="@style/Theme.RealtimeTranslate.Starting">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Below Android 13 the framework has no per-app locale, so androidx stores
+             the drawer's `App language` choice and re-applies it on the next launch.
+             From Android 13 the platform's own LocaleManager owns it and this is
+             inert. -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true"
+                tools:replace="android:value" />
+        </service>
     </application>
 </manifest>

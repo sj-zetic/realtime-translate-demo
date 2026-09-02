@@ -145,7 +145,7 @@ class SessionViewModelTest {
 
         assertEquals(SessionPhase.ModelLoadFailed, viewModel.state.value.phase)
         assertFalse(viewModel.state.value.conversationStarted)
-        assertEquals("offline", viewModel.state.value.errorMessage)
+        assertEquals(UiText.raw("offline"), viewModel.state.value.errorMessage)
     }
 
     @Test fun `retry reloads after model load failure`() = runTest {
@@ -195,7 +195,7 @@ class SessionViewModelTest {
         val translator = FakeTranslator()
         val viewModel = SessionViewModel(
             translator = translator,
-            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true, conversations = listOf(ConversationItem("partial", Speaker.A, SpeechLanguage.Automatic, HyMt2Languages.all.first(), "partial", false, translationError = "error"))),
+            initialState = SessionUiState(SessionPhase.Ready, conversationStarted = true, conversations = listOf(ConversationItem("partial", Speaker.A, SpeechLanguage.Automatic, HyMt2Languages.all.first(), "partial", false, translationError = UiText.raw("error")))),
         )
 
         viewModel.dispatch(SessionAction.EndSession)
@@ -339,7 +339,7 @@ class SessionViewModelTest {
         )
 
         viewModel.dispatch(SessionAction.PttPress(TestContext(), Speaker.A))
-        transcriber.listener.onError("Speech recognition failed.")
+        transcriber.listener.onError(UiText.raw("Speech recognition failed."))
         assertEquals(SessionPhase.Error, viewModel.state.value.phase)
         viewModel.dispatch(SessionAction.Retry)
 

@@ -13,15 +13,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
@@ -42,7 +51,7 @@ import androidx.compose.ui.unit.sp
 /** The About block's facts, read from the installed package so the drawer never hardcodes them. */
 data class AppInfo(val displayName: String, val version: String, val build: String) {
     /** One terse line for the About block: `Version 0.1.0 (1)`. */
-    val versionLine: String get() = "Version $version ($build)"
+    val versionLine: UiText get() = UiText.res(R.string.about_version_line, version, build)
 
     companion object {
         /**
@@ -73,53 +82,42 @@ data class AppInfo(val displayName: String, val version: String, val build: Stri
     }
 }
 
-/** Every drawer string in one place, in the app's terse voice and with no em dash anywhere. */
+/**
+ * The two drawer strings that are never translated: an address and a URL. Every other string the
+ * drawer shows is a resource, so the French and Spanish passes cover it.
+ */
 object SettingsDrawerCopy {
-    /** An address and a URL, so neither is ever translated by accident. */
     const val CONTACT_EMAIL = "contact@zetic.ai"
     const val WEBSITE = "https://zetic.ai"
 
-    const val TITLE = "Settings"
-    const val CLOSE = "Close settings"
-
-    const val CLEAR_TITLE = "Clear conversation"
-    const val CLEAR_SUBTITLE = "Keeps the session and the languages"
-    const val CLEAR_CONFIRMATION = "Conversation cleared"
-
-    const val WEBSITE_TITLE = "Visit zetic.ai"
-    const val CONTACT_TITLE = "Contact us"
-    const val COPY_CONFIRMATION = "Email address copied"
-    const val BUBBLE_COPY_ACTION = "Copy"
-    const val BUBBLE_COPY_CONFIRMATION = "Copied"
-
-    const val ABOUT_TITLE = "About"
-    const val PRIVACY_LINE = "Speech, translation, everything stays on this phone."
-
     /**
-     * Spelled out here so the accessibility label and the visible row can never disagree about the
-     * fixed words between them.
+     * Built from the row's own title so the accessibility label and the visible row can never
+     * disagree about the fixed words between them, in any language.
      */
-    fun clearAccessibilityLabel(isEnabled: Boolean): String =
-        if (isEnabled) "$CLEAR_TITLE, keeps the session and the languages"
-        else "$CLEAR_TITLE, unavailable, there is nothing to clear"
-
-    const val WEBSITE_ACCESSIBILITY = "Visit zetic.ai, opens in the browser"
-    const val CONTACT_ACCESSIBILITY = "Contact us, copies $CONTACT_EMAIL to the clipboard"
+    fun clearAccessibilityLabel(isEnabled: Boolean): UiText = UiText.res(
+        if (isEnabled) {
+            R.string.settings_clear_accessibility_available
+        } else {
+            R.string.settings_clear_accessibility_unavailable
+        },
+        UiText.res(R.string.settings_clear_title),
+    )
 }
 
 /**
  * The drawer panel's content. Row labels are terse and left-aligned; each row's trailing glyph is
  * a quiet [TextSecondary] icon that repeats what the label already says.
  *
- * The `App language` and `Storage` rows the shared spec describes are not here yet: localization is
- * a later stage, and the storage row needs a read-only answer about the Melange cache that the
- * Android SDK does not offer today. The row list is the extension point for both.
+ * The `Storage` row the shared spec describes is still not here: it needs a read-only answer about
+ * the Melange cache that the Android SDK does not offer today. The row list is the extension point.
  */
 @Composable
 fun SettingsDrawerContent(
     appInfo: AppInfo,
     canClearConversation: Boolean,
+    appLanguage: AppLanguage,
     onClearConversation: () -> Unit,
+    onSelectAppLanguage: (AppLanguage) -> Unit,
     onVisitWebsite: () -> Unit,
     onCopyContact: () -> Unit,
     onClose: () -> Unit,
@@ -130,7 +128,7 @@ fun SettingsDrawerContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                SettingsDrawerCopy.TITLE,
+                stringResource(R.string.settings_title),
                 color = TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -138,7 +136,7 @@ fun SettingsDrawerContent(
             )
             Icon(
                 Icons.Filled.Close,
-                contentDescription = SettingsDrawerCopy.CLOSE,
+                contentDescription = stringResource(R.string.settings_close),
                 tint = TextSecondary,
                 modifier = Modifier
                     .clickable(onClick = onClose)
@@ -149,19 +147,22 @@ fun SettingsDrawerContent(
         HorizontalDivider(color = DividerLine)
 
         SettingsRow(
-            title = SettingsDrawerCopy.CLEAR_TITLE,
-            subtitle = SettingsDrawerCopy.CLEAR_SUBTITLE,
-            accessibilityLabel = SettingsDrawerCopy.clearAccessibilityLabel(canClearConversation),
+            title = stringResource(R.string.settings_clear_title),
+            subtitle = stringResource(R.string.settings_clear_subtitle),
+            accessibilityLabel = SettingsDrawerCopy.clearAccessibilityLabel(canClearConversation).text(),
             icon = Icons.Filled.Delete,
             enabled = canClearConversation,
             onClick = onClearConversation,
         )
         HorizontalDivider(color = DividerLine)
 
+        AppLanguageRow(appLanguage, onSelectAppLanguage)
+        HorizontalDivider(color = DividerLine)
+
         SettingsRow(
-            title = SettingsDrawerCopy.WEBSITE_TITLE,
+            title = stringResource(R.string.settings_website_title),
             subtitle = null,
-            accessibilityLabel = SettingsDrawerCopy.WEBSITE_ACCESSIBILITY,
+            accessibilityLabel = stringResource(R.string.settings_website_accessibility),
             painter = painterResource(R.drawable.ic_open_in_new),
             enabled = true,
             onClick = onVisitWebsite,
@@ -169,9 +170,9 @@ fun SettingsDrawerContent(
         HorizontalDivider(color = DividerLine)
 
         SettingsRow(
-            title = SettingsDrawerCopy.CONTACT_TITLE,
+            title = stringResource(R.string.settings_contact_title),
             subtitle = SettingsDrawerCopy.CONTACT_EMAIL,
-            accessibilityLabel = SettingsDrawerCopy.CONTACT_ACCESSIBILITY,
+            accessibilityLabel = stringResource(R.string.settings_contact_accessibility, SettingsDrawerCopy.CONTACT_EMAIL),
             painter = painterResource(R.drawable.ic_copy),
             enabled = true,
             onClick = onCopyContact,
@@ -182,10 +183,43 @@ fun SettingsDrawerContent(
             Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(SettingsDrawerCopy.ABOUT_TITLE, color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.settings_about_title), color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text(appInfo.displayName, color = TextPrimary, fontSize = 16.sp)
-            Text(appInfo.versionLine, color = TextSecondary, fontSize = 12.sp)
-            Text(SettingsDrawerCopy.PRIVACY_LINE, color = TextSecondary, fontSize = 12.sp)
+            Text(appInfo.versionLine.text(), color = TextSecondary, fontSize = 12.sp)
+            Text(stringResource(R.string.settings_privacy_line), color = TextSecondary, fontSize = 12.sp)
+        }
+    }
+}
+
+/**
+ * The row that puts the app into a language of its own, without changing the phone's.
+ *
+ * The current language is the subtitle, because the value is the point of the row: someone who has
+ * put the app into a language they cannot read has to be able to find their way back out by
+ * recognizing it. The three concrete languages are named in their own language; only `System` is
+ * translated, and choosing it removes the override rather than pinning whatever the phone is now.
+ */
+@Composable
+private fun AppLanguageRow(selected: AppLanguage, onSelect: (AppLanguage) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val title = stringResource(R.string.settings_app_language_title)
+    val value = selected.label.text()
+    Box {
+        SettingsRow(
+            title = title,
+            subtitle = value,
+            accessibilityLabel = stringResource(R.string.settings_app_language_accessibility, value),
+            icon = Icons.Filled.KeyboardArrowDown,
+            enabled = true,
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AppLanguage.entries.forEach { language ->
+                DropdownMenuItem(
+                    text = { Text(language.label.text()) },
+                    onClick = { expanded = false; onSelect(language) },
+                )
+            }
         }
     }
 }

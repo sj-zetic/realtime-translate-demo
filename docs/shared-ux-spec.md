@@ -20,9 +20,9 @@ The bottom bar's contract is those two controls, the hint, and the session actio
 
 ### Launch
 
-Cold launch shows the official ZETIC logo lockup centered on `color.surface`, so the first frame is the app's own background rather than a blank white flash, and the transition into the header is a continuation of the same surface. iOS declares this with the image-based `UILaunchScreen` in `Sources/Info.plist` (`UIImageName` = `LaunchLogo`, `UIColorName` = `LaunchBackground`); there is no storyboard. `LaunchLogo` is a 240 pt wide render of the lockup at 1x/2x/3x, roughly 60% of the screen width, because the launch screen draws the image at its natural size instead of scaling it to fit. Android parity is pending.
+Cold launch shows the official ZETIC logo lockup centered on `color.surface`, so the first frame is the app's own background rather than a blank white flash, and the transition into the header is a continuation of the same surface. iOS declares this with the image-based `UILaunchScreen` in `Sources/Info.plist` (`UIImageName` = `LaunchLogo`, `UIColorName` = `LaunchBackground`); there is no storyboard. `LaunchLogo` is a 240 pt wide render of the lockup at 1x/2x/3x, roughly 60% of the screen width, because the launch screen draws the image at its natural size instead of scaling it to fit. Implemented on both platforms. Android declares the same thing as a theme rather than a first frame: `Theme.RealtimeTranslate.Starting` with `parent="Theme.SplashScreen"` from `androidx.core:core-splashscreen`, `windowSplashScreenBackground` set to `color.surface`, `windowSplashScreenAnimatedIcon` set to `@drawable/splash_logo`, and `postSplashScreenTheme` handing over to the app's own theme; `MainActivity` calls `installSplashScreen()` before `super.onCreate`. Android 12 and later draw that icon on a 288 dp canvas and mask it to the inner circle, so `splash_logo` is a layer list that centers the lockup at 132 dp wide rather than handing over the wide wordmark at its natural size, which would clip both ends of it.
 
-The app icon is the ZETIC Z monogram, teal `color.accent` on a near-black field, shipped as the single 1024x1024 universal entry in `Sources/Assets.xcassets/AppIcon.appiconset` on iOS. It is provisional and may be replaced.
+The app icon is the ZETIC Z monogram, teal `color.accent` on a near-black field, shipped as the single 1024x1024 universal entry in `Sources/Assets.xcassets/AppIcon.appiconset` on iOS. It is provisional and may be replaced. Android ships the same artwork as an adaptive icon, which needs the two as separate layers: `@color/ic_launcher_background` is the near-black field and `@mipmap/ic_launcher_foreground` is the glyph alone, generated from the same 1024x1024 render by solving for the Z's alpha per pixel and re-drawing it on transparency. The glyph occupies 52 dp of the 108 dp canvas, which reproduces the iOS proportion inside the 72 dp viewport and stays inside the 66 dp safe zone; the same foreground doubles as the `monochrome` layer, and a legacy raster set at the five densities covers launchers that ignore the adaptive entry.
 
 ### Screen layout
 
@@ -238,14 +238,14 @@ Long-pressing a chat bubble offers one action, `Copy`, which puts that bubble's 
 
 ## Spoken translation
 
-A translation that arrives is read aloud, so the person it is for can listen instead of leaning over the phone. The voice is the platform's own speech synthesizer (`AVSpeechSynthesizer` on iOS); no model is downloaded and nothing is sent anywhere. Implemented on iOS; Android parity is pending.
+A translation that arrives is read aloud, so the person it is for can listen instead of leaning over the phone. The voice is the platform's own speech synthesizer (`AVSpeechSynthesizer` on iOS, `android.speech.tts.TextToSpeech` on Android); no model is downloaded and nothing is sent anywhere. Implemented on both platforms. On Android the announcement rule lives in `SpokenTranslationAnnouncer`, which owns the set of bubble ids already spoken over an injected `SpeechOutput`, so newest-wins and speak-once are unit tested without a synthesizer; the composable that drives it hands it each new transcript and nothing else.
 
 ### Speaking a translation
 
 - A translation is spoken exactly once, at the moment its bubble reaches the translated state. Nothing else speaks: not a partial transcript, not the source text, not a failed translation, and not a bubble that arrives with no translated text.
 - The voice language is that bubble's reading language, so an A turn is read in B's language and a B turn in A's.
 - **Newest wins.** A translation that finishes while an earlier one is still being spoken cuts it off mid-sentence rather than queueing behind it. Two people talking must never build a backlog of sentences the phone still owes them.
-- The voice is resolved from the reading language in three steps: an exact match for the code, then the variant that code implies (`zh-Hant` picks a `zh-TW` voice over a `zh-CN` one, `en` picks `en-US`), then any installed voice for the same language. A language with no installed voice on the device stays silent; it is never read out in another language's voice.
+- The voice is resolved from the reading language in three steps: an exact match for the code, then the variant that code implies (`zh-Hant` picks a `zh-TW` voice over a `zh-CN` one, `en` picks `en-US`), then any installed voice for the same language. A language with no installed voice on the device stays silent; it is never read out in another language's voice. Android resolves the same three steps against `TextToSpeech.availableLanguages`, sharing the implied-variant table with the recognizer's language matching, because the question is the same one; a `setLanguage` that comes back `LANG_MISSING_DATA` or `LANG_NOT_SUPPORTED` is treated as no voice at all.
 
 ### Replaying a bubble
 
@@ -259,9 +259,9 @@ Every bubble with a finished translation carries a small speaker glyph in the bo
 
 One toggle at the trailing end of the status strip: a speaker glyph when sound is on, a crossed-out speaker when it is off. The status strip is one short line of text with its whole trailing half empty, so the app's only always-present control lands there without crowding the header wordmark or adding a row of chrome.
 
-- Default is sound **on**. The choice is remembered in platform preferences (`@AppStorage` key `speech.muted` on iOS), and the view model seeds itself from the same key, so a launch that starts muted never speaks before the screen appears.
+- Default is sound **on**. The choice is remembered in platform preferences (`@AppStorage` key `speech.muted` on iOS, the same key in Android's `turn-translate` `SharedPreferences`), and the view model seeds itself from the same key, so a launch that starts muted never speaks before the screen appears.
 - Muting suppresses the automatic announcement, disables every replay control, and stops whatever is being spoken at that moment: the toggle is what someone reaches for to make the phone stop talking.
-- The toggle announces its state in words, `Spoken translation on` or `Spoken translation off`, because the glyph is its whole face.
+- The toggle announces its state in words, `Spoken translation on` or `Spoken translation off`, because the glyph is its whole face. On Android that sentence is the control's `contentDescription` and the role stays `Button`: a `Switch` would announce its own `on` after a label that already said which it is.
 
 ### Recognition and playback handoff
 
@@ -271,6 +271,8 @@ Recognition runs the audio session as `.record` with `.measurement` mode, which 
 - **Nothing is ever spoken while the microphone is open.** Beginning a turn stops speech synchronously before the recognizer starts, so a user who interrupts a sentence by pressing a control gets a recording, not a fight over the route. Ending a session stops speech too.
 - The session is claimed and released once each, never per sentence: replacing one translation with a newer one is a cut, not a route change, and the delegate callback that reports the cancelled utterance cannot deactivate a session the recognizer has since claimed. A session that refuses to activate speaks nothing and is retried on the next translation.
 - A session state machine (`SpeechAudioCoordinator` on iOS) owns that handoff over an injected session seam, so the ordering is unit tested even though the audio route itself is only verifiable on a device.
+
+Android has no audio session to claim, so the same coordinator sits over audio focus instead. Speaking requests `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` with `USAGE_ASSISTANT` and `CONTENT_TYPE_SPEECH`, which dips whatever else is playing rather than pausing it, and abandons it when speech ends. The rules are the same three: focus is claimed once and held across a replacement, so a cut is not audible as a route change; it is handed back once, so an utterance-done callback arriving after the next push-to-talk cannot touch a route the recognizer has since claimed; and a refused request speaks nothing and is retried on the next translation. `SpeechAudioCoordinator` is the same class name on both platforms and is unit tested over an injected focus seam.
 
 ## Typed input
 
@@ -303,7 +305,7 @@ Tapping it opens a half-height sheet, which is the surface a screen reader alrea
 
 ## Clear the conversation
 
-One action, in the settings drawer's row list, that empties the transcript without ending the session: the model stays resident, both language chips stay as they are, and the next turn starts straight away. Implemented on both platforms. Android also stops nothing extra today, because spoken translation is not on Android yet; when it lands, the clear stops it the same way iOS does.
+One action, in the settings drawer's row list, that empties the transcript without ending the session: the model stays resident, both language chips stay as they are, and the next turn starts straight away. Implemented on both platforms, and on both the clear stops whatever is being spoken.
 
 - The row reads `Clear conversation` with the subtitle `Keeps the session and the languages` and a quiet trash glyph. It is the first row, because it is the one row someone opens the drawer in order to use.
 - No confirmation. Nothing was ever stored, so there is nothing to lose that a next turn does not replace.
@@ -327,7 +329,7 @@ A phone call, Siri, an alarm, or an unplugged headset takes the audio session aw
 
 ## Localization
 
-The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, every key translated in each. Android parity is pending.
+The interface is translatable, and the app can be put into a language of its own without changing the phone's. This is separate from everything else on this screen that says "language": the two chips choose what is *translated*, and this chooses what the app is *written in*. Implemented on iOS in English, French, and Spanish: all three are shipped, every key translated in each. Implemented on Android in the same three languages, over its own smaller surface: 102 keys in `res/values/strings.xml` and 101 in each of `res/values-fr` and `res/values-es`, the one difference being `app_name`, which is the product name and is never overridden. The Android catalog is smaller than the iOS one because typed input, the `Storage` row, and the interruption note are not on Android yet; every key the two share carries the same reviewed French and Spanish value.
 
 ### Shipped languages and their register
 
@@ -338,12 +340,16 @@ The interface is translatable, and the app can be put into a language of its own
 
 One String Catalog per platform holds every user-facing string. On iOS that is `ios/Sources/Localizable.xcstrings`, with `en` as the development language, `en`, `fr`, and `es` in the project's known regions and in `CFBundleLocalizations`, and the catalog compiled into the app bundle at build time. A build extracts the strings and `xcstringstool sync` merges them into the catalog, so the catalog is generated from the code rather than maintained beside it.
 
+On Android that is `res/values/strings.xml` with `res/values-fr` and `res/values-es` beside it, which is the platform's own arrangement: the resource compiler picks the file, and a key a language does not define falls back to the default one. French typography is carried as real code points in the XML and survives compilation unchanged, because U+00A0 and U+202F are not ASCII whitespace and are not collapsed; the two push-to-talk captions keep their leading space by being written as quoted values.
+
 Strings reach the catalog by one of two routes, and the difference is visible to the user:
 
 1. **Literals in views** (`Text("Settings")`) resolve against the environment locale. They repaint the moment the language changes.
 2. **Strings built in models and copy constants** (`String(localized:)`) resolve against the bundle and the process locale, which the platform settles at launch. They change when the app is next opened.
 
 That split is the whole reason the language row promises what it promises. It is not worked around: half the screen updating immediately and the rest updating on the next launch is standard platform behaviour, and pretending otherwise would mean rebuilding every model string on every locale change for no real gain.
+
+Android has the same split in the same two places and answers it differently, because it can. A composable reads `stringResource`, which follows the composition's own configuration. Everything built outside a composition, which on Android is the view model's error banner, the recognizer's failure sentences, and the translation runtime's, travels as `UiText`: either a resource id with its arguments, or the one kind of text this app did not write and cannot translate, which is a message the platform or the Melange runtime produced. Nothing is resolved until the frame that draws it, so a language change repaints the error banner along with the rest of the screen. `UiText.Res` also nests, so a sentence composed from a translated phrase, `The translation model is about 1.9 GB.`, stays two catalog entries rather than becoming one concatenation.
 
 ### What is not translated
 
@@ -357,9 +363,10 @@ That split is the whole reason the language row promises what it promises. It is
 - **What it shows**: the row title `App language` with the language currently in force as its subtitle. The value is the point of the row: someone who has put the app into a language they cannot read has to be able to find their way back out by recognizing it.
 - **The choices**: `System`, `English`, `Français`, `Español`. The three concrete languages are named in their own language, never translated; only `System` is.
 - **The default is `System`**, which follows the order set in the platform's own settings. Choosing `System` again removes the override rather than pinning whatever the phone currently is, so a phone that changes its language later is followed instead of frozen.
-- **Choosing a language** writes the platform's own language override (`AppleLanguages` on iOS) and confirms with the shared toast reading exactly `Language applies fully after reopening the app`. Everything the environment locale drives repaints immediately; the rest follows on the next launch. Choosing the language that is already selected changes nothing and shows no toast.
+- **Choosing a language** writes the platform's own language override (`AppleLanguages` on iOS, the per-app locale through `AppCompatDelegate.setApplicationLocales` on Android) and confirms with the shared toast reading exactly `Language applies fully after reopening the app`. Everything the environment locale drives repaints immediately; the rest follows on the next launch. Choosing the language that is already selected changes nothing and shows no toast.
 - **The drawer stays open**, unlike the clear row: the thing worth seeing afterwards is this row showing the new value.
 - **Nothing else changes.** The session, the loaded model, the transcript, both language chips, and the sound toggle are untouched. The override is remembered across launches under its own key, alongside the other preferences.
+- **On Android the override is the platform's, not the app's.** From Android 13 `setApplicationLocales` is the framework's `LocaleManager`, which is what the phone's own Settings app shows and edits, and `res/xml/locales_config.xml` tells that Settings page which three languages this build offers. Below Android 13 the androidx backport stores the choice and re-applies it on the next launch, which is why `MainActivity` is an `AppCompatActivity` and why the manifest declares `AppLocalesMetadataHolderService` with `autoStoreLocales`. That is a deliberate departure from "its own key alongside the other preferences": writing a second private copy of a value the OS already owns is how the two get to disagree.
 
 ### Fallback rules
 
@@ -367,7 +374,7 @@ That split is the whole reason the language row promises what it promises. It is
 - **A key missing from a language falls back to English**, so a partly finished pass never shows a blank or a raw key.
 - **A stored language this build no longer offers falls back to `System`**, the same tolerance the reading chips apply to a code that is no longer in the catalogue.
 - **Formatting follows the chosen language**: sizes, numbers, and dates come from the platform's formatters rather than from hand-built strings, so they are already right in a language whose strings are not translated yet.
-- **No user-facing string, in any language, contains an em dash or an en dash.** The rule is enforced across the whole catalog by a test that scans every value, not just the copy constants a person remembered to list.
+- **No user-facing string, in any language, contains an em dash or an en dash.** The rule is enforced across the whole catalog by a test that scans every value, not just the copy constants a person remembered to list. On Android that test parses the three `strings.xml` files off disk rather than walking the generated `R.string` fields, which would only ever see the default language: the one that cannot be wrong. The same test asserts key parity in both directions, identical format arguments per key, and that every specifier is positional so a translation may reorder them.
 
 ## Model storage
 
@@ -542,10 +549,11 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Background the app mid-session | The screen hold is released immediately and taken again on return |
 | Hold and release a push-to-talk control | A firm tap on press and a lighter one on release, with a soft tick when that turn's translation arrives |
 | Long-press a chat bubble | One `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast |
-| Translation succeeds with sound on | iOS only for now: the translation is spoken once in the recipient's reading language, cutting off any translation still being spoken. Android parity is pending |
-| Translation succeeds with sound off | iOS only for now: nothing is spoken and no bubble carries a replay control at all; the bubble is otherwise unchanged. Android parity is pending |
-| Tap a bubble's replay glyph | iOS only for now: that translation is spoken again; the glyph is absent on bubbles with no finished translation, and absent altogether while the app is muted. Android parity is pending |
-| Start a turn while a translation is being spoken | iOS only for now: speech stops immediately and the microphone opens; the audio session is never held by both. Android parity is pending |
+| Translation succeeds with sound on | The translation is spoken once in the recipient's reading language, cutting off any translation still being spoken |
+| Translation succeeds with sound off | Nothing is spoken; iOS shows no replay control at all while muted, Android shows it disabled. The bubble is otherwise unchanged |
+| Tap a bubble's replay glyph | That translation is spoken again; the glyph is absent on bubbles with no finished translation |
+| Start a turn while a translation is being spoken | Speech stops immediately and the microphone opens; the audio route is never held by both. iOS hands back the audio session, Android abandons audio focus |
+| A reading language the phone has no voice for | Nothing is spoken and the replay glyph does nothing audible; the sentence is never read out in another language's voice |
 | Relaunch after changing a reading language | iOS only for now: both chips come back as they were left, with the spoken language derived from the restored reading language. Android parity is pending |
 | Relaunch after overriding a spoken language | iOS only for now: the override comes back; a stored recognizer the device no longer has re-derives from the reading chip instead. Android parity is pending |
 | Type a message and send it | iOS only for now: the same bubble, target language, request, and spoken translation a released push-to-talk control would have produced. Android parity is pending |
@@ -553,9 +561,10 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 | Clear the conversation from the drawer | The transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears |
 | A call arrives mid-utterance | iOS only for now: the in-flight bubble is discarded, the session returns to idle with the `Interrupted. Tap to talk again.` note, and the next push-to-talk records normally. Android parity is pending |
 | Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start session` shows the download consent again. Android has no `Storage` row until the Melange Android SDK can be asked what is cached |
-| Open the drawer and read the `App language` row | iOS only for now: the row names the language in force, defaulting to `System`. Android parity is pending |
-| Choose an app language | iOS only for now: the choice is remembered, the toast says it applies fully after reopening the app, and the session, model, transcript, and both chips are untouched. Android parity is pending |
-| Run the app on a phone set to French or Spanish | iOS only for now: the interface is in that language throughout, including the 38 reading-language names, which the platform names in the reader's own language. Android parity is pending |
+| Open the drawer and read the `App language` row | The row names the language in force, defaulting to `System`, with `English`, `Français`, and `Español` named in their own language |
+| Choose an app language | The choice is remembered, the toast says it applies fully after reopening the app, the drawer stays open on the row showing the new value, and the session, model, transcript, and both chips are untouched. Choosing the language already in force changes nothing and shows no toast |
+| Run the app on a phone set to French or Spanish | The interface is in that language, including the status strip, the error banners, and the first-run flow. The 38 reading-language names are localized on iOS; Android still names them in English, parity pending |
+| Open the launcher | The ZETIC Z monogram, teal on near-black, masked by whatever shape the launcher uses |
 
 ## Verification
 
@@ -571,7 +580,7 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - No user-facing string in the first-run flow or the session-comfort behaviors contains an em dash.
 - The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event on both platforms, even though the idle timer, the Taptic Engine, and Android's `performHapticFeedback` are only verifiable on a device. Android also unit tests the first-run step selection, the consent decision including its metered path, and the copyable-text rule; its Compose UI tests need an emulator and are not part of the JVM verification bar.
 - Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
-- A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device.
+- A finished translation is spoken once, in the recipient's reading language; a newer one cuts off an older one; muting suppresses both the announcement and every replay; and beginning a turn stops speech before the microphone opens. The voice-matching chain and the audio-session handoff are covered by unit tests over injected seams, even though the voice and the audio route themselves are only verifiable on a device. Android covers the same list plus two the seeding makes possible: a transcript already on screen when the announcer is created is never read aloud, and unmuting never blurts out the backlog muting suppressed.
 - No user-facing string in the spoken-output controls contains an em dash.
 - Choosing a reading language re-aligns that speaker's recognition language to the matching installed recognizer, on both platforms, at first resolution and on every later change; a reading language the device has no recognizer for leaves the recognition language as it was, and an explicit recognition choice stands until that speaker's reading language changes again. The matcher and the coupling are covered by unit tests on both platforms, including the variant preference (`fr` over `fr-BE`, `zh-Hant` over `zh-CN`).
 - Ending a session leaves the model resident on both platforms, so a second `Start session` in the same launch loads nothing; the model is released only when the screen's owner goes away. Covered by unit tests on both platforms.
@@ -588,6 +597,7 @@ Every surface has to survive the accessibility text sizes, and the rule is the s
 - No user-facing string in the interruption note, the empty-turn note, or the storage row contains an em dash.
 - Every user-facing string comes out of the String Catalog: a test resolves a sample of explicitly keyed entries and fails if a lookup falls through to its own key, which is what a missing or uncompiled catalog looks like. A second test checks the compiled catalog is actually in the app bundle.
 - The whole catalog is scanned rather than sampled: every key and every value is free of em dashes and en dashes, every entry carries a translator comment, no entry is stale, and English is the only populated language until the French and Spanish passes land.
+- On Android the same scan reads `res/values/strings.xml`, `res/values-fr/strings.xml`, and `res/values-es/strings.xml` off disk and asserts, across all three: no em dash, en dash, or minus sign in any value; key parity in both directions apart from `app_name`; the same multiset of format specifiers per key; and no non-positional specifier anywhere. Two more assert what the French and Spanish passes are actually for: French keeps its no-break space before every colon and before the literal percent, and uses U+2019 rather than an ASCII apostrophe; Spanish never says `Iniciar sesión`, which means log in.
 - The app-language override writes both halves that have to agree, the remembered value and the platform's `AppleLanguages` key, and choosing `System` removes the override rather than pinning the current device language. A stored language this build no longer offers falls back to `System`. All of it is covered by unit tests against a throwaway preferences domain, so no test can leave an override behind for the next run.
 - UI tests force the app back to the device language on every launch, so the English strings they assert against are the ones that are actually rendered.
 - Every surface is checked at the largest accessibility text size: nothing truncates, nothing overlaps, no action falls off the bottom edge, and no content rides up over the status bar.

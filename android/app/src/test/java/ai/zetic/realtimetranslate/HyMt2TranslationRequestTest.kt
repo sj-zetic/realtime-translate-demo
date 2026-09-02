@@ -3,6 +3,7 @@ package ai.zetic.realtimetranslate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class HyMt2TranslationRequestTest {
     @Test
@@ -14,13 +15,13 @@ class HyMt2TranslationRequestTest {
 
     @Test
     fun `uses the device recognizer without a fixed source language list`() {
-        assertEquals("Automatic (device recognizer)", SpeechLanguage.Automatic.displayName)
+        assertEquals(UiText.res(R.string.speech_language_automatic), SpeechLanguage.Automatic.displayName)
     }
 
     @Test
     fun `maps installed language tags without a fixed whitelist`() {
-        val languages = SpeechLanguageCatalogMapping.installed(listOf("fr-FR", "ko-KR", "fr-FR"))
-        assertEquals(listOf("French (France)", "Korean (South Korea)"), languages.map { it.displayName })
+        val languages = SpeechLanguageCatalogMapping.installed(listOf("fr-FR", "ko-KR", "fr-FR"), Locale.ENGLISH)
+        assertEquals(listOf("French (France)", "Korean (South Korea)"), languages.map { it.name })
     }
 
     @Test
@@ -35,9 +36,9 @@ class HyMt2TranslationRequestTest {
 
     @Test
     fun `requires only an on-device recognizer and never creates an online fallback`() {
-        assertTrue(OnDeviceRecognitionEligibility.failureFor(30, true, true)?.contains("API 31") == true)
-        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, false, true)?.contains("Microphone permission") == true)
-        assertTrue(OnDeviceRecognitionEligibility.failureFor(31, true, false)?.contains("will not fall back to online recognition") == true)
+        assertEquals(UiText.res(R.string.speech_error_android_version), OnDeviceRecognitionEligibility.failureFor(30, true, true))
+        assertEquals(UiText.res(R.string.speech_error_permission), OnDeviceRecognitionEligibility.failureFor(31, false, true))
+        assertEquals(UiText.res(R.string.speech_error_no_recognizer), OnDeviceRecognitionEligibility.failureFor(31, true, false))
         assertEquals(null, OnDeviceRecognitionEligibility.failureFor(31, true, true))
     }
 }

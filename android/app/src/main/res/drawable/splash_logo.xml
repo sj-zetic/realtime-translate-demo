@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ZETIC lockup for the splash window.
+     The platform draws `windowSplashScreenAnimatedIcon` on a 288dp canvas and
+     masks it to the inner circle, so the wide wordmark is sized down and
+     centered here rather than handed over at its natural width, which would
+     clip both ends of it. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:gravity="center" android:width="132dp" android:height="42dp">
+        <bitmap android:src="@drawable/zetic_logo" android:gravity="center" />
+    </item>
+</layer-list>
