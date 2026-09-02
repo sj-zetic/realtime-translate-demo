@@ -41,15 +41,15 @@ final class SettingsDrawerModel: ObservableObject {
   static let privacyLine = "Speech, translation, everything stays on this phone."
 
   @Published private(set) var isOpen = false
-  @Published private(set) var toast: String?
 
   let appInfo: AppInfo
+  /// The drawer shares the app's one toast behaviour rather than owning a second one.
+  let toasts: ToastCenter
+
+  var toast: String? { toasts.message }
 
   private let pasteboard: SettingsPasteboard
   private let openURL: (URL) -> Void
-  private let announce: (String) -> Void
-  private let toastDuration: TimeInterval
-  private var toastTask: Task<Void, Never>?
 
   init(
     appInfo: AppInfo = .main,
@@ -62,9 +62,8 @@ final class SettingsDrawerModel: ObservableObject {
   ) {
     self.appInfo = appInfo
     self.pasteboard = pasteboard
-    self.toastDuration = toastDuration
     self.openURL = openURL
-    self.announce = announce
+    toasts = ToastCenter(duration: toastDuration, announce: announce)
   }
 
   func open() { isOpen = true }
@@ -76,18 +75,6 @@ final class SettingsDrawerModel: ObservableObject {
   /// Copies the contact address and confirms it with a self-dismissing toast.
   func copyContactEmail() {
     pasteboard.write(Self.contactEmail)
-    showToast(Self.copyConfirmation)
-  }
-
-  private func showToast(_ message: String) {
-    toastTask?.cancel()
-    toast = message
-    announce(message)
-    let duration = toastDuration
-    toastTask = Task { [weak self] in
-      try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-      guard !Task.isCancelled else { return }
-      self?.toast = nil
-    }
+    toasts.show(Self.copyConfirmation)
   }
 }

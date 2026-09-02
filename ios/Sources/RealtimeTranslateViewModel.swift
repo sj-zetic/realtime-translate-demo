@@ -20,6 +20,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
 
   private let speechRecognizer: any SpeechRecognizing
   private let translationRuntime: any TranslationRuntime
+  private let haptics: any HapticSink
   private var activeItemID: UUID?
   private var pendingFinalTranscript: String?
   private var sessionTask: Task<Void, Never>?
@@ -31,7 +32,8 @@ final class RealtimeTranslateViewModel: ObservableObject {
        targetLanguageA: TargetLanguage = .hyMT2Candidates[1], sourceLanguageB: SpeechSourceLanguage = .automatic,
        targetLanguageB: TargetLanguage = .hyMT2Candidates[9], items: [ConversationItem] = [],
        speechRecognizer: (any SpeechRecognizing)? = nil,
-       translationRuntime: (any TranslationRuntime)? = nil) {
+       translationRuntime: (any TranslationRuntime)? = nil,
+       haptics: (any HapticSink)? = nil) {
     let recognizer = speechRecognizer ?? PlatformSpeechRecognizer()
     let supported = [SpeechSourceLanguage.automatic] + recognizer.availableSourceLanguages()
     self.state = state
@@ -49,6 +51,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.items = items
     self.speechRecognizer = recognizer
     self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
+    self.haptics = haptics ?? SystemHaptics()
     availableSourceLanguages = supported
     permissionGranted = recognizer.currentPermission() == .granted
   }
@@ -135,17 +138,20 @@ final class RealtimeTranslateViewModel: ObservableObject {
         onFinal: { [weak self] transcript in self?.receiveFinal(transcript, speaker: speaker) }
       )
       state = .listening(speaker)
+      haptics.play(.turnBegan)
     } catch {
       items.removeAll { $0.id == item.id }
       activeItemID = nil
       speechRecognizer.stop()
       state = .error(error.localizedDescription)
+      haptics.play(.sessionError)
     }
   }
 
   func endTurn(_ speaker: Speaker) {
     guard state == .listening(speaker) else { return }
     state = .finalizing(speaker)
+    haptics.play(.turnEnded)
     updateActiveItem { item in
       ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                        targetLanguage: item.targetLanguage, translation: nil, state: .finalizing)
@@ -182,13 +188,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
     }
   }
 
-  /// The model is loaded, so the A/B controls and `End Session` belong on screen.
-  var isSessionLive: Bool {
-    switch state {
-    case .ready, .listening, .finalizing, .translating, .error: true
-    default: false
-    }
-  }
+  /// The model is loaded, so the A/B controls and `End Session` belong on screen. The same flag
+  /// decides whether the display stays awake (see `ScreenAwakePolicy`).
+  var isSessionLive: Bool { state.isSessionLive }
 
   /// A single tap can start the first session once permissions are granted.
   var canStartSession: Bool {
@@ -284,6 +286,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
           ConversationItem(id: item.id, speaker: item.speaker, transcript: item.transcript,
                            targetLanguage: item.targetLanguage, translation: translation, state: .translated)
         }
+        haptics.play(.translationDelivered)
       } catch {
         guard state == .translating(speaker), let itemID else { return }
         updateItem(id: itemID) { item in

@@ -68,8 +68,13 @@ struct RealtimeTranslateRootView: View {
   @StateObject var viewModel: RealtimeTranslateViewModel
   @StateObject private var settings = SettingsDrawerModel()
   @StateObject private var firstRun: FirstRunModel
+  @StateObject private var conversationCopy = ConversationCopyModel()
   @AppStorage(FirstRunDefaults.welcomeSeenKey) private var welcomeSeen = false
   @AppStorage(FirstRunDefaults.permissionPrimingSeenKey) private var primingSeen = false
+  @Environment(\.scenePhase) private var scenePhase
+  /// Holds the display awake while a session is live. A reference, not observed state: nothing on
+  /// screen depends on it, so it must never invalidate the body it is driven from.
+  @State private var screenAwake = ScreenAwakeController()
 
   @MainActor init(viewModel: RealtimeTranslateViewModel,
                   firstRun: FirstRunModel = .fromLaunchArguments()) {
@@ -81,7 +86,19 @@ struct RealtimeTranslateRootView: View {
     mainScreen
       .overlay { SettingsDrawerOverlay(model: settings) }
       .overlay { firstRunOverlay }
-      .onAppear { viewModel.adoptExistingPermission() }
+      .onAppear {
+        viewModel.adoptExistingPermission()
+        updateScreenAwake()
+      }
+      .onDisappear { screenAwake.release() }
+      .onChange(of: viewModel.state) { _ in updateScreenAwake() }
+      .onChange(of: scenePhase) { _ in updateScreenAwake() }
+  }
+
+  /// The one place the idle timer is decided: a live session in the foreground keeps the screen
+  /// lit, and everything else, backgrounding included, hands it back.
+  private func updateScreenAwake() {
+    screenAwake.update(state: viewModel.state, isForeground: scenePhase == .active)
   }
 
   private var firstRunStep: FirstRunStep {
@@ -127,7 +144,12 @@ struct RealtimeTranslateRootView: View {
         ThinDivider()
         LanguageBar(viewModel: viewModel)
         SessionBanner(viewModel: viewModel, startSession: startSession)
-        ConversationList(items: viewModel.items, emptyHint: emptyHint)
+        // The copy confirmation sits at the bottom of the transcript rather than the bottom of the
+        // screen, so it never lands on top of the push-to-talk row or the session action.
+        ConversationList(items: viewModel.items, emptyHint: emptyHint, copy: conversationCopy.copy)
+          .overlay(alignment: .bottom) {
+            ToastLayer(center: conversationCopy.toasts, identifier: "copy-toast")
+          }
       }
       .background(DesignToken.surface)
       .navigationTitle("Turn Translate")
@@ -161,6 +183,39 @@ struct RealtimeTranslateRootView: View {
 
 struct ThinDivider: View {
   var body: some View { Rectangle().fill(DesignToken.divider).frame(height: 1) }
+}
+
+/// Bottom-of-screen confirmation. Text only, no icon, and it fades itself out. Shared by the
+/// settings drawer's copy row and a copied chat bubble, so both confirmations look identical.
+struct Toast: View {
+  let message: String?
+  let identifier: String
+
+  var body: some View {
+    ZStack {
+      if let message {
+        Text(message)
+          .font(.caption)
+          .foregroundStyle(DesignToken.surface)
+          .padding(.horizontal, 16)
+          .padding(.vertical, 10)
+          .background(DesignToken.textPrimary)
+          .clipShape(RoundedRectangle(cornerRadius: Layout.control))
+          .padding(.bottom, 24)
+          .accessibilityIdentifier(identifier)
+      }
+    }
+    .animation(.easeInOut(duration: 0.2), value: message)
+    .allowsHitTesting(false)
+  }
+}
+
+/// The `Toast` bound to a `ToastCenter`, so the surface presenting it only has to place it.
+struct ToastLayer: View {
+  @ObservedObject var center: ToastCenter
+  var identifier = "toast"
+
+  var body: some View { Toast(message: center.message, identifier: identifier) }
 }
 
 private struct StatusStrip: View {
@@ -322,6 +377,7 @@ private struct BannerButton: View {
 private struct ConversationList: View {
   let items: [ConversationItem]
   let emptyHint: String
+  let copy: (ConversationItem) -> Void
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -333,7 +389,9 @@ private struct ConversationList: View {
               .foregroundStyle(DesignToken.textSecondary)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
-          ForEach(items) { ConversationBubble(item: $0).id($0.id) }
+          ForEach(items) { item in
+            ConversationBubble(item: item, copy: { copy(item) }).id(item.id)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -348,6 +406,7 @@ private struct ConversationList: View {
 
 private struct ConversationBubble: View {
   let item: ConversationItem
+  let copy: () -> Void
 
   private var isA: Bool { item.speaker == .a }
 
@@ -368,9 +427,21 @@ private struct ConversationBubble: View {
       .padding(12)
       .background(item.speaker.tintColor)
       .clipShape(RoundedRectangle(cornerRadius: Layout.message))
+      // A long press on the bubble offers one labelled `Copy`, rather than copying silently on
+      // any long press: the transcript scrolls, so a bare gesture would fire on a slow drag, and
+      // the menu is also what puts the action in the accessibility rotor.
+      .contextMenu {
+        if item.copyableText != nil {
+          Button(ConversationCopyModel.action, action: copy)
+            .accessibilityIdentifier("copy-bubble")
+        }
+      }
+      // Grouped on the bubble rather than the row, so the accessibility element and the long-press
+      // target are the bubble itself and not the empty half of the screen beside it.
+      .accessibilityElement(children: .combine)
+      .accessibilityIdentifier("conversation-bubble")
       if isA { Spacer(minLength: 32) }
     }
-    .accessibilityElement(children: .combine)
   }
 
   @ViewBuilder private var deliveryLine: some View {

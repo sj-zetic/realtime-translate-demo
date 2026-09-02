@@ -83,6 +83,31 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertTrue(waitForDisappearance(toast, timeout: 6))
   }
 
+  func testLongPressingABubbleCopiesItAndShowsTheCopiedToast() {
+    let app = launch(state: "ended")
+    let bubble = app.descendants(matching: .any).matching(identifier: "conversation-bubble").firstMatch
+    XCTAssertTrue(bubble.waitForExistence(timeout: 5))
+
+    // Under full-suite load the first long-press can miss the context-menu window,
+    // and the toast auto-dismisses after 2 seconds; retry the press and read the
+    // toast frame only while it still exists.
+    let copy = app.buttons["copy-bubble"]
+    var menuShown = false
+    for _ in 0..<3 where !menuShown {
+      bubble.press(forDuration: 1.5)
+      menuShown = copy.waitForExistence(timeout: 4)
+    }
+    XCTAssertTrue(menuShown)
+    copy.tap()
+
+    let toast = app.staticTexts["Copied"]
+    XCTAssertTrue(toast.waitForExistence(timeout: 5))
+    if toast.exists {
+      XCTAssertGreaterThan(toast.frame.minY, app.frame.midY)
+    }
+    XCTAssertTrue(waitForDisappearance(toast, timeout: 8))
+  }
+
   private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed

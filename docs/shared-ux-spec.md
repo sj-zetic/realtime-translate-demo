@@ -171,6 +171,42 @@ The only secondary surface. It slides in from the trailing edge over the main sc
 
 - **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
 
+## Session comfort
+
+Three behaviors that only matter once two people are actually using one phone together. None of them adds a control or a setting, and none of them changes a state transition. Implemented on iOS; Android parity is pending.
+
+### Keeping the screen awake
+
+While a session is live, the display does not dim or lock. A turn can be seconds of silence while someone thinks, and both people are reading the same screen, so the normal idle timeout is wrong for exactly the states where the A/B controls are on screen.
+
+- The screen is held awake in exactly the states where push-to-talk is available: `ready`, `listeningA` / `listeningB`, `finalizingA` / `finalizingB`, `translatingA` / `translatingB`, and `error`. It is the same condition that decides whether the A/B controls and `End session` are shown, not a second rule that can drift from it.
+- Every other state, `permissionRequired`, `setup`, `modelLoading`, `modelLoadFailed`, `modelUnloading`, and `ended`, uses the platform's normal idle behavior. A long model download does not hold the screen awake.
+- Backgrounding the app releases the hold immediately, whatever the session state is, and so does leaving the screen. Returning to the foreground during a live session takes it again.
+- iOS applies this through `UIApplication.isIdleTimerDisabled`, driven from the view layer by scene phase plus session state.
+
+### Haptics
+
+Push-to-talk is operated by feel, often without looking, so the two ends of a turn are confirmed physically. The vocabulary is four events and nothing else.
+
+| Event | Feel | Why |
+| --- | --- | --- |
+| A push-to-talk control is pressed and recording starts | Medium impact | The one deliberate action, and the one worth confirming firmly |
+| A push-to-talk control is released and the turn ends | Light impact | Symmetric with the press, quieter because the work is not done yet |
+| A finalized transcript comes back as a translation | Soft impact | A tick that says the other speaker can read now, without demanding attention |
+| A session error banner appears | Standard error notification | The one failure that takes over the screen |
+
+- A failed translation is silent. The bubble already carries the failure, the session continues, and a buzz per failed turn would be noise.
+- Nothing else vibrates: not model loading, not language changes, not opening the drawer, not copying.
+- The mapping from event to sensation is a single table, so the vocabulary can be read in one place rather than inferred from call sites.
+
+### Copy a bubble
+
+Long-pressing a chat bubble offers one action, `Copy`, which puts that bubble's text on the system clipboard.
+
+- A translated bubble copies its translation, falling back to the source transcript if there is somehow no translated text. Every other bubble copies its source transcript. A bubble still showing `Listening...` has nothing to copy and offers no action.
+- The gesture is a platform context menu with a single `Copy` item, not a bare long press that copies silently. The transcript scrolls, so a bare gesture fires on a slow drag; the menu also names the action before it happens and exposes it to the accessibility rotor.
+- The confirmation is the same toast the settings drawer uses, reading exactly `Copied`: `color.textPrimary` fill, `color.surface` text, `radius.control`, non-interactive, fading out after about two seconds, and posted as an accessibility announcement as well as shown. It is anchored to the bottom of the transcript rather than the bottom of the screen, so it never covers the push-to-talk row or the session action.
+
 ## Language selection on the main screen
 
 - Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
@@ -284,6 +320,10 @@ The accent cap applies to the product chrome only, where the accent means "this 
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
 | End session | Wait for model cleanup and close, clear the prior conversation, then return the same screen to its idle state |
 | Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
+| Leave a live session idle on screen | iOS only for now: the display stays lit for as long as the A/B controls are on screen, and dims normally in every other state. Android parity is pending |
+| Background the app mid-session | iOS only for now: the screen hold is released immediately and taken again on return. Android parity is pending |
+| Hold and release a push-to-talk control | iOS only for now: a medium tap on press and a lighter one on release, with a soft tick when that turn's translation arrives. Android parity is pending |
+| Long-press a chat bubble | iOS only for now: one `Copy` action puts the translation, or the transcript when there is no translation yet, on the clipboard and shows the `Copied` toast. Android parity is pending |
 
 ## Verification
 
@@ -296,5 +336,7 @@ The accent cap applies to the product chrome only, where the accent means "this 
 - The welcome and the consent card are fully navigable with a screen reader: every control carries a label, and each surface is announced as modal so the screen behind it is not reachable while it is up.
 - The welcome appears on a first-ever launch and never again after `Get started`, across a relaunch.
 - With no local model, the first `Start conversation` shows the consent card and downloads nothing until `Download now`; with a local model present no consent card appears at all.
-- No user-facing string in the first-run flow contains an em dash.
+- No user-facing string in the first-run flow or the session-comfort behaviors contains an em dash.
+- The keep-awake decision and the haptic vocabulary are covered by unit tests state by state and event by event, even though the idle timer and the Taptic Engine themselves are only verifiable on a device.
+- Long-pressing a bubble and choosing `Copy` shows the `Copied` toast above the push-to-talk row, and the toast disappears on its own.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.
