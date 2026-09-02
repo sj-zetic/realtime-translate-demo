@@ -54,6 +54,96 @@ Conversation ready
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
 - Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and push-to-talk row avoid system bars and gesture areas.
 
+## First run
+
+Three steps stand between a brand-new install and a first translated turn, each shown at most once and each skipped silently when it has nothing to say. They are overlays above the single main screen, not separate destinations: the main screen is never rebuilt on the way in and there is no back stack to unwind. Implemented on iOS; Android parity is pending.
+
+The first two steps are remembered in platform preferences (`@AppStorage` keys `firstRun.welcomeSeen` and `firstRun.permissionPrimingSeen` on iOS). The third is not remembered at all, because the model on disk already answers the question it asks.
+
+### 1. Welcome
+
+The very first launch opens on a full-surface welcome before anything else, in the same minimal chrome as the app: `color.surface` fill, the ZETIC lockup at the top so the launch screen flows into it, content leading-aligned, and one accent-filled action pinned at the bottom.
+
+```text
+ [ZETIC]
+
+ Turn Translate
+ Two people, two languages, one phone.
+ ------------------------------------
+ Speech and translation run on this phone. Nothing is sent to a server.
+
+
+ [ Get started ]
+```
+
+- The tagline and the privacy line are the whole message: what it does, and where it runs.
+- `Get started` is the only control. It is the accent-filled primary action, matching `Start conversation` on the main screen.
+- Shown exactly once per install. Leaving it also settles the priming step for a returning user whose permissions are already granted.
+
+### 2. Permission priming
+
+After the welcome, and before either system prompt fires, a full-surface priming step explains what the microphone and speech recognition are for. The OS alert is never the first mention of the microphone.
+
+```text
+ Microphone and speech
+ Microphone: to hear whoever is holding a button.
+ ------------------------------------
+ Speech recognition: to turn that audio into text.
+ ------------------------------------
+ Both run on this phone. No audio and no text leave the device.
+ iOS asks for each one next.
+
+ [ Continue ]
+ [ Not now  ]
+```
+
+- `Continue` triggers the real system prompts. `Not now` dismisses the step and leaves the main screen's existing permission banner as the way back in.
+- Skipped silently when the prompts have already been answered with a yes, so a returning user never sees it. The permission already held is adopted on appear, which also means a returning launch lands on the idle main screen rather than the permission banner.
+
+### 3. Model download consent
+
+Tapping `Start conversation` (or `Retry model load`) asks before it starts the one large transfer the app ever makes. The consent step is a card over the main screen, on the same `color.scrim` the settings drawer uses, because it interrupts one tap rather than the whole app.
+
+```text
+ Download the translation model
+ The translation model is about 1.9 GB.
+ It downloads once, then it stays on this phone.
+ ------------------------------------
+ You are not on Wi-Fi. A download this large is better on Wi-Fi.
+
+ [ Download now ]
+ [ Not now      ]
+```
+
+- Shown only when no complete local model exists. A complete extracted module or a complete archive for `SJ_zetic/Hy-MT2-1.8B` both mean the next start is a local load in seconds with no network at all, so consent is skipped entirely and the session starts on the tap.
+- `about 1.9 GB` is the measured size of the archive and is the only size wording used.
+- The Wi-Fi line appears only when the current network path is expensive or constrained (`NWPathMonitor` `isExpensive` / `isConstrained` on iOS). On an unrestricted path the card carries the size and the once-only line and nothing else.
+- `Download now` proceeds into `modelLoading`. `Not now` and a tap on the scrim both dismiss the card and leave the screen idle; nothing is downloaded and the declined start is dropped rather than queued.
+- Declining does not remember anything: the next `Start conversation` asks again, which is also how the Wi-Fi warning gets a second chance to appear.
+
+### Model preparation progress
+
+The loading banner distinguishes a genuine download from a local load, because they feel completely different and only one of them has a size.
+
+| Condition | Headline | Detail | Indicator |
+| --- | --- | --- | --- |
+| A progress callback reports a value strictly between 0 and 1 | `Downloading translation model <percent>%` | `<transferred> of 1.9 GB` | Determinate progress bar in `color.accent` |
+| No progress reported, or exactly 0 or 1 | `Preparing translation model` | none | Indeterminate spinner in `color.accent` |
+
+The progress callback is the whole rule: the local load path never reports progress, so an indeterminate banner never promises bytes that will not move. The transferred amount is rounded to tenths of a gigabyte, so half of the archive reads as `1.0 of 1.9 GB`. Both variants keep the existing `Speaker controls unlock when the model is ready.` line.
+
+### Test hooks
+
+The first-run states are forced through launch arguments so they can be exercised without depending on whatever a device or simulator container happens to hold. On iOS these are applied before any view reads its stored flags.
+
+| Argument | Effect |
+| --- | --- |
+| `-resetFirstRun` | Clear both remembered flags |
+| `-firstRun fresh` | Clear both flags and report no local model: welcome, then priming, then consent |
+| `-firstRun returning` | Set both flags and report a local model present: no first-run surface at all |
+| `-firstRun consentNeeded` | Set both flags and report no local model: the next `Start conversation` shows the consent card |
+| `-firstRunCellular` | Report the current network path as expensive, so the Wi-Fi line appears |
+
 ## Settings drawer
 
 The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Nothing in it affects a live session, so it can be opened at any state. Implemented on iOS; Android parity is pending.
@@ -97,8 +187,8 @@ The `setup` and `ready` states now render on the same screen: `setup` is the idl
 | State | Display on the main screen | Allowed actions | Next state |
 | --- | --- | --- | --- |
 | `permissionRequired` | Permission banner; push-to-talk locked | Request permission, open settings, change languages | `setup`, `error` |
-| `setup` | Idle screen; `Start conversation`; push-to-talk locked | Start session, change language | `modelLoading`, `permissionRequired`, `error` |
-| `modelLoading` | Progress banner; push-to-talk and chips locked | Wait | `ready`, `modelLoadFailed` |
+| `setup` | Idle screen; `Start conversation`; push-to-talk locked | Start session, change language | `modelLoading`, `permissionRequired`, `error`; stays in `setup` while the [download consent card](#3-model-download-consent) is open and if it is declined |
+| `modelLoading` | Progress banner, [downloading or preparing](#model-preparation-progress); push-to-talk and chips locked | Wait | `ready`, `modelLoadFailed` |
 | `ready` | Live screen; A/B controls available; `End session` | Start A or B, end session, change language | `listeningA`, `listeningB`, `modelUnloading` |
 | `listeningA` | `Speaker A is speaking`, active A bubble, accent-filled A control | Stop A | `finalizingA`, `error` |
 | `listeningB` | `Speaker B is speaking`, active B bubble, accent-filled B control | Stop B | `finalizingB`, `error` |
@@ -132,6 +222,7 @@ If platform STT reports a final result before the user stops an utterance, the a
 
 - The `Reading language` section of each speaker's chip menu shows all 38 options from the [Hy-MT2 translation reference](hy-mt2-integration-reference.md).
 - Starting a session asynchronously downloads and loads `SJ_zetic/Hy-MT2-1.8B` through Melange SDK `1.10.0`. Loading failure reports a retryable error and never enables PTT.
+- The first download is consented to, not assumed: with no complete local model the session start opens the [download consent card](#3-model-download-consent) first, and with one present it starts straight into a local load.
 - Translation runs only for finalized source text: A translates to B's reading language and B translates to A's reading language.
 - The translation request uses the documented flat one-user-message Hy-MT2 prompt, including its blank line and Hy control tokens. Melange accepts that rendered request as a `String`; the app manually renders the required flat template rather than passing a chat-message object. If inference fails, the app preserves the source bubble and shows an error and recovery action instead of an invented translation or an empty translation bubble.
 - Hy-MT2 requests are serial. A queued bubble displays the recipient and `Translation pending`.
@@ -145,7 +236,7 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 
 | Token | Value | Usage |
 | --- | --- | --- |
-| `color.accent` | `#2DBDB2` | Brand accent, reserved for two product-level emphasis uses: the `Start conversation` action and the model-load progress indicator |
+| `color.accent` | `#2DBDB2` | Brand accent, reserved for product-level emphasis: the `Start conversation` action, the model-load progress indicator, and the single primary action on each first-run surface |
 | `color.surface` | `#FFFFFF` | Default background, chips, and idle controls |
 | `color.surfaceSubtle` | `#F0F0F0` | Inline banners and disabled controls |
 | `color.divider` | `#E8E8E8` | Hairline dividers and neutral control borders |
@@ -171,14 +262,17 @@ Each speaker owns one muted family, both derived from the brand system. No hue o
 | `color.tintX` | `#E9F7F5` | `#F0F0F0` | Chat-bubble fill; bubbles carry no border |
 | `color.borderX` | `#BFE7E2` | `#E8E8E8` | Hairline border of that speaker's language chip and idle PTT control |
 
-The two-use accent cap applies to the product chrome only. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher — the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table. System dark-mode support is outside MVP scope; do not add forced theme switching.
+The accent cap applies to the product chrome only, where the accent means "this is the way forward" and appears once per surface. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher: the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table. System dark-mode support is outside MVP scope; do not add forced theme switching.
 
 ## Android/iOS parity criteria
 
 | Scenario | Same result on both platforms |
 | --- | --- |
-| Cold start with permissions granted | The top language bar shows one chip per speaker, A left and B right, plus a single `Start conversation` / `Start Session` action |
-| Start session | The banner reports model progress on the same screen; PTT and chips stay locked until the model is ready |
+| Very first launch ever | iOS only for now: the welcome appears before anything else, `Get started` leads into the permission priming, and neither is ever shown again. Android parity is pending |
+| Cold start with permissions granted | No first-run surface appears; the top language bar shows one chip per speaker, A left and B right, plus a single `Start conversation` / `Start Session` action |
+| Start session with no local model | iOS only for now: the download consent card names `about 1.9 GB`, warns about Wi-Fi on an expensive path, and starts nothing until `Download now`. Android parity is pending |
+| Start session with the model already on disk | No consent step; the session loads locally and the banner shows `Preparing translation model` with an indeterminate spinner |
+| Start session | The banner reports model progress on the same screen; a real download names its percent and approximate transferred amount; PTT and chips stay locked until the model is ready |
 | Start A | A partial bubble on the left and active-A state; B control disabled with explanatory text |
 | Start B | B partial bubble on the right and active-B state; A control disabled with explanatory text |
 | Release or tap stop | Final result received before stopping stays pending; after stopping, source text finalizes and translation queues for the other speaker's language |
@@ -199,4 +293,8 @@ The two-use accent cap applies to the product chrome only. The per-speaker ident
 - The `ZETIC` wordmark is the settings control, exposes the accessibility label `ZETIC, opens settings`, and reads as tappable through its chevron.
 - Opening the drawer leaves the session state, the conversation, and both language chips untouched; closing it by scrim tap, close control, or trailing swipe returns to exactly the screen that was there before.
 - Copying the contact address puts `contact@zetic.ai` on the system clipboard and shows the `Email address copied` toast, which disappears on its own.
+- The welcome and the consent card are fully navigable with a screen reader: every control carries a label, and each surface is announced as modal so the screen behind it is not reachable while it is up.
+- The welcome appears on a first-ever launch and never again after `Get started`, across a relaunch.
+- With no local model, the first `Start conversation` shows the consent card and downloads nothing until `Download now`; with a local model present no consent card appears at all.
+- No user-facing string in the first-run flow contains an em dash.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.

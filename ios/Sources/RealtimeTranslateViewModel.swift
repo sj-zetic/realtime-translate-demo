@@ -14,6 +14,9 @@ final class RealtimeTranslateViewModel: ObservableObject {
   }
   @Published private(set) var items: [ConversationItem]
   @Published private(set) var availableSourceLanguages: [SpeechSourceLanguage]
+  /// Whether the microphone and speech-recognition prompts have already been answered with a yes.
+  /// Drives the first-run priming step only; the session flow still keys off `state`.
+  @Published private(set) var permissionGranted: Bool
 
   private let speechRecognizer: any SpeechRecognizing
   private let translationRuntime: any TranslationRuntime
@@ -47,6 +50,7 @@ final class RealtimeTranslateViewModel: ObservableObject {
     self.speechRecognizer = recognizer
     self.translationRuntime = translationRuntime ?? MelangeTranslationRuntime()
     availableSourceLanguages = supported
+    permissionGranted = recognizer.currentPermission() == .granted
   }
 
   static func fromLaunchArguments() -> RealtimeTranslateViewModel {
@@ -68,8 +72,23 @@ final class RealtimeTranslateViewModel: ObservableObject {
     Task {
       let permission = await speechRecognizer.requestPermissions()
       refreshAvailableLanguages()
+      permissionGranted = permission == .granted
       state = permission == .granted ? .setup : .permissionRequired
     }
+  }
+
+  /// The first-run priming step exists to explain the system prompts before they fire, so it has
+  /// nothing to say once they have been answered.
+  var needsPermissionPriming: Bool { !permissionGranted }
+
+  /// Adopts a permission the system already holds, so a returning launch lands on the idle main
+  /// screen instead of the permission banner. Never triggers a system prompt, and never disturbs a
+  /// state the app has already moved past.
+  func adoptExistingPermission() {
+    permissionGranted = speechRecognizer.currentPermission() == .granted
+    guard permissionGranted, state == .permissionRequired else { return }
+    refreshAvailableLanguages()
+    state = .setup
   }
 
   func openAppSettings() {
