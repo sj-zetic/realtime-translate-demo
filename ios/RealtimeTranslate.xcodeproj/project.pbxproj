@@ -24,6 +24,8 @@
 		2A77E3C9B10D49F6C8035EE6 /* SpeechOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A77E3CAB10D49F6C8035EE7 /* SpeechOutput.swift */; };
 		2B10A0010000000000000001 /* LanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B10A0020000000000000002 /* LanguagePreferences.swift */; };
 		2B10A0030000000000000003 /* TypedInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B10A0040000000000000004 /* TypedInput.swift */; };
+		2C10B0010000000000000001 /* AudioInterruption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10B0020000000000000002 /* AudioInterruption.swift */; };
+		2C10B0030000000000000003 /* ModelStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C10B0040000000000000004 /* ModelStorage.swift */; };
 		9E4A1B7C2D5F30861AF7B203 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D8B24E1963C70A54BE01F72 /* Assets.xcassets */; };
 		A0B3C17336D47FFE20633F52 /* ZeticMLange in Frameworks */ = {isa = PBXBuildFile; productRef = 98E43219EA9601F248FA4521 /* ZeticMLange */; };
 		C5CB99E384DC5D3B8E5E2D81 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C173CF675A584896801C0C7C /* Accelerate.framework */; };
@@ -64,6 +66,8 @@
 		2A77E3CAB10D49F6C8035EE7 /* SpeechOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechOutput.swift; sourceTree = "<group>"; };
 		2B10A0020000000000000002 /* LanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePreferences.swift; sourceTree = "<group>"; };
 		2B10A0040000000000000004 /* TypedInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedInput.swift; sourceTree = "<group>"; };
+		2C10B0020000000000000002 /* AudioInterruption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInterruption.swift; sourceTree = "<group>"; };
+		2C10B0040000000000000004 /* ModelStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStorage.swift; sourceTree = "<group>"; };
 		7EB25577F9034F2DC3C5D324 /* RealtimeTranslateViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeTranslateViewModel.swift; sourceTree = "<group>"; };
 		7F8FFD8B86BAA0E6B351BD58 /* RealtimeTranslate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		92794941EC907DE5E049A49D /* RealtimeTranslateTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RealtimeTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -124,11 +128,13 @@
 			children = (
 				5D8B24E1963C70A54BE01F72 /* Assets.xcassets */,
 				CA4397337AD04A9EF1EBB4DE /* Info.plist */,
+				2C10B0020000000000000002 /* AudioInterruption.swift */,
 				3F91A2D4B7C650182E9DA110 /* FirstRunModel.swift */,
 				3F91A2D6B7C650182E9DA112 /* FirstRunViews.swift */,
 				2B10A0020000000000000002 /* LanguagePreferences.swift */,
 				4B2D6E1907C3F5A82D14B860 /* LocalModelStore.swift */,
 				F761CECEBAC4B9C274F93981 /* MelangeTranslationRuntime.swift */,
+				2C10B0040000000000000004 /* ModelStorage.swift */,
 				3C61319FFF47136929BAF199 /* Models.swift */,
 				28F3951377CBE2418ED8BEDF /* PlatformSpeechRecognizer.swift */,
 				0E5BCC243A2010768B37D841 /* RealtimeTranslateApp.swift */,
@@ -283,11 +289,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C10B0010000000000000001 /* AudioInterruption.swift in Sources */,
 				3F91A2D5B7C650182E9DA111 /* FirstRunModel.swift in Sources */,
 				3F91A2D7B7C650182E9DA113 /* FirstRunViews.swift in Sources */,
 				2B10A0010000000000000001 /* LanguagePreferences.swift in Sources */,
 				8D1F4A62C09B75E31A2D64F0 /* LocalModelStore.swift in Sources */,
 				8EC6C3010220ACCEC54729E0 /* MelangeTranslationRuntime.swift in Sources */,
+				2C10B0030000000000000003 /* ModelStorage.swift in Sources */,
 				72612CC547B37C8683B4CE3B /* Models.swift in Sources */,
 				8C2421B2839AC19E06969F7E /* PlatformSpeechRecognizer.swift in Sources */,
 				8C9A7BE2CD5D6F2793C57BF7 /* RealtimeTranslateApp.swift in Sources */,

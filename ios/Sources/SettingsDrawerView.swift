@@ -9,13 +9,15 @@ struct SettingsDrawerOverlay: View {
   /// still knows nothing about the view model behind it.
   let canClearConversation: Bool
   let clearConversation: () -> Void
+  /// The model is in memory, so deleting it from disk is not something the drawer can offer yet.
+  let isSessionLive: Bool
 
   var body: some View {
     ZStack(alignment: .trailing) {
       if model.isOpen {
         Scrim(close: model.close)
         SettingsDrawerPanel(model: model, canClearConversation: canClearConversation,
-                            clearConversation: clearConversation)
+                            clearConversation: clearConversation, isSessionLive: isSessionLive)
           .transition(.move(edge: .trailing))
       }
     }
@@ -45,15 +47,22 @@ private struct SettingsDrawerPanel: View {
   @ObservedObject var model: SettingsDrawerModel
   let canClearConversation: Bool
   let clearConversation: () -> Void
+  let isSessionLive: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       header
       ThinDivider()
-      rows
-      ThinDivider()
-      about
-      Spacer(minLength: 0)
+      // At the accessibility text sizes the rows and the About block are taller than the panel.
+      // Without a scroller the whole column overflows and rides up over the status bar; with one
+      // the header stays put and the last row is still reachable.
+      ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
+          rows
+          ThinDivider()
+          about
+        }
+      }
     }
     .frame(maxWidth: 280, maxHeight: .infinity, alignment: .top)
     .background(DesignToken.surface.ignoresSafeArea())
@@ -108,6 +117,8 @@ private struct SettingsDrawerPanel: View {
         action: { model.clearConversation(clearConversation) }
       )
       ThinDivider()
+      storageRow
+      ThinDivider()
       SettingsRow(
         title: "Visit zetic.ai",
         subtitle: nil,
@@ -128,6 +139,33 @@ private struct SettingsDrawerPanel: View {
     }
   }
 
+  /// The model's footprint, and the app's only destructive action behind the app's only
+  /// `confirmationDialog`. The row itself never deletes: it asks.
+  private var storageRow: some View {
+    let row = model.storageRow(isSessionLive: isSessionLive)
+    return SettingsRow(
+      title: ModelStorageCopy.title,
+      subtitle: row.subtitle,
+      symbol: "internaldrive",
+      identifier: "settings-storage",
+      accessibilityLabel: row.accessibilityLabel,
+      isEnabled: row.isEnabled,
+      action: model.confirmDeleteModel
+    )
+    .confirmationDialog(ModelStorageCopy.confirmationTitle, isPresented: $model.isConfirmingDelete,
+                        titleVisibility: .visible) {
+      // No identifiers here: SwiftUI turns these into alert actions, which carry their titles as
+      // their identifiers, and an identifier of our own would be dropped on some releases and
+      // shadow the title on others.
+      Button(ModelStorageCopy.deleteAction, role: .destructive, action: model.deleteModel)
+      Button(ModelStorageCopy.keepAction, role: .cancel) {}
+    } message: {
+      Text(ModelStorageCopy.confirmationMessage(
+        ModelStorageCopy.size(bytes: model.storage.totalBytes)
+      ))
+    }
+  }
+
   private var about: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("About")
@@ -136,6 +174,7 @@ private struct SettingsDrawerPanel: View {
       Text(model.appInfo.displayName)
         .font(.subheadline)
         .foregroundStyle(DesignToken.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
       Text(model.appInfo.versionLine)
         .font(.caption)
         .foregroundStyle(DesignToken.textSecondary)
@@ -162,14 +201,19 @@ private struct SettingsRow: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 12) {
+        // Both lines wrap rather than truncate: at the accessibility sizes a row's subtitle is
+        // three lines of a 280 point panel, and "1.9 GB on this phone" losing its number to an
+        // ellipsis would leave the row saying nothing at all.
         VStack(alignment: .leading, spacing: 2) {
           Text(title)
             .font(.subheadline)
             .foregroundStyle(isEnabled ? DesignToken.textPrimary : DesignToken.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
           if let subtitle {
             Text(subtitle)
               .font(.caption)
               .foregroundStyle(DesignToken.textSecondary)
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
         Spacer(minLength: 8)

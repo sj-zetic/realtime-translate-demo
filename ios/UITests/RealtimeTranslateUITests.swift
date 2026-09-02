@@ -322,6 +322,57 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(clear.isEnabled)
   }
 
+  // MARK: - Model storage
+
+  /// Driven from `-modelStorage`, so the row and its confirmation are exercised without a real
+  /// 1.9 GB model on the simulator.
+  func testTheStorageRowNamesTheFootprintAndConfirmsBeforeDeleting() {
+    let app = launch(state: "ended", extra: ["-modelStorage", "2039431168", "-toastSeconds", "6"])
+    app.buttons["ZETIC, opens settings"].tap()
+
+    let storage = app.buttons["settings-storage"]
+    XCTAssertTrue(storage.waitForExistence(timeout: 10))
+    XCTAssertTrue(storage.isEnabled)
+    XCTAssertTrue(storage.label.contains("Storage"))
+    XCTAssertTrue(storage.label.contains("GB"))
+    XCTAssertTrue(storage.label.contains("Delete downloaded model"))
+
+    // Tapping the row asks rather than deleting, and backing out leaves the model alone.
+    storage.tap()
+    let delete = app.buttons["Delete downloaded model"]
+    XCTAssertTrue(delete.waitForExistence(timeout: 5))
+    XCTAssertTrue(contains(app, "The next session downloads the model again."))
+    // How the dialog offers its way out depends on how the host presents it: an action sheet
+    // carries the "Keep it" button, a popover is dismissed by tapping outside itself. Either way
+    // backing out leaves the model where it is.
+    let keep = app.buttons["Keep it"]
+    if keep.exists { keep.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
+    XCTAssertTrue(waitForDisappearance(delete, timeout: 5))
+    XCTAssertTrue(app.buttons["settings-storage"].isEnabled)
+
+    storage.tap()
+    XCTAssertTrue(delete.waitForExistence(timeout: 5))
+    delete.tap()
+
+    XCTAssertTrue(app.staticTexts["Model deleted"].waitForExistence(timeout: 5))
+    // The row stays where it is and reports an empty store, rather than disappearing.
+    let empty = app.buttons["settings-storage"]
+    XCTAssertTrue(empty.waitForExistence(timeout: 5))
+    XCTAssertFalse(empty.isEnabled)
+    XCTAssertTrue(empty.label.contains("No model downloaded"))
+  }
+
+  func testTheStorageRowIsLockedWhileASessionHoldsTheModel() {
+    let app = launch(state: "ready", extra: ["-modelStorage", "2039431168"])
+    app.buttons["ZETIC, opens settings"].tap()
+
+    let storage = app.buttons["settings-storage"]
+    XCTAssertTrue(storage.waitForExistence(timeout: 10))
+    XCTAssertFalse(storage.isEnabled)
+    XCTAssertTrue(storage.label.contains("End the session first"))
+  }
+
+
   /// Every existing scenario is a returning user: the first-run flags are forced closed so the
   /// welcome never stands between the test and the screen it is checking, and the remembered
   /// languages are cleared so a run never inherits the previous one's chips.

@@ -1,3 +1,4 @@
+import AVFAudio
 import XCTest
 import Speech
 @testable import RealtimeTranslate
@@ -1347,6 +1348,384 @@ final class RealtimeTranslateTests: XCTestCase {
     await waitUntil { model.toast == nil }
   }
 
+  // MARK: - Audio interruptions
+
+  func testTheInterruptionTableTurnsOnWhatWasUsingAudioAtThatInstant() {
+    // Listening and finalizing are the two states holding the microphone, so those are the two
+    // that lose their utterance. Everything else either loses a sentence of speech or nothing.
+    let table: [(AudioInterruptionEvent, SessionState, Bool, AudioInterruptionResponse)] = [
+      (.began, .listening(.a), false, .abandonUtterance),
+      (.began, .finalizing(.b), false, .abandonUtterance),
+      // Speaking cannot happen over an open microphone, but the decision must not depend on that.
+      (.began, .listening(.a), true, .abandonUtterance),
+      (.began, .ready, true, .stopSpeech),
+      (.began, .ready, false, .ignore),
+      // The recognizer was released before the request went out, so a call costs nothing here.
+      (.began, .translating(.a), false, .ignore),
+      (.began, .loadingModel(0.5), false, .ignore),
+      (.began, .setup, false, .ignore),
+      (.routeLost, .listening(.b), false, .abandonUtterance),
+      (.routeLost, .ready, true, .stopSpeech),
+      (.routeLost, .ready, false, .ignore)
+    ]
+    for (event, state, isSpeaking, expected) in table {
+      XCTAssertEqual(
+        AudioInterruptionPolicy.response(to: event, state: state, isSpeaking: isSpeaking), expected,
+        "\(event) in \(state) while speaking=\(isSpeaking)"
+      )
+    }
+  }
+
+  func testAnInterruptionEndingNeverRestartsAnythingEvenWhenTheSystemSaysItCould() {
+    for state in [SessionState.ready, .listening(.a), .finalizing(.a), .setup] {
+      for shouldResume in [true, false] {
+        XCTAssertEqual(
+          AudioInterruptionPolicy.response(to: .ended(shouldResume: shouldResume), state: state,
+                                           isSpeaking: false), .ignore
+        )
+      }
+    }
+  }
+
+  func testInterruptionPayloadsAreReadOrIgnoredRatherThanGuessed() {
+    let began = AudioInterruptionEvent.fromInterruption(
+      [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue]
+    )
+    XCTAssertEqual(began, .began)
+    let resumable = AudioInterruptionEvent.fromInterruption([
+      AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue,
+      AVAudioSessionInterruptionOptionKey: AVAudioSession.InterruptionOptions.shouldResume.rawValue
+    ])
+    XCTAssertEqual(resumable, .ended(shouldResume: true))
+    XCTAssertEqual(
+      AudioInterruptionEvent.fromInterruption(
+        [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue]
+      ),
+      .ended(shouldResume: false)
+    )
+    XCTAssertNil(AudioInterruptionEvent.fromInterruption(nil))
+    XCTAssertNil(AudioInterruptionEvent.fromInterruption(["unrelated": 1]))
+
+    XCTAssertEqual(
+      AudioInterruptionEvent.fromRouteChange(
+        [AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue]
+      ),
+      .routeLost
+    )
+    // A headset arriving, or this app's own category change, is not an interruption.
+    for reason in [AVAudioSession.RouteChangeReason.newDeviceAvailable, .categoryChange, .override] {
+      XCTAssertNil(AudioInterruptionEvent.fromRouteChange([AVAudioSessionRouteChangeReasonKey: reason.rawValue]))
+    }
+    XCTAssertNil(AudioInterruptionEvent.fromRouteChange(nil))
+  }
+
+  func testAnInterruptionWhileListeningDiscardsTheUtteranceAndKeepsTheSessionLive() {
+    let recognizer = FakeSpeechRecognizer()
+    let interruptions = FakeAudioInterruptions()
+    let earlier = previewTranslatedItem
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [earlier], speechRecognizer: recognizer,
+      translationRuntime: FakeTranslationRuntime(result: "Translated"),
+      speechOutput: FakeSpeechOutput(), audioInterruptions: interruptions
+    )
+    viewModel.beginTurn(.a)
+    recognizer.sendPartial("Half a sen")
+    XCTAssertEqual(viewModel.items.count, 2)
+
+    interruptions.send(.began)
+
+    // The half-written bubble is gone the way a failed start's bubble goes; the earlier one stays.
+    XCTAssertEqual(viewModel.items.count, 1)
+    XCTAssertEqual(viewModel.items.first?.id, earlier.id)
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertTrue(viewModel.isSessionLive)
+    XCTAssertEqual(viewModel.notice, "Interrupted. Tap to talk again.")
+    XCTAssertGreaterThan(recognizer.stopCount, 0)
+  }
+
+  func testAnInterruptionWhileFinalizingDiscardsTheUtteranceToo() {
+    let recognizer = FakeSpeechRecognizer()
+    let interruptions = FakeAudioInterruptions()
+    let viewModel = readyViewModel(recognizer, interruptions: interruptions)
+    viewModel.beginTurn(.b)
+    recognizer.sendPartial("Nearly done")
+    viewModel.endTurn(.b)
+    XCTAssertEqual(viewModel.state, .finalizing(.b))
+
+    interruptions.send(.routeLost)
+
+    XCTAssertTrue(viewModel.items.isEmpty)
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertNotNil(viewModel.notice)
+  }
+
+  func testAnInterruptionWhileIdleOnlyStopsWhatWasBeingSpoken() {
+    let speechOutput = FakeSpeechOutput()
+    let interruptions = FakeAudioInterruptions()
+    let viewModel = RealtimeTranslateViewModel(
+      state: .ready, items: [previewTranslatedItem], speechRecognizer: FakeSpeechRecognizer(),
+      translationRuntime: FakeTranslationRuntime(), speechOutput: speechOutput,
+      audioInterruptions: interruptions
+    )
+    viewModel.replay(previewTranslatedItem)
+    XCTAssertTrue(speechOutput.isSpeaking)
+
+    interruptions.send(.began)
+
+    XCTAssertFalse(speechOutput.isSpeaking)
+    // The transcript is untouched: the bubble and its replay glyph are still there.
+    XCTAssertEqual(viewModel.items.count, 1)
+    XCTAssertNil(viewModel.notice)
+    XCTAssertEqual(viewModel.state, .ready)
+
+    // Nothing playing, nothing recording: an interruption changes nothing at all.
+    interruptions.send(.began)
+    XCTAssertNil(viewModel.notice)
+  }
+
+  func testTheNextPushToTalkWorksAfterAnInterruptionAndClearsTheNote() {
+    let recognizer = FakeSpeechRecognizer()
+    let interruptions = FakeAudioInterruptions()
+    let viewModel = readyViewModel(recognizer, interruptions: interruptions)
+    viewModel.beginTurn(.a)
+    interruptions.send(.began)
+    // The system's hint that audio could resume is deliberately not acted on.
+    interruptions.send(.ended(shouldResume: true))
+    XCTAssertEqual(viewModel.state, .ready)
+    XCTAssertEqual(recognizer.startedSources.count, 1)
+
+    viewModel.beginTurn(.a)
+
+    XCTAssertEqual(viewModel.state, .listening(.a))
+    XCTAssertEqual(recognizer.startedSources.count, 2)
+    XCTAssertNil(viewModel.notice)
+  }
+
+  func testAudioInterruptionCopyUsesNoEmDash() {
+    XCTAssertFalse(AudioInterruptionCopy.notice.contains("\u{2014}"))
+    XCTAssertFalse(AudioInterruptionCopy.notice.isEmpty)
+  }
+
+  // MARK: - Model storage
+
+  func testFootprintNamesTheArchiveTheModuleAndEverythingADeleteWouldReclaim() throws {
+    let root = try makeCacheFixture(archiveByteCount: 8, indexedByteCount: 8, moduleByteCount: 16)
+
+    let footprint = LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root)
+
+    XCTAssertEqual(footprint.archiveBytes, 8)
+    XCTAssertEqual(footprint.moduleBytes, 16)
+    // The whole model directory, counted once, which is exactly what the delete removes.
+    XCTAssertEqual(footprint.totalBytes, 24)
+    XCTAssertFalse(footprint.isEmpty)
+
+    // An archive on its own still reports, and an empty cache reports nothing rather than failing.
+    let archiveOnly = try makeCacheFixture()
+    XCTAssertEqual(
+      LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: archiveOnly).moduleBytes, 0
+    )
+    XCTAssertTrue(
+      LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B",
+                                cacheRoot: root.appendingPathComponent("missing")).isEmpty
+    )
+    XCTAssertTrue(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: nil).isEmpty)
+  }
+
+  func testDeletingRemovesExactlyThisModelsArtifactsAndIndexEntries() throws {
+    let root = try makeCacheFixture(moduleByteCount: 16)
+    let manager = FileManager.default
+    let neighbour = root.appendingPathComponent("artifacts/bbbb/llmTargetModel-1111111111111111",
+                                                isDirectory: true)
+    try manager.createDirectory(at: neighbour, withIntermediateDirectories: true)
+
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
+                   .deleted)
+
+    // The model's own directory is gone, and so are the index records naming it.
+    XCTAssertFalse(manager.fileExists(atPath: root.appendingPathComponent("artifacts/aaaa").path))
+    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+    XCTAssertNil(LocalModelStore.discoverExtractedModule(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root))
+    XCTAssertTrue(LocalModelStore.footprint(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root).isEmpty)
+    let index = try JSONSerialization.jsonObject(
+      with: Data(contentsOf: root.appendingPathComponent("cache-index.json"))
+    ) as? [String: Any]
+    XCTAssertEqual((index?["artifacts"] as? [[String: Any]])?.count, 0)
+    XCTAssertEqual((index?["resolvedModels"] as? [[String: Any]])?.count, 0)
+    XCTAssertEqual(index?["schemaVersion"] as? Int, 1)
+
+    // Everything the SDK owns is left alone: another model's artifacts, the backend-selection
+    // records the decryption key lives in, and the staging locks.
+    XCTAssertTrue(manager.fileExists(atPath: neighbour.path))
+    XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("staging-locks").path))
+    XCTAssertTrue(manager.fileExists(
+      atPath: root.appendingPathComponent("backend-selection-last-known-good/dummy.json").path
+    ))
+
+    // A second delete finds an index that no longer names this model. There is nothing left to
+    // identify, so it refuses rather than guessing at a directory.
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
+                   .refused)
+
+    // An index that still names a model whose directory is already gone is the one case that is
+    // neither a delete nor a refusal: the stale records are swept and nothing is removed.
+    let stale = try makeCacheFixture()
+    try manager.removeItem(at: stale.appendingPathComponent("artifacts/aaaa"))
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: stale),
+                   .nothingToDelete)
+    XCTAssertNil(LocalModelStore.discoverArchive(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: stale))
+  }
+
+  func testDeletingRefusesAnIndexItCannotReadOrAModelKeyThatEscapesTheArtifactsRoot() throws {
+    let manager = FileManager.default
+    let unparseable = try makeCacheFixture()
+    let indexURL = unparseable.appendingPathComponent("cache-index.json")
+    try "{\"schemaVersion\":99,\"artifacts\":\"unexpected\"}"
+      .write(to: indexURL, atomically: true, encoding: .utf8)
+
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: unparseable),
+                   .refused)
+    XCTAssertTrue(manager.fileExists(atPath: unparseable.appendingPathComponent("artifacts/aaaa").path))
+
+    // A key that is not a plain directory name is refused before any path is built from it, so a
+    // model key of ".." cannot reach the cache root or anything beside it.
+    for escape in ["..", "../escape", "nested/key", ""] {
+      let container = manager.temporaryDirectory.appendingPathComponent("Escape-\(UUID().uuidString)")
+      let root = container.appendingPathComponent("ZeticMLangeCache", isDirectory: true)
+      addTeardownBlock { try? manager.removeItem(at: container) }
+      try manager.createDirectory(at: root.appendingPathComponent("artifacts", isDirectory: true),
+                                  withIntermediateDirectories: true)
+      let sibling = container.appendingPathComponent("escape", isDirectory: true)
+      try manager.createDirectory(at: sibling, withIntermediateDirectories: true)
+      let index = """
+        {"schemaVersion":1,"artifacts":[],"resolvedModels":[{"logicalRef":{"kind":"llm",\
+        "name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"\(escape)"}]}
+        """
+      try index.write(to: root.appendingPathComponent("cache-index.json"), atomically: true,
+                      encoding: .utf8)
+
+      XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: root),
+                     .refused, escape)
+      XCTAssertTrue(manager.fileExists(atPath: sibling.path), escape)
+      XCTAssertTrue(manager.fileExists(atPath: root.appendingPathComponent("artifacts").path), escape)
+    }
+
+    // No cache directory at all is refused too, rather than reaching for a default root.
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: "SJ_zetic/Hy-MT2-1.8B", cacheRoot: nil), .refused)
+  }
+
+  func testTheStorageRowNamesTheSizeAndLocksWhileASessionHoldsTheModel() {
+    let footprint = LocalModelStore.Footprint(archiveBytes: 1_000_000_000, moduleBytes: 1_000_000_000,
+                                              totalBytes: 2_000_000_000)
+    let size = ModelStorageCopy.size(bytes: 2_000_000_000)
+
+    let idle = ModelStorageRow.row(footprint: footprint, isSessionLive: false)
+    XCTAssertTrue(idle.isEnabled)
+    XCTAssertEqual(idle.subtitle, "\(size) on this phone")
+    XCTAssertTrue(idle.accessibilityLabel.contains(ModelStorageCopy.deleteAction))
+
+    // A loaded model cannot be deleted from under the session that is using it.
+    let live = ModelStorageRow.row(footprint: footprint, isSessionLive: true)
+    XCTAssertFalse(live.isEnabled)
+    XCTAssertTrue(live.subtitle.contains(size))
+    XCTAssertTrue(live.subtitle.contains("End the session first"))
+
+    let empty = ModelStorageRow.row(footprint: .none, isSessionLive: false)
+    XCTAssertFalse(empty.isEnabled)
+    XCTAssertEqual(empty.subtitle, "No model downloaded")
+
+    for line in [ModelStorageCopy.title, ModelStorageCopy.empty, ModelStorageCopy.deleteAction,
+                 ModelStorageCopy.keepAction, ModelStorageCopy.confirmationTitle,
+                 ModelStorageCopy.sessionLive, ModelStorageCopy.deleted,
+                 ModelStorageCopy.confirmationMessage(size), idle.subtitle, live.subtitle] {
+      XCTAssertFalse(line.contains("\u{2014}"), line)
+      XCTAssertFalse(line.isEmpty)
+    }
+  }
+
+  func testTheDrawerAsksBeforeDeletingAndThenReportsAnEmptyStore() async {
+    let stored = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 0, totalBytes: 8)
+    let storage = FixedModelStorage(stored)
+    var announcements: [String] = []
+    let model = SettingsDrawerModel(
+      appInfo: .main, pasteboard: FakePasteboard(), toastDuration: 0.02, openURL: { _ in },
+      announce: { announcements.append($0) }, modelStorage: storage
+    )
+
+    // Opening is what reads the disk, so a download that finished since the last look is seen.
+    model.open()
+    XCTAssertEqual(model.storage, stored)
+    XCTAssertTrue(model.storageRow(isSessionLive: false).isEnabled)
+    XCTAssertFalse(model.isConfirmingDelete)
+
+    // The row asks. It does not delete.
+    model.confirmDeleteModel()
+    XCTAssertTrue(model.isConfirmingDelete)
+    XCTAssertEqual(storage.deletions, 0)
+
+    model.deleteModel()
+
+    XCTAssertFalse(model.isConfirmingDelete)
+    XCTAssertEqual(storage.deletions, 1)
+    XCTAssertTrue(model.storage.isEmpty)
+    XCTAssertEqual(model.storageRow(isSessionLive: false).subtitle, "No model downloaded")
+    XCTAssertEqual(model.toast, "Model deleted")
+    XCTAssertEqual(announcements, ["Model deleted"])
+    // The drawer stays open on purpose: the row itself is the confirmation.
+    XCTAssertTrue(model.isOpen)
+
+    await waitUntil { model.toast == nil }
+  }
+
+  func testARefusedDeleteChangesNothingAndSaysNothing() {
+    let stored = LocalModelStore.Footprint(archiveBytes: 8, moduleBytes: 0, totalBytes: 8)
+    let storage = FixedModelStorage(stored, outcome: .refused)
+    let model = SettingsDrawerModel(appInfo: .main, pasteboard: FakePasteboard(),
+                                    toastDuration: 0.02, openURL: { _ in }, announce: { _ in },
+                                    modelStorage: storage)
+    model.open()
+
+    model.deleteModel()
+
+    XCTAssertEqual(model.storage, stored)
+    XCTAssertNil(model.toast)
+    XCTAssertFalse(model.isConfirmingDelete)
+  }
+
+  func testTheDownloadConsentGateReArmsOnceTheModelIsDeleted() throws {
+    let root = try makeCacheFixture(moduleByteCount: 16)
+    let name = "SJ_zetic/Hy-MT2-1.8B"
+    let firstRun = FirstRunModel(path: FixedNetworkPath(.unrestricted), hasLocalModel: {
+      LocalModelStore.discoverExtractedModule(forModelName: name, cacheRoot: root) != nil
+        || LocalModelStore.discoverArchive(forModelName: name, cacheRoot: root) != nil
+    })
+
+    // With the model on disk the start runs straight through, exactly as it does today.
+    var started = 0
+    firstRun.requestSessionStart { started += 1 }
+    XCTAssertEqual(started, 1)
+    XCTAssertNil(firstRun.consent)
+
+    XCTAssertEqual(LocalModelStore.deleteModel(forModelName: name, cacheRoot: root), .deleted)
+
+    // The very next start is a first download again, so it has to ask.
+    firstRun.requestSessionStart { started += 1 }
+    XCTAssertEqual(started, 1)
+    XCTAssertEqual(firstRun.consent, FirstRunModel.ConsentPrompt(cellularWarning: false))
+    firstRun.acceptConsent()
+    XCTAssertEqual(started, 2)
+  }
+
+  func testTheStorageLaunchArgumentPutsAModelOnTheRowWithoutOneExisting() {
+    XCTAssertNil(FixedModelStorage.fromLaunchArguments([]))
+    XCTAssertNil(FixedModelStorage.fromLaunchArguments(["-modelStorage", "not-a-number"]))
+
+    let storage = FixedModelStorage.fromLaunchArguments(["-modelStorage", "2039431168"])
+
+    XCTAssertEqual(storage?.footprint().totalBytes, 2_039_431_168)
+    XCTAssertEqual(storage?.deleteModel(), .deleted)
+    XCTAssertEqual(storage?.footprint(), LocalModelStore.Footprint.none)
+  }
+
   private var previewTranslatedItem: ConversationItem {
     ConversationItem(
       id: UUID(), speaker: .a, transcript: "Hello.", targetLanguage: .hyMT2Candidates[2],
@@ -1354,23 +1733,43 @@ final class RealtimeTranslateTests: XCTestCase {
     )
   }
 
-  /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key.
-  private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8) throws -> URL {
+  /// Mirrors the schema the SDK writes, with dummy checksums and a dummy secret key. Passing
+  /// `moduleByteCount` adds the extracted `.gguf` beside the archive, which is what a cache looks
+  /// like once a model has actually been loaded once.
+  private func makeCacheFixture(archiveByteCount: Int = 8, indexedByteCount: Int = 8,
+                                moduleByteCount: Int? = nil) throws -> URL {
+    let modelKey = "aaaa"
     let manager = FileManager.default
     let container = manager.temporaryDirectory.appendingPathComponent("LocalModelStore-\(UUID().uuidString)")
     let root = container.appendingPathComponent("ZeticMLangeCache", isDirectory: true)
     addTeardownBlock { try? manager.removeItem(at: container) }
-    let relativePath = "artifacts/aaaa/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.ztc"
+    let relativePath = "artifacts/\(modelKey)/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.ztc"
     let archive = root.appendingPathComponent(relativePath)
     try manager.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data(repeating: 0, count: archiveByteCount).write(to: archive)
+    var storedFiles = [
+      """
+      {"byteCount":\(indexedByteCount),"checksum":"00000000000000000000000000000000",\
+      "relativePath":"\(relativePath)","validationState":"checksumValidated"}
+      """
+    ]
+    if let moduleByteCount {
+      let modulePath = "artifacts/\(modelKey)/llmTargetModel-c488c23ffebf7fd0/Hy_MT2_1.gguf"
+      let module = root.appendingPathComponent(modulePath)
+      try Data(repeating: 0, count: moduleByteCount).write(to: module)
+      storedFiles.append(
+        """
+        {"byteCount":\(moduleByteCount),"checksum":"00000000000000000000000000000000",\
+        "relativePath":"\(modulePath)","validationState":"checksumValidated"}
+        """
+      )
+    }
     let index = """
       {"schemaVersion":1,"artifacts":[{"createdAt":809969480.2,"id":"llmTargetModel-c488c23ffebf7fd0",\
-      "kind":"llmTargetModel","modelKey":"aaaa","ownedArtifactIDs":[],"primaryRelativePath":"\(relativePath)",\
-      "selector":{"apType":"GPU","llmTarget":"LLAMA_CPP"},"storedFiles":[{"byteCount":\(indexedByteCount),\
-      "checksum":"00000000000000000000000000000000","relativePath":"\(relativePath)",\
-      "validationState":"checksumValidated"}],"updatedAt":809969480.2}],\
-      "resolvedModels":[{"logicalRef":{"kind":"llm","name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"aaaa",\
+      "kind":"llmTargetModel","modelKey":"\(modelKey)","ownedArtifactIDs":[],"primaryRelativePath":"\(relativePath)",\
+      "selector":{"apType":"GPU","llmTarget":"LLAMA_CPP"},"storedFiles":[\(storedFiles.joined(separator: ","))],\
+      "updatedAt":809969480.2}],\
+      "resolvedModels":[{"logicalRef":{"kind":"llm","name":"SJ_zetic/Hy-MT2-1.8B"},"modelKey":"\(modelKey)",\
       "updatedAt":809969926.4}]}
       """
     try index.write(to: root.appendingPathComponent("cache-index.json"), atomically: true, encoding: .utf8)
@@ -1379,19 +1778,26 @@ final class RealtimeTranslateTests: XCTestCase {
     let record = """
       {"candidate_artifact_id":"llmTargetModel-c488c23ffebf7fd0","schema_version":1,\
       "response":{"candidate":{"checksum":"00000000000000000000000000000000",\
-      "secret_key":"\(String(repeating: "0", count: 64))"},"model_key":"aaaa"}}
+      "secret_key":"\(String(repeating: "0", count: 64))"},"model_key":"\(modelKey)"}}
       """
     try record.write(to: records.appendingPathComponent("dummy.json"), atomically: true, encoding: .utf8)
+    try manager.createDirectory(at: root.appendingPathComponent("staging-locks", isDirectory: true),
+                                withIntermediateDirectories: true)
     return root
   }
 
   private func readyViewModel(
-    _ recognizer: FakeSpeechRecognizer, runtime: FakeTranslationRuntime = FakeTranslationRuntime(result: "Translated")
+    _ recognizer: FakeSpeechRecognizer,
+    runtime: FakeTranslationRuntime = FakeTranslationRuntime(result: "Translated"),
+    speechOutput: FakeSpeechOutput? = nil,
+    interruptions: FakeAudioInterruptions? = nil
   ) -> RealtimeTranslateViewModel {
     // Spoken output is faked everywhere a translation completes, so the suite never claims the
     // host's audio session on its way past a delivered turn.
     RealtimeTranslateViewModel(state: .ready, speechRecognizer: recognizer,
-                               translationRuntime: runtime, speechOutput: FakeSpeechOutput())
+                               translationRuntime: runtime,
+                               speechOutput: speechOutput ?? FakeSpeechOutput(),
+                               audioInterruptions: interruptions ?? FakeAudioInterruptions())
   }
 
   private func waitUntil(_ condition: @escaping () -> Bool) async {
@@ -1454,6 +1860,16 @@ private final class FakeSpeechAudioSession: SpeechAudioSession {
   }
 
   func deactivate() { events.append(.deactivate) }
+}
+
+@MainActor
+private final class FakeAudioInterruptions: AudioInterruptionObserving {
+  private var handler: ((AudioInterruptionEvent) -> Void)?
+
+  func observe(_ handler: @escaping (AudioInterruptionEvent) -> Void) { self.handler = handler }
+
+  /// Stands in for the phone call, the alarm, or the unplugged headset.
+  func send(_ event: AudioInterruptionEvent) { handler?(event) }
 }
 
 @MainActor

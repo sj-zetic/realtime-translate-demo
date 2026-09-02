@@ -160,6 +160,9 @@ The only secondary surface. It slides in from the trailing edge over the main sc
  Clear conversation          🗑
  Keeps the session and the languages
 ------------------------------
+ Storage                     ▤
+ 1.9 GB on this phone
+------------------------------
  Visit zetic.ai              ↗
 ------------------------------
  Contact us                  ⧉
@@ -172,7 +175,7 @@ The only secondary surface. It slides in from the trailing edge over the main sc
 ```
 
 1. **Header**: the title `Settings` and a close control.
-2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
+2. **Row list**: `Clear conversation` empties the transcript without ending the session, see [clear the conversation](#clear-the-conversation). `Storage` reports what the downloaded model occupies and is the way to give that space back, see [model storage](#model-storage). `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
 3. **About**: the app display name, version, and build read from the platform bundle, plus one privacy line: `Speech, translation, everything stays on this phone.`
 
 - **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
@@ -288,6 +291,29 @@ One action, in the settings drawer's row list, that empties the transcript witho
 - The confirmation is the shared toast, reading exactly `Conversation cleared`, posted as an accessibility announcement as well as shown. The drawer closes first, so the emptied transcript is what the toast lands over.
 - One obvious place only: the drawer row. There is no duplicate on the transcript, on the bottom bar, or in a bubble's context menu.
 
+## Audio interruptions
+
+A phone call, Siri, an alarm, or an unplugged headset takes the audio session away mid-sentence. There is no way to resume an utterance that lost its microphone halfway through, so the app does not pretend otherwise: the utterance dies, the session does not. Implemented on iOS; Android parity is pending.
+
+- **What is lost**: exactly what was using audio at that instant, and nothing else. The model stays loaded, both language chips stay as they are, and every earlier bubble stays where it is.
+- **Interrupted while recording or finalizing** (`listeningA` / `listeningB`, `finalizingA` / `finalizingB`): the recognizer is released, the half-written bubble is discarded the same way a failed turn start discards its bubble, and the session returns to `ready`.
+- **Interrupted while a translation is being spoken**: the speech stops. The transcript is untouched, so the bubble and its replay control are still there for whoever wants to hear it again.
+- **Interrupted while translating, loading, or idle with nothing playing**: nothing changes. The microphone was already handed back before the request went out, so a call arriving mid-translation costs the utterance nothing.
+- **Route lost** (headphones unplugged, a Bluetooth headset disconnecting) is treated as an interruption, because to whoever is speaking it is one. A new device merely becoming available is not.
+- **The note**: one quiet line in the inline session banner reading exactly `Interrupted. Tap to talk again.`, in `color.textSecondary` with no error color and no button. It is not an error state. It clears itself the moment the next turn starts, by push-to-talk or by typing.
+- **The interruption ending never restarts anything.** The platform's "audio could resume now" hint is read and deliberately not acted on: resuming would mean opening the microphone with nobody holding a button, which is the one thing a push-to-talk app must never do. The next press starts a turn normally, because the recognizer claims and activates its own audio session on every start.
+
+## Model storage
+
+The 1.9 GB translation model is the largest thing this app puts on a phone, and the settings drawer is where it can be given back. This is the app's only destructive action. Implemented on iOS; Android parity is pending.
+
+- **The row** reads `Storage` with the on-device footprint as its subtitle, for example `1.9 GB on this phone`. The number is what a delete would actually reclaim: the whole model directory in the SDK's cache, counted once.
+- **Nothing downloaded**: the subtitle reads `No model downloaded` and the row is disabled. It is disabled rather than hidden, so the row never moves.
+- **A live session**: the model is in memory, so the subtitle appends `End the session first.` and the row is disabled. The accessibility label says the same thing in words.
+- **Deleting asks first.** The row never deletes; it opens a confirmation titled `Delete the downloaded model?` whose message names the size and the cost (`This frees 1.9 GB. The next session downloads the model again.`), with one destructive action `Delete downloaded model` and one way out, `Keep it`. It is the only confirmation in the app, because it is the only thing here that cannot be undone from inside it.
+- **What is deleted**: the model's own artifacts and nothing else. The archive and the extracted module, the directory holding them, and the cache-index records that name them. The SDK's backend-selection records and staging locks are never touched, and neither is any other model in the same cache. A cache whose index cannot be read is refused rather than swept, and a model key that is not a plain directory name inside the artifacts root is refused before any path is built from it.
+- **Afterwards** the drawer stays open, the row reports `No model downloaded`, and the shared toast reads exactly `Model deleted`. The app is back in its pre-download state: the next `Start conversation` shows the [download consent](#3-model-download-consent) again, because there is genuinely a download to consent to.
+
 ## Language selection on the main screen
 
 - Each speaker has exactly one chip in the top language bar. One tap opens that speaker's menu, which carries two sections: `Reading language` (the 38 Hy-MT2 entries, the primary list) and `Spoken language` (`Automatic` plus the OS-derived on-device recognition locales). Android renders the sections as labelled groups separated by a divider in a `DropdownMenu`; iOS renders two inline `Picker`s inside one `Menu`.
@@ -391,7 +417,19 @@ Each speaker owns one muted family, both derived from the brand system. No hue o
 | `color.tintX` | `#E9F7F5` | `#F0F0F0` | Chat-bubble fill; bubbles carry no border |
 | `color.borderX` | `#BFE7E2` | `#E8E8E8` | Hairline border of that speaker's language chip and idle PTT control |
 
-The accent cap applies to the product chrome only, where the accent means "this is the way forward" and appears once per surface. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher: the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table. System dark-mode support is outside MVP scope; do not add forced theme switching.
+The accent cap applies to the product chrome only, where the accent means "this is the way forward" and appears once per surface. The per-speaker identity system is a deliberate exception: it reuses the same teal and ink values as a consistent, muted signal across a speaker's three touchpoints (language chip, chat bubbles, PTT control). Color is never the only distinguisher: the `Speaker A` / `Speaker B` labels, the `A ·` / `B ·` prefixes, and the left/right alignment carry the same information without it. Android uses dp/sp and iOS uses pt with Dynamic Type while maintaining the visual size and hierarchy in the table.
+
+### Appearance
+
+The app is locked to the light appearance, explicitly: iOS declares `UIUserInterfaceStyle = Light` in `Info.plist`. This is a decision, not an omission. The token set above is a flat list of literal colors used for roles that invert under a dark palette rather than translate into one: `color.surface` is the page background in some places and the text drawn on top of `color.textPrimary` or `color.accent` in others (the toast, the `Start conversation` label, a recording PTT control). Swapping the token values would make those pairings white-on-white rather than correct them, so a dark variant is a redesign of the pairings and not a palette edit. Until that redesign happens, declaring the light appearance is the honest option: someone whose phone is in dark mode gets the design as drawn, instead of a screen that is illegible in the places nobody checked. Do not add a theme switcher.
+
+### Dynamic Type
+
+Every surface has to survive the accessibility text sizes, and the rule is the same everywhere: text wraps and containers scroll, text is not truncated or shrunk. Truncation is the failure mode that matters here, because these strings are short and load bearing: a status line reading `Translation Model Unavailable` cut to `Translation Model` says the opposite of what it means, and a chip reading `A · Traditional Chinese` cut to `A · Tradi…` names no language at all.
+
+- **Wrapping**: every status line, banner line, settings row title and subtitle, hint, and toast wraps to as many lines as it needs.
+- **Scrolling**: the settings drawer panel and the full-surface first-run steps scroll once their content outgrows the phone, and the consent card scrolls inside itself so its two actions are never pushed past the bottom edge. The first-run steps stay vertically centered while they fit and switch to scrolling only when they do not, so the default sizes look exactly as they did.
+- **The one exception**: the language chips, which share one row, are allowed two lines and a small shrink. A chip is the one place where unlimited wrapping would turn the language bar into four rows and push the transcript off the screen.
 
 ## Android/iOS parity criteria
 
@@ -426,6 +464,8 @@ The accent cap applies to the product chrome only, where the accent means "this 
 | Type a message and send it | iOS only for now: the same bubble, target language, request, and spoken translation a released push-to-talk control would have produced. Android parity is pending |
 | Open typed input while an utterance is in flight | iOS only for now: the keyboard control is disabled under exactly the push-to-talk rule, with the same explanatory text. Android parity is pending |
 | Clear the conversation from the drawer | iOS only for now: the transcript empties, the session, model, and both chips are untouched, and the `Conversation cleared` toast appears. Android parity is pending |
+| A call arrives mid-utterance | iOS only for now: the in-flight bubble is discarded, the session returns to idle with the `Interrupted. Tap to talk again.` note, and the next push-to-talk records normally. Android parity is pending |
+| Delete the downloaded model | iOS only for now: the confirmation names the size, the delete removes only that model's artifacts and index records, and the next `Start conversation` shows the download consent again. Android parity is pending |
 
 ## Verification
 
@@ -448,4 +488,8 @@ The accent cap applies to the product chrome only, where the accent means "this 
 - The typed-input sheet is fully navigable with a screen reader: the speaker control, the guidance line, the field, `Cancel`, and `Send` each carry a label, and the sheet is announced as modal.
 - Clearing the conversation from the drawer empties the transcript, leaves the session state, the model, and both language chips untouched, and shows the `Conversation cleared` toast; the row is disabled with nothing to clear and while an utterance is in flight.
 - No user-facing string in the typed-input sheet or the clear action contains an em dash.
+- An interruption arriving while recording or finalizing discards the in-flight bubble, leaves every earlier bubble and the loaded model alone, shows the note, and leaves the next push-to-talk working. An interruption while a translation is being spoken stops only the speech. An interruption ending never starts listening. The whole decision table is covered by unit tests state by state over an injected interruption seam, even though the interruption itself is only verifiable on a device.
+- The `Storage` row reports the model's footprint, is disabled with nothing downloaded and while a session holds the model, and deletes only behind its confirmation. The size reading, the deletion's containment rules (an unreadable index and a model key outside the artifacts root are both refused), the survival of the backend-selection records and staging locks, and the consent gate re-arming afterwards are covered by unit tests over a cache fixture.
+- No user-facing string in the interruption note or the storage row contains an em dash.
+- Every surface is checked at the largest accessibility text size: nothing truncates, nothing overlaps, no action falls off the bottom edge, and no content rides up over the status bar.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.
