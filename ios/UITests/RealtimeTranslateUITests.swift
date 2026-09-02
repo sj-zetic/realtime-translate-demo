@@ -44,9 +44,48 @@ final class RealtimeTranslateUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Start A Turn"].isEnabled)
   }
 
-  func testHeaderCarriesTheZeticWordmark() {
+  func testHeaderCarriesTheZeticWordmarkAsTheSettingsButton() {
     let app = launch(state: "ready")
-    XCTAssertTrue(app.images["ZETIC"].exists)
+    XCTAssertTrue(app.buttons["ZETIC, opens settings"].exists)
+    XCTAssertTrue(app.buttons["ZETIC, opens settings"].isHittable)
+  }
+
+  func testWordmarkOpensTheSettingsDrawerAndTheScrimClosesIt() {
+    let app = launch(state: "ready")
+    app.buttons["ZETIC, opens settings"].tap()
+
+    let visit = app.buttons["settings-visit-zetic"]
+    let contact = app.buttons["settings-contact-us"]
+    XCTAssertTrue(visit.waitForExistence(timeout: 2))
+    XCTAssertTrue(contact.exists)
+    XCTAssertTrue(app.staticTexts["Settings"].exists)
+    XCTAssertTrue(contains(app, "Turn Translate"))
+    XCTAssertTrue(contains(app, "stays on this phone"))
+    XCTAssertTrue(app.buttons["settings-close"].exists)
+
+    // Tapping outside the panel, on the scrim's exposed left edge, closes the drawer.
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.5)).tap()
+    XCTAssertTrue(waitForDisappearance(visit))
+  }
+
+  func testContactRowShowsTheCopyToast() {
+    let app = launch(state: "ready")
+    app.buttons["ZETIC, opens settings"].tap()
+    let contact = app.buttons["settings-contact-us"]
+    XCTAssertTrue(contact.waitForExistence(timeout: 2))
+    XCTAssertTrue(contact.label.contains("contact@zetic.ai"))
+
+    contact.tap()
+
+    let toast = app.staticTexts["Email address copied"]
+    XCTAssertTrue(toast.waitForExistence(timeout: 2))
+    XCTAssertGreaterThan(toast.frame.minY, app.frame.midY)
+    XCTAssertTrue(waitForDisappearance(toast, timeout: 6))
+  }
+
+  private func waitForDisappearance(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
+    let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
+    return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed
   }
 
   func testLanguageBarSitsAboveTheConversationAndPushToTalk() {

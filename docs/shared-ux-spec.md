@@ -8,7 +8,7 @@ Both platforms use idiomatic Jetpack Compose and SwiftUI controls while preservi
 
 Turn Translate is a single screen. Setup, model loading, conversation, and error guidance are regions of that one screen instead of separate destinations, so a first session costs one tap when permissions are granted and the default languages are acceptable.
 
-1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall.
+1. **Header**: The app name `Turn Translate` on the leading edge and the `ZETIC` wordmark on the trailing edge of the same row, with the current session state as text below. Android renders both in a header row; iOS puts the title and the wordmark in the navigation bar. The wordmark is the official ZETIC logo lockup, shipped as `res/drawable-nodpi/zetic_logo.png` on Android and the `ZeticLogo` image set in `Sources/Assets.xcassets` on iOS, rendered at 16 dp/pt tall. The wordmark is a control: tapping it opens the [settings drawer](#settings-drawer). A small chevron in `color.textSecondary` sits immediately after the lockup as the only affordance that says the lockup is tappable, and the control carries the accessibility label `ZETIC, opens settings`. Implemented on iOS; Android parity is pending.
 2. **Language bar**: One compact chip per speaker directly under the status strip. Speaker A's chip is left-aligned and speaker B's chip is right-aligned, mirroring the side that speaker's chat bubbles appear on. Each chip reads `<speaker> · <reading language>`. Choosing a reading language also re-aligns that speaker's spoken (recognition) language to the matching recognizer when one exists, so the chip is the single source of truth: a speaker shown as Korean is listened to in Korean. The spoken-language picker stays available as an explicit override until the reading language changes again.
 3. **Session banner**: An inline region that appears only when the session needs attention: permission request, model-loading progress, model-load failure and retry, session unloading, or a runtime error with its recovery action. Push-to-talk stays unavailable until `SJ_zetic/Hy-MT2-1.8B` is ready.
 4. **Conversation**: Chronologically ordered chat bubbles. Speaker A is left-aligned and speaker B is right-aligned. The newest bubble is scrolled into view.
@@ -18,7 +18,7 @@ Turn Translate is a single screen. Setup, model loading, conversation, and error
 ### Screen layout
 
 ```text
-Turn Translate                              ZETIC
+Turn Translate                            ZETIC v
 Conversation ready
 ------------------------------------
  [ A · English ]              [ B · Korean ]
@@ -47,6 +47,33 @@ Conversation ready
 - The active utterance's partial source text updates only its existing active bubble. Partial text is never translated.
 - While A or B is active, the opposite button is disabled with a textual explanation. Simultaneous recording is not supported.
 - Android applies safe-content insets and iOS uses a bottom safe-area inset so the status strip, bubbles, and push-to-talk row avoid system bars and gesture areas.
+
+## Settings drawer
+
+The only secondary surface. It slides in from the trailing edge over the main screen, which stays mounted and untouched behind a dim scrim. Nothing in it affects a live session, so it can be opened at any state. Implemented on iOS; Android parity is pending.
+
+- **Opening**: tap the `ZETIC` wordmark in the header. **Closing**: the header's close control, a tap anywhere on the scrim outside the panel, or a swipe toward the trailing edge. There is no back stack entry and no navigation transition; the main screen never unloads.
+- **Panel**: full height, 280 dp/pt wide at most, `color.surface` fill with a hairline `color.divider` on its leading edge, and hairline dividers between regions. Row labels are terse and left-aligned; each row's trailing icon is a quiet `color.textSecondary` glyph that repeats what the label already says.
+
+```text
+ Settings                    X
+------------------------------
+ Visit zetic.ai              ↗
+------------------------------
+ Contact us                  ⧉
+ contact@zetic.ai
+------------------------------
+ About
+ Turn Translate
+ Version 1.0 (1)
+ Speech, translation, everything stays on this phone.
+```
+
+1. **Header**: the title `Settings` and a close control.
+2. **Row list**: `Visit zetic.ai` opens `https://zetic.ai` in the system browser. `Contact us` shows `contact@zetic.ai` as its subtitle and copies that address to the system clipboard; it does not open a mail composer. The row list is the extension point for later settings rows, including the deferred app-language row, which is owned by the localization work item and is not shipped here.
+3. **About**: the app display name, version, and build read from the platform bundle, plus one privacy line: `Speech, translation, everything stays on this phone.`
+
+- **Copy confirmation**: copying the address shows a toast centered at the bottom of the screen reading exactly `Email address copied`, in `color.textPrimary` fill with `color.surface` text at `radius.control`, which fades out after about two seconds. The toast is not interactive, the drawer stays open behind it, and the same text is posted as an accessibility announcement so it is not a visual-only confirmation.
 
 ## Language selection on the main screen
 
@@ -84,7 +111,9 @@ If platform STT reports a final result before the user stops an utterance, the a
 - Accessibility labels include the current action and speaker, such as `Start speaker A` / `Start A Turn`, `Stop speaker A` / `End A Turn`, and the B equivalents.
 - A disabled opposite control exposes equivalent explanatory text, such as `Speaker B cannot start while speaker A is active`. A control disabled because no model is loaded explains that instead.
 - Every language chip announces both selections for its speaker, such as `Speaker A languages: reads English, speaks Automatic`.
-- No decorative icons are used. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
+- The main screen uses no icons. State, speaker, and errors are carried by text, alignment, and layout, so the single accent color is never the only signal.
+- The header wordmark and the settings drawer are the one exception, and only for chrome: the wordmark's chevron, the external-link glyph on `Visit zetic.ai`, and the copy glyph on `Contact us`. Each sits next to a text label that already says what the control does, so removing every glyph leaves the drawer fully usable.
+- The wordmark control announces `ZETIC, opens settings`; the drawer's rows announce their action and, for `Contact us`, the address being copied; the copy confirmation is posted as an accessibility announcement as well as shown.
 
 ## On-device STT prerequisites
 
@@ -122,7 +151,8 @@ The palette is the ZETIC minimal system: white surfaces, near-black text, gray s
 | `radius.control` | `20 dp/pt` | A/B PTT controls, language chips, session actions |
 | `type.body` | `16 sp/pt` | Source and translated text |
 | `type.meta` | `12 sp/pt` | Speaker, status, chip, and target-language text |
-| `logo.wordmark` | official ZETIC logo lockup, `16 dp/pt` tall | The ZETIC logo in the header |
+| `logo.wordmark` | official ZETIC logo lockup, `16 dp/pt` tall | The ZETIC logo in the header, tappable, followed by a `color.textSecondary` chevron |
+| `color.scrim` | `#000000` at 16% | Dim behind the settings drawer; tapping it closes the drawer |
 
 ### Per-speaker identity families
 
@@ -153,11 +183,14 @@ The two-use accent cap applies to the product chrome only. The per-speaker ident
 | STT unsupported or permission denied | Do not start; show cause and recovery action inline; do not switch to network recognition |
 | Model loading or translation fails | Preserve source text when available; do not invent a translation; show a retryable error in place |
 | End session | Wait for model cleanup and close, clear the prior conversation, then return the same screen to its idle state |
+| Open the settings drawer from the wordmark | iOS only for now: the drawer slides in over an unchanged main screen, offers `Visit zetic.ai`, `Contact us`, and the About block, and closes without touching session state. Android parity is pending |
 
 ## Verification
 
 - Every control has an equivalent accessibility label.
 - Body text and state text do not clip or overlap at larger text sizes and Dynamic Type sizes; the language bar keeps both chips reachable rather than overlapping them.
 - A/B active state, processing, and errors are distinguished with text, alignment, and layout in addition to color; removing all color leaves the screen fully usable.
-- The `ZETIC` wordmark exposes a `ZETIC` accessibility label and is decorative brand exposure only, never a control.
+- The `ZETIC` wordmark is the settings control, exposes the accessibility label `ZETIC, opens settings`, and reads as tappable through its chevron.
+- Opening the drawer leaves the session state, the conversation, and both language chips untouched; closing it by scrim tap, close control, or trailing swipe returns to exactly the screen that was there before.
+- Copying the contact address puts `contact@zetic.ai` on the system clipboard and shows the `Email address copied` toast, which disappears on its own.
 - Android and iOS capture and compare the parity-table scenarios plus the idle, live, and error variants of the single screen using the same inputs.
