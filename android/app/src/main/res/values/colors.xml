@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The adaptive icon's background layer: `color.textPrimary`, the near-black
-         the concept render sets the Z on. -->
-    <color name="ic_launcher_background">#0A0A0A</color>
+    <!-- The adaptive icon's background layer: the near-white field the concept
+         render sets the two chat bubbles on. -->
+    <color name="ic_launcher_background">#F7F8F8</color>
     <!-- The launch window: `color.surface`, so the first frame is the app's own
          background rather than a white flash from somewhere else. Matches the
          iOS `LaunchBackground` color set exactly. -->
