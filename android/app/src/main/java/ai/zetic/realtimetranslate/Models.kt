@@ -70,6 +70,14 @@ data class SessionUiState(
     val errorMessage: String? = null,
 ) {
     fun settingsFor(speaker: Speaker) = settings.getValue(speaker)
+
+    /**
+     * The drawer's `Clear conversation` row is disabled, not hidden, when there is nothing to clear
+     * and while an utterance is recording, finalizing, or translating: the row never moves, and it
+     * never strands a bubble a translation is about to land in.
+     */
+    val canClearConversation: Boolean get() = conversations.isNotEmpty() && activeSpeaker() == null
+
     fun activeSpeaker(): Speaker? = when (phase) {
         SessionPhase.ListeningA, SessionPhase.FinalizingA, SessionPhase.TranslatingA -> Speaker.A
         SessionPhase.ListeningB, SessionPhase.FinalizingB, SessionPhase.TranslatingB -> Speaker.B

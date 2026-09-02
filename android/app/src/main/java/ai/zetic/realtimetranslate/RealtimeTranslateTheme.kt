@@ -1,9 +1,12 @@
 package ai.zetic.realtimetranslate
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
 
 /** ZETIC minimal design tokens. White surfaces, near-black text, one teal accent. */
 val Accent = Color(0xFF2DBDB2)
@@ -13,6 +16,13 @@ val DividerLine = Color(0xFFE8E8E8)
 val TextPrimary = Color(0xFF0A0A0A)
 val TextSecondary = Color(0xFF6B6B6B)
 val Error = Color(0xFFC92A2A)
+
+/** `radius.message` and `radius.control`, shared by the main screen, the drawer, and the toast. */
+val MessageShape: Shape = RoundedCornerShape(16.dp)
+val ControlShape: Shape = RoundedCornerShape(20.dp)
+
+/** `color.scrim`: the dim behind the settings drawer and the first-run consent card. */
+val Scrim = Color.Black.copy(alpha = 0.16f)
 
 /**
  * Per-speaker identity families, both derived from the brand system: speaker A is the teal

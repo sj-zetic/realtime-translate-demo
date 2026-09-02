@@ -2,9 +2,12 @@ package ai.zetic.realtimetranslate
 
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,16 +22,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -41,14 +47,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +71,7 @@ sealed interface UiAction {
     data class SelectReading(val speaker: Speaker, val language: TranslationLanguage) : UiAction
     data object StartConversation : UiAction
     data object EndSession : UiAction
+    data object ClearConversation : UiAction
     data class PttPress(val speaker: Speaker) : UiAction
     data class PttRelease(val speaker: Speaker) : UiAction
     data class TogglePtt(val speaker: Speaker) : UiAction
@@ -76,14 +84,12 @@ fun UiAction.toSessionAction(context: Context): SessionAction = when (this) {
     is UiAction.SelectReading -> SessionAction.ReadingLanguageChanged(speaker, language)
     UiAction.StartConversation -> SessionAction.StartConversation(context)
     UiAction.EndSession -> SessionAction.EndSession
+    UiAction.ClearConversation -> SessionAction.ClearConversation
     is UiAction.PttPress -> SessionAction.PttPress(context, speaker)
     is UiAction.PttRelease -> SessionAction.PttRelease(speaker)
     is UiAction.TogglePtt -> SessionAction.TogglePtt(context, speaker)
     UiAction.Retry -> SessionAction.Retry
 }
-
-private val MessageShape: Shape = RoundedCornerShape(16.dp)
-private val ControlShape: Shape = RoundedCornerShape(20.dp)
 
 fun statusLabel(state: SessionUiState): String = when (state.phase) {
     SessionPhase.PermissionRequired -> "Microphone permission required"
@@ -104,19 +110,31 @@ fun statusLabel(state: SessionUiState): String = when (state.phase) {
  * banner, the chat transcript, and the A/B push-to-talk controls.
  */
 @Composable
-fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, onOpenAppSettings: () -> Unit = {}) {
+fun RealtimeTranslateApp(
+    state: SessionUiState,
+    onAction: (UiAction) -> Unit,
+    onOpenAppSettings: () -> Unit = {},
+    onOpenSettingsDrawer: () -> Unit = {},
+    onCopyBubble: (ConversationItem) -> Unit = {},
+    copyToast: ToastState? = null,
+) {
     Column(
         Modifier.fillMaxSize().background(Surface).windowInsetsPadding(WindowInsets.safeContent),
     ) {
-        Header(state)
+        Header(state, onOpenSettingsDrawer)
         LanguageBar(state, onAction)
         SessionBanner(state, onAction, onOpenAppSettings)
-        ConversationList(state, Modifier.weight(1f))
+        // The copy confirmation is anchored to the bottom of the transcript rather than the bottom
+        // of the screen, so it never lands on top of the push-to-talk row or the session action.
+        Box(Modifier.weight(1f)) {
+            ConversationList(state, Modifier.fillMaxSize(), onCopyBubble)
+            copyToast?.let { ToastHost(it, Modifier.align(Alignment.BottomCenter)) }
+        }
         BottomBar(state, onAction)
     }
 }
 
-@Composable private fun Header(state: SessionUiState) {
+@Composable private fun Header(state: SessionUiState, onOpenSettingsDrawer: () -> Unit) {
     val status = statusLabel(state)
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -130,7 +148,7 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
                 color = TextPrimary,
                 modifier = Modifier.weight(1f),
             )
-            ZeticWordmark()
+            ZeticWordmarkButton(onOpenSettingsDrawer)
         }
         Text(
             status,
@@ -146,14 +164,36 @@ fun RealtimeTranslateApp(state: SessionUiState, onAction: (UiAction) -> Unit, on
     HorizontalDivider(color = DividerLine)
 }
 
-/** The official ZETIC logo lockup, from `res/drawable-nodpi/zetic_logo.png`. */
-@Composable private fun ZeticWordmark(modifier: Modifier = Modifier) {
-    Image(
-        painterResource(R.drawable.zetic_logo),
-        contentDescription = "ZETIC",
-        contentScale = ContentScale.Fit,
-        modifier = modifier.height(16.dp),
-    )
+/**
+ * The official ZETIC logo lockup, from `res/drawable-nodpi/zetic_logo.png`, as the control that
+ * opens the settings drawer. The chevron is the only affordance that says the lockup is tappable.
+ */
+@Composable private fun ZeticWordmarkButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(ControlShape)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "ZETIC, opens settings"
+                role = Role.Button
+            }
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Image(
+            painterResource(R.drawable.zetic_logo),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(16.dp),
+        )
+        Icon(
+            Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = TextSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+    }
 }
 
 /** Language chips can be changed at any time except while an utterance is in flight. */
@@ -300,7 +340,7 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
     ) { Text(label, fontSize = 14.sp) }
 }
 
-@Composable private fun ConversationList(state: SessionUiState, modifier: Modifier) {
+@Composable private fun ConversationList(state: SessionUiState, modifier: Modifier, onCopyBubble: (ConversationItem) -> Unit) {
     val listState = rememberLazyListState()
     LaunchedEffect(state.conversations.size) {
         if (state.conversations.isNotEmpty()) listState.animateScrollToItem(state.conversations.lastIndex)
@@ -321,12 +361,20 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
                 Text(hint, color = TextSecondary, fontSize = 14.sp)
             }
         }
-        items(state.conversations, key = { it.id }) { MessageBubble(it) }
+        items(state.conversations, key = { it.id }) { MessageBubble(it, onCopyBubble) }
     }
 }
 
-@Composable private fun MessageBubble(item: ConversationItem) {
+/**
+ * A named menu action rather than a bare long press that copies silently: the transcript scrolls,
+ * so a bare gesture fires on a slow drag, and the menu names the action before it happens and
+ * exposes it to the accessibility service. A bubble with nothing to copy offers no action at all.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun MessageBubble(item: ConversationItem, onCopyBubble: (ConversationItem) -> Unit) {
     val isA = item.speaker == Speaker.A
+    var menuExpanded by remember { mutableStateOf(false) }
+    val copyable = item.copyableText != null
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isA) Arrangement.Start else Arrangement.End,
@@ -336,10 +384,22 @@ private fun shortLanguageName(language: SpeechLanguage): String = when (language
                 .fillMaxWidth(0.88f)
                 .clip(MessageShape)
                 .background(speakerTint(item.speaker))
+                .combinedClickable(
+                    enabled = copyable,
+                    onClick = {},
+                    onLongClick = { menuExpanded = true },
+                    onLongClickLabel = SettingsDrawerCopy.BUBBLE_COPY_ACTION,
+                )
                 .padding(12.dp)
                 .semantics { contentDescription = "Speaker ${item.speaker.label} utterance" },
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(SettingsDrawerCopy.BUBBLE_COPY_ACTION) },
+                    onClick = { menuExpanded = false; onCopyBubble(item) },
+                )
+            }
             Text(
                 "Speaker ${item.speaker.label}",
                 color = speakerDeep(item.speaker),
