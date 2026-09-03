@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RealtimeTranslateDemo"
+rootProject.name = "RealtimeTranslate"
 include(":app")

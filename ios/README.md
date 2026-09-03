@@ -28,4 +28,8 @@ The app is locked to the light appearance (`UIUserInterfaceStyle = Light` in `So
 
 The app is iPhone only: `TARGETED_DEVICE_FAMILY` is `1` in both `project.yml` and the generated `RealtimeTranslate.xcodeproj`, because there is no iPad layout and the copy says `on this phone` throughout.
 
-For a device build, provide `MELANGE_PERSONAL_KEY` as an Xcode build environment variable. The value is expanded into the built app's `Info.plist` so the installed demo can load its model; it is not tracked in this repository. Treat that demo artifact as credential-bearing and do not distribute it.
+The deployment target is iOS 16.6 because the ZeticMLange 1.10.0 binary is built for iOS 16.6 or later.
+
+For a device build, provide `MELANGE_PERSONAL_KEY` as an Xcode build environment variable. The value is expanded into the built app's `Info.plist` so the installed app can load its model; it is not tracked in this repository. Treat any such artifact as credential-bearing and do not publish it. Client distribution should use a client-scoped, revocable credential rather than a developer's personal key.
+
+An iOS IPA is not universally sideloadable like an Android APK. A `debugging` or `release-testing` export installs only on devices covered by its provisioning profile. For external client testing, TestFlight is the preferred path and requires an App Store Connect account, an Apple Distribution certificate, and a matching distribution profile for `ai.zetic.realtimetranslate`.

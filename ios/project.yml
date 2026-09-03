@@ -9,7 +9,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: 5.0
-    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    # ZeticMLange 1.10.0 is built for iOS 16.6 or later.
+    IPHONEOS_DEPLOYMENT_TARGET: 16.6
     PRODUCT_BUNDLE_IDENTIFIER: ai.zetic.realtimetranslate
 targets:
   RealtimeTranslate:
