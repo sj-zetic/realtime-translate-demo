@@ -1,6 +1,6 @@
 # Turn Translate
 
-Turn Translate is an on-device, two-speaker push-to-talk translation MVP for Android and iOS.
+Turn Translate is an on-device, two-speaker push-to-talk translation app for Android and iOS.
 
 Each person selects their utterance with the A or B button. The app recognizes the selected person's source text with platform on-device STT, then translates only finalized text into the other person's reading language with `SJ_zetic/Hy-MT2-1.8B`. Automatic speaker separation and simultaneous speech recognition are not supported.
 

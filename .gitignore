@@ -4,6 +4,7 @@
 
 # Android
 android/.gradle/
+android/.kotlin/
 android/build/
 android/app/build/
 android/local.properties
@@ -12,6 +13,7 @@ android/local.properties
 
 # iOS
 ios/DerivedData/
+ios/SourcePackages/
 ios/build/
 ios/Pods/
 *.xcuserstate
