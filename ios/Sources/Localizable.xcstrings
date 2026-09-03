@@ -426,6 +426,23 @@
         }
       }
     },
+    "Jump to latest": {
+      "comment": "Accessibility label for the control that scrolls the conversation to the newest bubble",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir al último turno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aller au dernier tour de parole"
+          }
+        }
+      }
+    },
     "Keeps the session and the languages": {
       "comment": "Settings drawer row subtitle under Clear conversation",
       "localizations": {
@@ -796,6 +813,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recharger le modèle"
+          }
+        }
+      }
+    },
+    "Scrolls to the newest bubble and follows the conversation again.": {
+      "comment": "Accessibility hint for the control that scrolls the conversation to the newest bubble",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se desplaza hasta el último turno y vuelve a seguir la conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fait défiler jusqu’au dernier tour de parole et suit à nouveau la conversation."
           }
         }
       }

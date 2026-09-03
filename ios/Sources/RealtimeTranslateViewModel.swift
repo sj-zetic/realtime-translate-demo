@@ -159,6 +159,10 @@ final class RealtimeTranslateViewModel: ObservableObject {
         ),
         preferences: store
       )
+    // A conversation taller than any phone, for the one behaviour that cannot be seen on a
+    // transcript that fits: the newest bubble has to be on screen without anybody scrolling.
+    case "longConversation":
+      return RealtimeTranslateViewModel(state: .ready, items: longPreviewItems, preferences: store)
     case "ready": return RealtimeTranslateViewModel(state: .ready, preferences: store)
     case "permissionRequired":
       return RealtimeTranslateViewModel(state: .permissionRequired, preferences: store)
@@ -789,6 +793,18 @@ final class RealtimeTranslateViewModel: ObservableObject {
       translation: "Bonjour.", state: .translated
     )
   ]
+  /// Twenty finished turns, alternating speakers, each one numbered so a test can name the newest
+  /// without counting bubbles. Far more than fits on any phone at any text size.
+  private static var longPreviewItems: [ConversationItem] {
+    (1...20).map { index in
+      ConversationItem(
+        id: UUID(), speaker: index.isMultiple(of: 2) ? .b : .a,
+        transcript: "Turn number \(index).", targetLanguage: .hyMT2Candidates[2],
+        translation: "Tour numero \(index).", state: .translated
+      )
+    }
+  }
+
   private static var failedPreviewItems: [ConversationItem] {
     [
       ConversationItem(
